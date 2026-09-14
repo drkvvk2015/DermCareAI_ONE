@@ -1,135 +1,148 @@
 import { Platform } from 'react-native';
 import { API_URL } from '@env';
 
+export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
+
+export type ImageQuality = {
+  usable: boolean;
+  reason: string;
+  width: number;
+  height: number;
+  mean_luminance: number;
+  luminance_variance: number;
+  issues: string[];
+};
+
 export type PredictionResponse = {
   class_name: string;
   confidence: number;
   model_used: string;
   visualization: string;
+  accepted: boolean;
+  safety_reason: string;
+  image_quality: ImageQuality;
+  app_version: string;
 };
+
+async function request(path: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(`${API_URL}${path}`, init);
+  return response;
+}
 
 export const api = {
   async analyzeSkinImage(imageUri: string): Promise<PredictionResponse> {
+    if (!imageUri) throw new Error('No image provided');
+
+    const formData = new FormData();
+    const imageUriParsed = Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri;
+    formData.append('file', {
+      uri: imageUriParsed,
+      type: 'image/jpeg',
+      name: 'screening-image.jpg',
+    } as any);
+
     try {
-      // Validate imageUri
-      if (!imageUri) {
-        throw new Error('No image provided');
-      }
-
-      const formData = new FormData();
-
-      // Handle image file
-      const imageUriParsed = Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri;
-
-      // Log the actual image data being sent
-      console.log('Image data:', {
-        uri: imageUriParsed,
-        type: 'image/jpeg',
-        name: 'image.jpg'
-      });
-
-      // Append file with explicit type declaration
-      const fileData = {
-        uri: imageUriParsed,
-        type: 'image/jpeg',
-        name: 'image.jpg'
-      };
-      formData.append('file', fileData as any);
-
-      console.log('Sending request with formData:', formData);
-
-      const response = await fetch(`${API_URL}/predict`, {
+      const response = await request('/predict', {
         method: 'POST',
         body: formData,
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { Accept: 'application/json' },
       });
 
+      const body = await response.text();
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error Response:', errorText);
-        throw new Error(`API Error: ${errorText}`);
-      }
-
-      const responseText = await response.text();
-      // console.log('Successful Response:', responseText);
-
-      const data = JSON.parse(responseText);
-      return data as PredictionResponse;
-
-    } catch (error) {
-      console.error('Full error details:', error);
-      if (error instanceof Error) {
-        if (error.message.includes('Network request failed')) {
-          throw new Error('Connection failed. Please check your internet and try again.');
+        let message = body;
+        try {
+          const parsed = JSON.parse(body);
+          message = parsed.detail || body;
+        } catch {
+          // Keep raw response text.
         }
-        throw error;
+        throw new Error(`AI service error (${response.status}): ${message}`);
       }
-      throw new Error('An unexpected error occurred');
+
+      const data = JSON.parse(body) as PredictionResponse;
+      if (!data.class_name || !data.model_used || typeof data.confidence !== 'number') {
+        throw new Error('AI service returned an invalid prediction payload');
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Network request failed')) {
+        throw new Error('Cannot reach the AI service. Check connectivity and the backend health status.');
+      }
+      throw error instanceof Error ? error : new Error('Unexpected AI service error');
     }
   },
 
+  async getHealth(): Promise<any> {
+    const response = await request('/health');
+    if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+    return response.json();
+  },
+
+  async selfHeal(): Promise<any> {
+    const response = await request('/self-heal', { method: 'POST' });
+    if (!response.ok) throw new Error(`Self-heal failed: ${response.status}`);
+    return response.json();
+  },
+
   getRecommendations(condition: string): string[] {
-    // Map conditions to recommendations
+    // These are clinician-facing reference prompts, not autonomous treatment orders.
     const recommendationsMap: { [key: string]: string[] } = {
-      'Melanoma': [
-        'Perform a thorough dermoscopic examination',
-        'Assess Breslow thickness and ulceration',
-        'Order a biopsy (excisional preferred) for histopathological confirmation',
-        'Evaluate lymph node involvement if indicated',
-        'Refer for oncologic assessment if metastatic risk is high'
+      Melanoma: [
+        'Perform a complete clinical and dermoscopic assessment.',
+        'Consider histopathological confirmation according to the lesion and clinical context.',
+        'Document lesion site, size, morphology and evolution.',
+        'Use established melanoma staging pathways only after diagnostic confirmation.',
+      ],
+      'Melanoma Risk Signal': [
+        'Do not treat this signal as a diagnosis.',
+        'Perform focused clinical and dermoscopic assessment.',
+        'Consider histopathological confirmation when clinically indicated.',
+        'Document the lesion for serial comparison when appropriate.',
       ],
       'Actinic Keratosis': [
-        'Differentiate from SCC using dermoscopy',
-        'Consider cryotherapy or topical 5-FU/imiquimod',
-        'Assess for signs of progression to SCC',
-        'Educate patient on long-term photoprotection',
-        'Schedule periodic follow-ups to monitor recurrence'
+        'Correlate the AI suggestion with clinical examination and dermoscopy.',
+        'Assess for features concerning for invasive squamous neoplasia.',
+        'Select treatment according to lesion burden, site and current guideline-based practice.',
+        'Document photoprotection counselling and follow-up when indicated.',
       ],
       'Basal Cell Carcinoma': [
-        'Confirm diagnosis via biopsy (shave or punch)',
-        'Assess margins for surgical excision planning',
-        'Consider Mohs surgery for high-risk areas',
-        'Evaluate nonsurgical treatments like imiquimod or PDT',
-        'Long-term follow-up for recurrence monitoring'
+        'Confirm the suspected diagnosis clinically and histopathologically when indicated.',
+        'Assess lesion risk category and anatomical site before treatment selection.',
+        'Select definitive therapy according to current dermatology/oncology guidance.',
+        'Document margins, recurrence risk and follow-up plan where relevant.',
       ],
       'Benign Keratosis': [
-        'Differentiate from malignant lesions via dermoscopy',
-        'No intervention needed unless symptomatic',
-        'Consider curettage, cryotherapy, or laser for cosmetic removal',
-        'Monitor for atypical changes over time',
-        'Reassure patient and educate on skin monitoring'
+        'Correlate with clinical examination and dermoscopy.',
+        'No treatment is implied by the AI output alone.',
+        'Consider intervention only when clinically or symptomatically indicated.',
+        'Monitor atypical or changing lesions appropriately.',
       ],
-      'Dermatofibroma': [
-        'Use dermoscopy to confirm central white scar-like area',
-        'Perform a punch biopsy if atypical features present',
-        'Differentiate from DFSP (dermatofibrosarcoma protuberans)',
-        'No treatment necessary unless symptomatic',
-        'Consider excision if growth or pain occurs'
+      Dermatofibroma: [
+        'Correlate with examination and dermoscopy.',
+        'Investigate lesions with atypical clinical behaviour or diagnostic uncertainty.',
+        'Use histopathology when clinically indicated.',
+        'Document changes in size, symptoms or morphology.',
       ],
       'Melanocytic Nevus': [
-        'Evaluate with dermoscopy for atypical features',
-        'Apply the ABCDE rule for melanoma risk assessment',
-        'Document lesion changes using serial photography',
-        'Consider excision if dysplastic or concerning',
-        'Regular monitoring for high-risk patients'
+        'Assess with clinical examination and dermoscopy.',
+        'Compare with previous images when available.',
+        'Evaluate asymmetry, border, colour and evolution in the clinical context.',
+        'Consider biopsy/excision only when clinically indicated.',
       ],
       'Vascular Lesion': [
-        'Differentiate from hemangioma, angiokeratoma, and Kaposi sarcoma',
-        'Use dermoscopy to assess vascular patterns',
-        'Consider Doppler ultrasound for deeper lesions',
-        'Evaluate treatment options: laser therapy or excision',
-        'Refer to oncology if signs of malignancy present'
-      ]
+        'Correlate the suggestion with clinical examination and dermoscopy.',
+        'Consider alternative vascular and non-vascular diagnoses.',
+        'Use imaging or histopathology selectively when depth or diagnosis is uncertain.',
+        'Document evolution and symptoms where clinically relevant.',
+      ],
     };
 
     return recommendationsMap[condition] || [
-      'Use dermoscopy to assess lesion characteristics',
-      'Consider histopathological examination if atypical',
-      'Evaluate differential diagnoses based on morphology',
-      'Determine appropriate treatment or referral',
-      'Monitor for recurrence or malignant transformation'
+      'The AI result requires clinician interpretation.',
+      'Perform appropriate clinical and dermoscopic assessment.',
+      'Use histopathology or additional investigations when clinically indicated.',
+      'Document the lesion and follow longitudinal change where appropriate.',
     ];
-  }
-}; 
+  },
+};
