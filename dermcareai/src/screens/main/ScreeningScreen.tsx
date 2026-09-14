@@ -5,7 +5,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'expo-camera';
 import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
-import { format } from 'date-fns';
 import { useIsFocused } from '@react-navigation/native';
 import { NavigationProps, Patient, ScreeningReport } from '../../navigation/types';
 import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
@@ -59,9 +58,14 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
       return;
     }
 
+    const options: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+      allowsEditing: true,
+    };
     const picker = mode === 'camera'
-      ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true })
-      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true });
+      ? await ImagePicker.launchCameraAsync(options)
+      : await ImagePicker.launchImageLibraryAsync(options);
 
     if (!picker.canceled && picker.assets[0]?.uri) {
       const uri = picker.assets[0].uri;
@@ -113,7 +117,14 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
     };
 
     try {
-      const ref = await addDoc(collection(db, 'screeningReports'), { ...reportData, doctorId: userId, aiAccepted: result.accepted, safetyReason: result.safety_reason, appVersion: result.app_version });
+      const ref = await addDoc(collection(db, 'screeningReports'), {
+        ...reportData,
+        doctorId: userId,
+        aiAccepted: result.accepted,
+        safetyReason: result.safety_reason,
+        appVersion: result.app_version,
+        imageQuality: result.image_quality,
+      });
       navigation.navigate('ScreeningReport', { report: { id: ref.id, ...reportData } });
     } catch (error) {
       console.error('Report save failed', error);
