@@ -16,13 +16,17 @@ from pydantic import BaseModel, Field
 from ImagePreprocessing import ImagePreprocessor
 from MelanomaClassifier import MobileNetPredictor
 from SkinLesionClassifier import SkinLesionClassifier
+from audit import router as audit_router
+from commerce import router as commerce_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
+from model_registry import verify_models
+from notifications import router as notifications_router
 from resilience import file_sha256
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "3.0.0")
 MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.70"))
 MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
@@ -39,18 +43,19 @@ class PredictionResponse(BaseModel):
     app_version: str
 
 
-app = FastAPI(title="DermCareAI API", version=APP_VERSION)
-
-# Restrict CORS in production. DEVELOPMENT may override this explicitly.
+app = FastAPI(title="DermCareAI Clinic Platform API", version=APP_VERSION)
 configured_origins = os.getenv("CORS_ORIGINS", "*")
 origins = [item.strip() for item in configured_origins.split(",") if item.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=False if origins == ["*"] else True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "PATCH"],
     allow_headers=["*"],
 )
+app.include_router(commerce_router)
+app.include_router(notifications_router)
+app.include_router(audit_router)
 
 
 class ModelService:
@@ -78,7 +83,6 @@ class ModelService:
         }
 
     def load(self) -> bool:
-        """Load both models. Failure leaves the API alive in a degraded state."""
         try:
             paths = self.model_paths
             self.mobilenet = MobileNetPredictor(paths["mobilenet"])
@@ -103,6 +107,7 @@ class ModelService:
             "loaded": self.mobilenet is not None and self.nasnet is not None,
             "reload_count": self.reload_count,
             "last_error": self.last_error,
+            "registry": verify_models(str(MODEL_DIR)),
             "models": {
                 name: {
                     "path": path,
@@ -116,7 +121,6 @@ class ModelService:
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mobilenet is None or self.nasnet is None:
             raise RuntimeError("AI model service is unavailable")
-
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         quality = assess_image_quality(image)
         if not quality["usable"]:
@@ -130,19 +134,15 @@ class ModelService:
                 "image_quality": quality,
                 "app_version": APP_VERSION,
             }
-
         image_array = np.array(image)
         processed_image = self.preprocessor.preprocess(image_array)
         if processed_image is None:
             raise ValueError("Image preprocessing failed")
-
         mobilenet_result = self.mobilenet.predict(processed_image)
         mobilenet_predicted_class = mobilenet_result["class_index"]
         mobilenet_confidence = float(mobilenet_result["probabilities"][mobilenet_predicted_class])
-
         if mobilenet_predicted_class == 0:
             import tensorflow as tf
-
             nasnet_image = tf.cast(processed_image, tf.float32) / 255.0
             nasnet_result = self.nasnet.predict_with_gradcam(nasnet_image)
             final_class = self.nasnet_classes[nasnet_result["class_index"]]
@@ -150,32 +150,19 @@ class ModelService:
             model_used = "NASNetMobile"
             visualization = nasnet_result["gradcam_visualization"]
         else:
-            # The binary model is a screening branch, not proof of melanoma.
             final_class = "Melanoma Risk Signal"
             final_confidence = mobilenet_confidence
             model_used = "MobileNetV2"
-            visualization = self.mobilenet.gradcam_visualization(
-                processed_image, mobilenet_predicted_class
-            )
-
-        decision = safety_gate(
-            class_name=final_class,
-            confidence=final_confidence,
-            image_quality_ok=bool(quality["usable"]),
-            minimum_confidence=MIN_CONFIDENCE,
-        )
+            visualization = self.mobilenet.gradcam_visualization(processed_image, mobilenet_predicted_class)
+        decision = safety_gate(class_name=final_class, confidence=final_confidence, image_quality_ok=bool(quality["usable"]), minimum_confidence=MIN_CONFIDENCE)
         if not decision.accepted:
             final_class = ABSTAIN_LABEL
-
         visualization_str = ""
         if visualization is not None:
-            visualization_img = Image.fromarray(
-                np.clip(visualization * 255, 0, 255).astype(np.uint8)
-            )
+            visualization_img = Image.fromarray(np.clip(visualization * 255, 0, 255).astype(np.uint8))
             buffered = io.BytesIO()
             visualization_img.save(buffered, format="JPEG", quality=88)
             visualization_str = base64.b64encode(buffered.getvalue()).decode()
-
         result = {
             "class_name": final_class,
             "confidence": final_confidence,
@@ -207,7 +194,6 @@ def assess_image_quality(image: Image.Image) -> Dict[str, Any]:
     mean = float(stat.mean[0])
     variance = float(stat.var[0])
     megapixels = (width * height) / 1_000_000
-
     issues: list[str] = []
     if width < 256 or height < 256:
         issues.append("resolution_too_low")
@@ -219,16 +205,7 @@ def assess_image_quality(image: Image.Image) -> Dict[str, Any]:
         issues.append("image_too_bright")
     if variance < 40:
         issues.append("low_contrast_or_blur")
-
-    return {
-        "usable": not issues,
-        "reason": "Image passed the basic quality gate." if not issues else ", ".join(issues),
-        "width": width,
-        "height": height,
-        "mean_luminance": round(mean, 2),
-        "luminance_variance": round(variance, 2),
-        "issues": issues,
-    }
+    return {"usable": not issues, "reason": "Image passed the basic quality gate." if not issues else ", ".join(issues), "width": width, "height": height, "mean_luminance": round(mean, 2), "luminance_variance": round(variance, 2), "issues": issues}
 
 
 @app.get("/")
@@ -245,26 +222,27 @@ def health_check() -> Dict[str, Any]:
 
 @app.post("/self-heal")
 def self_heal() -> Dict[str, Any]:
-    """Controlled recovery endpoint; it only reloads the configured local models."""
     recovered = model_service.recover()
     return {"recovered": recovered, "status": model_service.status()}
+
+
+@app.get("/models")
+def model_status() -> Dict[str, Any]:
+    return {"version": APP_VERSION, **model_service.status()}
 
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
-
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=400, detail="Empty image upload")
     if len(contents) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Image exceeds configured size limit")
-
     try:
         return model_service.process_image(contents)
     except RuntimeError as exc:
-        # One controlled recovery attempt for transient model/runtime faults.
         logger.warning("Inference unavailable: %s", exc)
         if model_service.recover():
             try:
