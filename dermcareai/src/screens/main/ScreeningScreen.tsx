@@ -1,406 +1,173 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  Image,
-  Platform,
-} from 'react-native';
-import {
-  Text,
-  Button,
-  Surface,
-  useTheme,
-  IconButton,
-  Card,
-  ActivityIndicator,
-  Searchbar,
-  MD3Theme,
-} from 'react-native-paper';
-import { NavigationProps, Patient, ScreeningReport, Appointment } from '../../navigation/types';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Card, Searchbar, Surface, Text, useTheme } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, PermissionResponse } from 'expo-camera';
-import { api } from '../../services/api';
-import { uploadImage } from '../../config/cloudinary';
-import { collection, query, where, getDocs, addDoc, FirestoreError, QuerySnapshot, DocumentData, orderBy, limit } from 'firebase/firestore';
-import { db, auth } from '../../config/firebase';
+import { Camera } from 'expo-camera';
+import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { auth, db } from '../../config/firebase';
 import { format } from 'date-fns';
 import { useIsFocused } from '@react-navigation/native';
-
-interface AnalysisResult {
-  condition: string;
-  confidence: number;
-  model: string;
-  recommendations: string[];
-  imageUrl: string;
-}
-
-interface ApiResponse {
-  class_name: string;
-  confidence: number;
-  model_used: string;
-  visualization: string;
-}
+import { NavigationProps, Patient, ScreeningReport } from '../../navigation/types';
+import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
 
 const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, route }) => {
+  const theme = useTheme();
   const isFocused = useIsFocused();
-  const theme = useTheme<MD3Theme>();
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(route?.params?.patient || null);
   const [image, setImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(
-    route?.params?.patient || null
-  );
-  const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [doctorNotes, setDoctorNotes] = useState<string>('');
-  const [upcomingAppointment, setUpcomingAppointment] = useState<Appointment | null>(null);
+  const [result, setResult] = useState<PredictionResponse | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchPatients();
+    void fetchPatients();
   }, []);
 
-  const fetchPatients = async (): Promise<void> => {
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) return;
-
-      const patientsRef = collection(db, 'patients');
-      const patientsQuery = query(patientsRef, where('doctorId', '==', userId));
-      const patientsSnapshot: QuerySnapshot<DocumentData> = await getDocs(patientsQuery);
-      const patientsData = patientsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Patient[];
-
-      setPatients(patientsData);
-    } catch (error) {
-      const firestoreError = error as FirestoreError;
-      console.error('Error fetching patients:', firestoreError.message);
-    }
-  };
-
-  const requestPermissions = async (): Promise<boolean> => {
-    if (Platform.OS !== 'web') {
-      const mediaLibraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (mediaLibraryPermission.status !== 'granted') {
-        alert('Sorry, we need camera roll permissions to make this work!');
-        return false;
-      }
-      const cameraPermission: PermissionResponse = await Camera.requestCameraPermissionsAsync();
-      if (cameraPermission.status !== 'granted') {
-        alert('Sorry, we need camera permissions to make this work!');
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const takePhoto = async (): Promise<void> => {
-    if (!selectedPatient) {
-      alert('Please select a patient first');
-      return;
-    }
-
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
-
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-      });
-
-      if (!result.canceled) {
-        setImage(result.assets[0].uri);
-        await analyzeImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      const pickerError = error as Error;
-      console.error('Error taking photo:', pickerError.message);
-      alert('Error taking photo. Please try again.');
-    }
-  };
-
-  const pickImage = async (): Promise<void> => {
-    if (!selectedPatient) {
-      alert('Please select a patient first');
-      return;
-    }
-
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-      });
-
-      if (!result.canceled) {
-        setImage(result.assets[0].uri);
-        await analyzeImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      const pickerError = error as Error;
-      console.error('Error picking image:', pickerError.message);
-      alert('Error selecting image. Please try again.');
-    }
-  };
-
-  const generateImageName = (patientId: string): string => {
-    const timestamp = format(new Date(), 'yyyyMMdd_HHmmss');
-    return `${patientId}_${timestamp}`;
-  };
-
-  const resetScreeningState = () => {
-    setImage(null);
-    setProcessedImage(null);
-    setResult(null);
-    setDoctorNotes('');
-    setSelectedPatient(null);
-    setUpcomingAppointment(null);
-    setSearchQuery('');
-  };
-
   useEffect(() => {
-    if (isFocused && route.params?.patient) {
-      handlePatientSelect(route.params.patient);
-    } else if (!isFocused) {
-      resetScreeningState();
+    if (isFocused && route?.params?.patient) {
+      setSelectedPatient(route.params.patient);
     }
-  }, [isFocused, route.params?.patient]);
+  }, [isFocused, route?.params?.patient]);
 
-  const analyzeImage = async (imageUri: string): Promise<void> => {
-    if (!imageUri) {
-      console.error('No image URI provided');
+  const fetchPatients = async () => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    try {
+      const snapshot = await getDocs(query(collection(db, 'patients'), where('doctorId', '==', userId)));
+      setPatients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Patient));
+    } catch (error) {
+      console.error('Patient loading failed', error);
+      Alert.alert('Error', 'Unable to load patients.');
+    }
+  };
+
+  const requestPermissions = async () => {
+    const camera = await Camera.requestCameraPermissionsAsync();
+    const media = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    return camera.status === 'granted' && media.status === 'granted';
+  };
+
+  const captureOrPick = async (mode: 'camera' | 'library') => {
+    if (!selectedPatient) {
+      Alert.alert('Select patient', 'Please select a patient before screening.');
+      return;
+    }
+    if (!(await requestPermissions())) {
+      Alert.alert('Permission required', 'Camera and photo-library permissions are required for screening.');
       return;
     }
 
+    const picker = mode === 'camera'
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true });
+
+    if (!picker.canceled && picker.assets[0]?.uri) {
+      const uri = picker.assets[0].uri;
+      setImage(uri);
+      await analyze(uri);
+    }
+  };
+
+  const analyze = async (uri: string) => {
     setLoading(true);
     setResult(null);
+    setProcessedImage(null);
     try {
-      console.log('Analyzing image with URI:', imageUri);
-      const result = await api.analyzeSkinImage(imageUri);
-
-      if (!result || !result.visualization) {
-        throw new Error('Invalid response from analysis API');
+      const prediction = await api.analyzeSkinImage(uri);
+      setResult(prediction);
+      if (prediction.visualization) {
+        setProcessedImage(`data:image/jpeg;base64,${prediction.visualization}`);
       }
 
-      const processedImageUrl = `data:image/png;base64,${result.visualization}`;
-      setProcessedImage(processedImageUrl);
-
-      if (!result.class_name) {
-        throw new Error('No condition detected in the image');
-      }
-
-      const recommendations = api.getRecommendations(result.class_name);
-
-      const analysisResult: AnalysisResult = {
-        condition: result.class_name,
-        confidence: result.confidence,
-        model: result.model_used,
-        recommendations,
-        imageUrl: imageUri
-      };
-
-      setResult(analysisResult);
-
-      // Save the screening report
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
-
-      const reportData: Omit<ScreeningReport, 'id'> = {
-        patientId: selectedPatient?.id || '',
-        patientName: selectedPatient?.name || '',
-        date: new Date().toISOString(),
-        imageUrl: imageUri,
-        processedImageUrl: processedImageUrl,
-        condition: result.class_name,
-        confidence: result.confidence,
-        model: result.model_used,
-        recommendations: recommendations,
-        doctorNotes: doctorNotes
-      };
-
-      const reportRef = await addDoc(collection(db, 'screeningReports'), {
-        ...reportData,
-        doctorId: userId,
-      });
-
-      // Reset state before navigation
-      resetScreeningState();
-
-      // Navigate to the report screen
-      navigation.navigate('ScreeningReport', {
-        report: {
-          id: reportRef.id,
-          ...reportData
-        }
-      });
+      const message = prediction.accepted
+        ? `${prediction.class_name} • ${(prediction.confidence * 100).toFixed(1)}% confidence`
+        : `${ABSTAIN_LABEL}\n${prediction.safety_reason}`;
+      Alert.alert('AI screening result', message);
     } catch (error) {
-      console.error('Error in analyzeImage:', error);
-      const analysisError = error as Error;
-      alert(analysisError.message || 'Error analyzing image. Please try again.');
+      const message = error instanceof Error ? error.message : 'Analysis failed.';
+      Alert.alert('AI screening unavailable', message);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUpcomingAppointment = async (patientId: string) => {
+  const saveReport = async () => {
+    if (!selectedPatient || !image || !result) return;
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const recommendations = api.getRecommendations(result.class_name);
+    const reportData: Omit<ScreeningReport, 'id'> = {
+      patientId: selectedPatient.id,
+      patientName: selectedPatient.name,
+      date: new Date().toISOString(),
+      imageUrl: image,
+      processedImageUrl: processedImage || '',
+      condition: result.class_name,
+      confidence: result.confidence,
+      model: result.model_used,
+      recommendations,
+      doctorNotes: '',
+    };
+
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) return;
-
-      const appointmentsRef = collection(db, 'appointments');
-      const appointmentsQuery = query(
-        appointmentsRef,
-        where('doctorId', '==', userId),
-        orderBy('date', 'asc')
-      );
-
-      const appointmentSnapshot = await getDocs(appointmentsQuery);
-
-      const upcomingAppointments = appointmentSnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Appointment))
-        .filter(apt =>
-          apt.patientId === patientId &&
-          new Date(apt.date) >= new Date() &&
-          apt.status === 'scheduled'
-        )
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      if (upcomingAppointments.length > 0) {
-        setUpcomingAppointment(upcomingAppointments[0]);
-      } else {
-        setUpcomingAppointment(null);
-      }
+      const ref = await addDoc(collection(db, 'screeningReports'), { ...reportData, doctorId: userId, aiAccepted: result.accepted, safetyReason: result.safety_reason, appVersion: result.app_version });
+      navigation.navigate('ScreeningReport', { report: { id: ref.id, ...reportData } });
     } catch (error) {
-      console.error('Error fetching upcoming appointment:', error);
-      setUpcomingAppointment(null);
+      console.error('Report save failed', error);
+      Alert.alert('Error', 'Unable to save the screening report.');
     }
   };
 
-  const handlePatientSelect = (patient: Patient) => {
-    setSelectedPatient(patient);
-    fetchUpcomingAppointment(patient.id);
-  };
-
-  const filteredPatients = patients.filter(patient =>
-    patient.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPatients = patients.filter(patient => patient.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <ScrollView style={styles.container}>
       <Surface style={styles.surface}>
-        <Text style={styles.title}>Skin Condition Screening</Text>
-        <Text style={[styles.disclaimer, styles.warning]}>
-          ⚠️ Disclaimer: This is a research prototype, not clinically validated, and should not replace clinical judgment or be the sole basis for decisions.
-        </Text>
-
-        {/* Patient Selection */}
-        <Card style={styles.patientCard}>
+        <Text variant="headlineSmall" style={styles.title}>Skin Condition Screening</Text>
+        <Card style={styles.warningCard}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>Select Patient</Text>
-            <Searchbar
-              placeholder="Search patients"
-              onChangeText={setSearchQuery}
-              value={searchQuery}
-              style={styles.searchBar}
-            />
-            <ScrollView style={styles.patientList}>
-              {filteredPatients.map(patient => (
-                <Button
-                  key={patient.id}
-                  mode={selectedPatient?.id === patient.id ? 'contained' : 'outlined'}
-                  onPress={() => handlePatientSelect(patient)}
-                  style={styles.patientButton}
-                >
-                  {patient.name}
-                </Button>
-              ))}
-            </ScrollView>
+            <Text style={styles.warning}>AI decision-support only. The system can abstain and does not establish a diagnosis.</Text>
+          </Card.Content>
+        </Card>
+
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium">Select Patient</Text>
+            <Searchbar placeholder="Search patients" value={searchQuery} onChangeText={setSearchQuery} style={styles.search} />
+            {filteredPatients.slice(0, 20).map(patient => (
+              <Button key={patient.id} mode={selectedPatient?.id === patient.id ? 'contained' : 'outlined'} onPress={() => setSelectedPatient(patient)} style={styles.patientButton}>
+                {patient.name}
+              </Button>
+            ))}
           </Card.Content>
         </Card>
 
         {selectedPatient && (
           <>
-            <View style={styles.imageActions}>
-              <Button
-                mode="contained"
-                onPress={takePhoto}
-                style={styles.button}
-                icon="camera"
-                disabled={loading}
-              >
-                Take Photo
-              </Button>
-              <Button
-                mode="contained"
-                onPress={pickImage}
-                style={styles.button}
-                icon="image"
-                disabled={loading}
-              >
-                Pick Image
-              </Button>
+            <View style={styles.actions}>
+              <Button mode="contained" icon="camera" onPress={() => void captureOrPick('camera')} disabled={loading} style={styles.actionButton}>Take Photo</Button>
+              <Button mode="outlined" icon="image" onPress={() => void captureOrPick('library')} disabled={loading} style={styles.actionButton}>Choose Image</Button>
             </View>
 
-            {image && (
-              <Card style={styles.imageCard}>
-                <Card.Content>
-                  <Text style={styles.imageLabel}>Screening Image:</Text>
-                  <Image source={{ uri: image }} style={styles.image} />
-                  {processedImage && (
-                    <>
-                      <Text style={[styles.imageLabel, { marginTop: 16 }]}>
-                        AI Focus Map:
-                      </Text>
-                      <Image source={{ uri: processedImage }} style={styles.image} />
-                      <Text style={styles.disclaimer}>
-                        ⚠️ This AI-generated focus map is part of the research prototype and is not clinically validated. It should not be used as the sole basis for diagnosis or treatment.
-                      </Text>
-                    </>
-                  )}
-                </Card.Content>
-              </Card>
-            )}
+            {image && <Card style={styles.card}><Card.Content><Text variant="titleMedium">Source Image</Text><Image source={{ uri: image }} style={styles.image} /></Card.Content></Card>}
+            {processedImage && <Card style={styles.card}><Card.Content><Text variant="titleMedium">AI Focus Map</Text><Image source={{ uri: processedImage }} style={styles.image} /><Text style={styles.caption}>Focus maps are explanatory aids, not diagnostic evidence.</Text></Card.Content></Card>}
 
-            {loading && (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.analyzing}>
-                  Analyzing image...
-                </Text>
-              </View>
-            )}
+            {loading && <View style={styles.loading}><ActivityIndicator size="large" color={theme.colors.primary} /><Text style={styles.caption}>Running automated evaluation and safety checks…</Text></View>}
 
-            {selectedPatient && upcomingAppointment && (
-              <Card style={styles.upcomingAppointmentCard}>
+            {result && (
+              <Card style={styles.card}>
                 <Card.Content>
-                  <Text style={styles.upcomingAppointmentTitle}>Upcoming Appointment</Text>
-                  <Text>
-                    {format(new Date(upcomingAppointment.date), 'MMMM d, yyyy')} at{' '}
-                    {upcomingAppointment.time}
-                  </Text>
-                  <Text>Type: {upcomingAppointment.type}</Text>
-                  <Button
-                    mode="outlined"
-                    onPress={() => navigation.navigate('AppointmentDetails', {
-                      appointment: upcomingAppointment
-                    })}
-                    style={styles.viewAppointmentButton}
-                  >
-                    View Appointment
-                  </Button>
+                  <Text variant="titleLarge">AI Result</Text>
+                  <Text style={result.accepted ? styles.accepted : styles.abstain}>{result.class_name}</Text>
+                  <Text>Confidence: {(result.confidence * 100).toFixed(1)}%</Text>
+                  <Text>Model: {result.model_used}</Text>
+                  <Text>Safety gate: {result.accepted ? 'PASSED — clinician review required' : 'ABSTAINED'}</Text>
+                  <Text style={styles.caption}>{result.safety_reason}</Text>
+                  <Text style={styles.caption}>Image quality: {result.image_quality.usable ? 'acceptable' : 'insufficient'} ({result.image_quality.reason})</Text>
+                  <Button mode="contained" onPress={() => void saveReport()} style={styles.saveButton}>Save for Clinician Review</Button>
                 </Card.Content>
               </Card>
             )}
@@ -412,102 +179,22 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  surface: {
-    padding: 16,
-    margin: 16,
-    borderRadius: 8,
-    elevation: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  disclaimer: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
-    marginVertical: 10,
-  },
-  warning: {
-    fontWeight: 'bold',
-    color: '#D9534F',
-  },
-  patientCard: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  searchBar: {
-    marginBottom: 12,
-  },
-  patientList: {
-    maxHeight: 200,
-  },
-  patientButton: {
-    marginBottom: 8,
-  },
-  imageActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  button: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-  imageCard: {
-    marginVertical: 16,
-  },
-  imageLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  image: {
-    width: '100%',
-    height: 300,
-    resizeMode: 'cover',
-    borderRadius: 8,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  analyzing: {
-    marginTop: 16,
-    fontSize: 16,
-    fontStyle: 'italic',
-  },
-  upcomingAppointmentCard: {
-    marginVertical: 10,
-  },
-  upcomingAppointmentTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  viewAppointmentButton: {
-    marginTop: 8,
-  },
-  screeningCard: {
-    marginVertical: 8,
-  },
-  viewButton: {
-    marginTop: 8,
-  },
-  date: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 4,
-  },
+  container: { flex: 1 },
+  surface: { margin: 12, padding: 14, borderRadius: 12 },
+  title: { textAlign: 'center', marginBottom: 14 },
+  card: { marginVertical: 8 },
+  warningCard: { marginBottom: 8 },
+  warning: { fontWeight: '700' },
+  search: { marginVertical: 10 },
+  patientButton: { marginTop: 6 },
+  actions: { flexDirection: 'row', gap: 8, marginVertical: 8 },
+  actionButton: { flex: 1 },
+  image: { width: '100%', height: 300, marginTop: 10, borderRadius: 8, resizeMode: 'cover' },
+  loading: { alignItems: 'center', paddingVertical: 24 },
+  accepted: { fontSize: 20, fontWeight: '700', marginTop: 8 },
+  abstain: { fontSize: 20, fontWeight: '700', marginTop: 8 },
+  caption: { marginTop: 8, opacity: 0.75 },
+  saveButton: { marginTop: 14 },
 });
 
-export default ScreeningScreen; 
+export default ScreeningScreen;
