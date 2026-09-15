@@ -8,8 +8,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from auth import require_roles
 
 router = APIRouter(prefix="/commerce", tags=["commerce"])
 
@@ -34,8 +36,6 @@ class InvoiceRequest(BaseModel):
 
 class PaymentRequest(BaseModel):
     invoice_id: str = Field(min_length=1)
-    # Kept optional for client compatibility; the server derives the payable
-    # amount from the stored invoice and never trusts this field.
     amount: int | None = Field(default=None, gt=0, description="Deprecated client value; ignored for pricing")
     customer_name: str = Field(min_length=1)
     customer_phone: str = Field(min_length=5)
@@ -79,12 +79,12 @@ def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
 
 
 @router.post("/invoices")
-def create_invoice(req: InvoiceRequest):
+def create_invoice(req: InvoiceRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
     return compute_invoice(req)
 
 
 @router.get("/invoices/{invoice_id}")
-def get_invoice(invoice_id: str):
+def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
     invoice = INVOICES.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -92,7 +92,7 @@ def get_invoice(invoice_id: str):
 
 
 @router.post("/payments/razorpay")
-async def create_razorpay_payment(req: PaymentRequest):
+async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
     invoice = INVOICES.get(req.invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -116,40 +116,20 @@ async def create_razorpay_payment(req: PaymentRequest):
         "accept_partial": False,
         "reference_id": req.invoice_id,
         "description": f"DermCareAI invoice {req.invoice_id}",
-        "customer": {
-            "name": req.customer_name,
-            "contact": req.customer_phone,
-            "email": req.customer_email,
-        },
+        "customer": {"name": req.customer_name, "contact": req.customer_phone, "email": req.customer_email},
         "notify": {"sms": False, "email": False},
         "reminder_enable": True,
     }
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(
-            "https://api.razorpay.com/v1/payment_links",
-            auth=(key_id, key_secret),
-            json=payload,
-        )
+        response = await client.post("https://api.razorpay.com/v1/payment_links", auth=(key_id, key_secret), json=payload)
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail="Unable to create payment link")
     data = response.json()
-    return {
-        "provider": "razorpay",
-        "id": data.get("id"),
-        "short_url": data.get("short_url"),
-        "status": data.get("status"),
-        "invoice_id": req.invoice_id,
-        "amount_paise": amount_paise,
-        "upi_supported": True,
-        "note": "Use UPI Intent/QR through the hosted checkout; do not use deprecated UPI Collect flows.",
-    }
+    return {"provider": "razorpay", "id": data.get("id"), "short_url": data.get("short_url"), "status": data.get("status"), "invoice_id": req.invoice_id, "amount_paise": amount_paise, "upi_supported": True, "note": "Use UPI Intent/QR through the hosted checkout; do not use deprecated UPI Collect flows."}
 
 
 @router.post("/payments/webhook")
-async def payment_webhook(
-    request: Request,
-    x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
-):
+async def payment_webhook(request: Request, x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature")):
     secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
     raw_body = await request.body()
     if secret:
@@ -158,7 +138,6 @@ async def payment_webhook(
         expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, x_razorpay_signature):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
-
     try:
         payload = await request.json()
     except Exception as exc:
@@ -175,47 +154,33 @@ async def payment_webhook(
 
 
 @router.post("/pharmacy/stock")
-def add_stock(item: Dict[str, Any]):
+def add_stock(item: Dict[str, Any], _: dict[str, Any] = Depends(require_roles("admin", "pharmacist"))):
     medicine_id = str(item.get("medicine_id", "")).strip()
     if not medicine_id:
         raise HTTPException(status_code=400, detail="medicine_id is required")
-    PHARMACY_STOCK[medicine_id] = {
-        **item,
-        "updated_at": now_iso(),
-    }
+    PHARMACY_STOCK[medicine_id] = {**item, "updated_at": now_iso()}
     return PHARMACY_STOCK[medicine_id]
 
 
 @router.get("/pharmacy/stock")
-def list_stock():
+def list_stock(_: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
     return list(PHARMACY_STOCK.values())
 
 
 @router.post("/pharmacy/dispense")
-def dispense(req: DispenseRequest):
-    # Aggregate first so duplicate lines cannot bypass a stock check.
+def dispense(req: DispenseRequest, _: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
     required: Dict[str, float] = {}
     for item in req.items:
         required[item.medicine_id] = required.get(item.medicine_id, 0.0) + float(item.quantity)
-
-    # Validate the complete request before mutating any inventory.
     for medicine_id, requested_qty in required.items():
         stock = PHARMACY_STOCK.get(medicine_id)
         if not stock:
             raise HTTPException(status_code=404, detail=f"Medicine {medicine_id} not found")
-        available = float(stock.get("quantity", 0))
-        if available < requested_qty:
+        if float(stock.get("quantity", 0)) < requested_qty:
             raise HTTPException(status_code=409, detail=f"Insufficient stock for {medicine_id}")
-
     now = now_iso()
     for medicine_id, requested_qty in required.items():
         stock = PHARMACY_STOCK[medicine_id]
         stock["quantity"] = float(stock.get("quantity", 0)) - requested_qty
         stock["updated_at"] = now
-
-    return {
-        "patient_id": req.patient_id,
-        "prescription_id": req.prescription_id,
-        "dispensed": [item.model_dump() for item in req.items],
-        "dispensed_at": now,
-    }
+    return {"patient_id": req.patient_id, "prescription_id": req.prescription_id, "dispensed": [item.model_dump() for item in req.items], "dispensed_at": now}
