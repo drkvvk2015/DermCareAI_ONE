@@ -4,8 +4,10 @@ import os
 from typing import Any, Dict
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from auth import require_roles
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -25,16 +27,7 @@ async def send_whatsapp(req: RegistrationNotification) -> Dict[str, Any]:
     if not token or not phone_number_id:
         return {"channel": "whatsapp", "status": "not_configured"}
     url = f"https://graph.facebook.com/v23.0/{phone_number_id}/messages"
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": req.phone,
-        "type": "template",
-        "template": {
-            "name": req.template_name,
-            "language": {"code": req.template_language},
-            "components": [{"type": "body", "parameters": [{"type": "text", "text": req.patient_name}, {"type": "text", "text": req.appointment_text}]}],
-        },
-    }
+    payload = {"messaging_product": "whatsapp", "to": req.phone, "type": "template", "template": {"name": req.template_name, "language": {"code": req.template_language}, "components": [{"type": "body", "parameters": [{"type": "text", "text": req.patient_name}, {"type": "text", "text": req.appointment_text}]}]}}
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
     if r.status_code >= 400:
@@ -48,13 +41,7 @@ async def send_sms(req: RegistrationNotification) -> Dict[str, Any]:
     sender = os.getenv("SMS_SENDER_ID")
     if not url or not token or not sender:
         return {"channel": "sms", "status": "not_configured"}
-    # Provider-neutral contract; map this payload to the selected Indian SMS provider.
-    payload = {
-        "to": req.phone,
-        "sender": sender,
-        "template": req.template_name,
-        "message": f"Dear {req.patient_name}, {req.appointment_text}",
-    }
+    payload = {"to": req.phone, "sender": sender, "template": req.template_name, "message": f"Dear {req.patient_name}, {req.appointment_text}"}
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
     if r.status_code >= 400:
@@ -63,7 +50,6 @@ async def send_sms(req: RegistrationNotification) -> Dict[str, Any]:
 
 
 async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
-    # Never send diagnosis, prescription, payment data or other sensitive medical data to a social network.
     url = os.getenv("SOCIAL_NOTIFICATION_WEBHOOK_URL")
     if not url:
         return {"channel": "social_webhook", "status": "not_configured"}
@@ -76,7 +62,7 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
 
 
 @router.post("/registration")
-async def registration_notifications(req: RegistrationNotification):
+async def registration_notifications(req: RegistrationNotification, _: dict[str, Any] = Depends(require_roles("admin", "receptionist", "doctor"))):
     results: list[Dict[str, Any]] = []
     for channel in req.channels:
         if channel == "whatsapp":
