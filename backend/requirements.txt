@@ -5,6 +5,7 @@ python-multipart
 pydantic
 pyngrok
 httpx
+firebase-admin
 
 # Image processing
 Pillow
