@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from auth import require_roles
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+ALLOWED_CHANNELS = {"whatsapp", "sms", "social_webhook"}
 
 
 class RegistrationNotification(BaseModel):
@@ -63,6 +64,10 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
 
 @router.post("/registration")
 async def registration_notifications(req: RegistrationNotification, _: dict[str, Any] = Depends(require_roles("admin", "receptionist", "doctor"))):
+    unknown = sorted(set(req.channels) - ALLOWED_CHANNELS)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unsupported notification channel(s): {', '.join(unknown)}")
+
     results: list[Dict[str, Any]] = []
     for channel in req.channels:
         if channel == "whatsapp":
