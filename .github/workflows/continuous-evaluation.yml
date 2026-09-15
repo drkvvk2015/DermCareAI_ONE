@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  PYTHONPATH: backend
+  PYTHONPATH: .
 
 jobs:
   backend-static-and-safety:
