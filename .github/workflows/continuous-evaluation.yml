@@ -2,9 +2,9 @@ name: DermCareAI Continuous Evaluation
 
 on:
   push:
-    branches: [main, ai-autoeval-selfheal-v2]
+    branches: [main, ai-autoeval-selfheal-v2, pr2-recovery-hardening]
   pull_request:
-    branches: [main]
+    branches: [main, pr2-recovery-hardening]
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
@@ -59,7 +59,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: dermcareai/package-lock.json
 
