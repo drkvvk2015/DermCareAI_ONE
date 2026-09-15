@@ -212,7 +212,8 @@ def health_check() -> Dict[str, Any]:
 def self_heal(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> Dict[str, Any]:
     require_admin_access(x_admin_token)
     recovered = model_service.recover()
-    return {"recovered": recovered, "status": model_service.status()}
+    status = model_service.status()
+    return {"recovered": recovered, "loaded": status["loaded"], "mode": status["mode"], "reload_count": status["reload_count"]}
 
 
 @app.get("/models")

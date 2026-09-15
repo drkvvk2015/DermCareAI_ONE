@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/audit", tags=["audit"])
@@ -30,6 +31,12 @@ def db():
     return conn
 
 
+def require_admin_access(x_admin_token: str | None) -> None:
+    admin_token = os.getenv("ADMIN_API_TOKEN")
+    if admin_token and not hmac.compare_digest(x_admin_token or "", admin_token):
+        raise HTTPException(status_code=401, detail="Administrative access required")
+
+
 def record_event(event: AuditEvent) -> Dict[str, Any]:
     timestamp = datetime.now(timezone.utc).isoformat()
     with db() as conn:
@@ -48,7 +55,8 @@ def create_audit_event(event: AuditEvent):
 
 
 @router.get("/events")
-def list_audit_events(limit: int = 100):
+def list_audit_events(limit: int = 100, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    require_admin_access(x_admin_token)
     with db() as conn:
         rows = conn.execute("SELECT id,timestamp,actor_id,actor_role,action,resource_type,resource_id,metadata_json,correlation_id,previous_hash,event_hash FROM audit_events ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)).fetchall()
     return [{"id": f"AUD-{row[0]:09d}", "timestamp": row[1], "actor_id": row[2], "actor_role": row[3], "action": row[4], "resource_type": row[5], "resource_id": row[6], "metadata": json.loads(row[7]), "correlation_id": row[8], "previous_hash": row[9], "event_hash": row[10]} for row in rows]

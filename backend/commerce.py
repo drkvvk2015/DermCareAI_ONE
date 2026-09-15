@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import uuid
 from datetime import datetime, timezone
@@ -145,20 +146,23 @@ async def create_razorpay_payment(req: PaymentRequest):
 @router.post("/payments/webhook")
 async def payment_webhook(
     request: Request,
-    payload: Dict[str, Any],
     x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
 ):
     secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
     raw = await request.body()
+    if secret and not x_razorpay_signature:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
     if secret and x_razorpay_signature:
         expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, x_razorpay_signature):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    try:
+        payload = json.loads(raw.decode("utf-8") or "{}")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
     payload_root = payload.get("payload", {})
     payment_entity = payload_root.get("payment", {}).get("entity", {})
     payment_link_entity = payload_root.get("payment_link", {}).get("entity", {})
-    if secret and not x_razorpay_signature:
-        raise HTTPException(status_code=401, detail="Missing webhook signature")
     reference_id = (
         payment_entity.get("notes", {}).get("invoice_id")
         or payment_link_entity.get("reference_id")
@@ -177,9 +181,12 @@ async def payment_webhook(
 def add_stock(item: StockItemRequest):
     medicine_id = item.medicine_id.strip()
     with STOCK_LOCK:
+        existing = PHARMACY_STOCK.get(medicine_id, {})
         PHARMACY_STOCK[medicine_id] = {
+            **existing,
             **item.model_dump(),
             "medicine_id": medicine_id,
+            "quantity": float(existing.get("quantity", 0)) + item.quantity,
             "updated_at": now_iso(),
         }
         return PHARMACY_STOCK[medicine_id]

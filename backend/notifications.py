@@ -77,6 +77,10 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
 
 @router.post("/registration")
 async def registration_notifications(req: RegistrationNotification):
+    supported_channels = {"whatsapp", "sms", "social_webhook"}
+    invalid_channels = [channel for channel in req.channels if channel not in supported_channels]
+    if invalid_channels:
+        raise HTTPException(status_code=400, detail=f"Unsupported notification channels: {', '.join(sorted(set(invalid_channels)))}")
     results: list[Dict[str, Any]] = []
     for channel in req.channels:
         if channel == "whatsapp":

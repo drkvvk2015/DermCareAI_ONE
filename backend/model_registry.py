@@ -28,6 +28,14 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
             "validated": False,
             "sha256": "",
         },
+        "embedded_ham10000": {
+            "repository": "PREMAADC/vit-base-ham10000",
+            "format": "transformers",
+            "purpose": "7-class dermoscopic lesion classification fallback",
+            "validated": False,
+            "research_only": True,
+            "license": "apache-2.0",
+        },
     },
 }
 
