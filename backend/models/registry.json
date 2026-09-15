@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "models": {
+    "melanoma_binary": {
+      "file": "melanoma_classifier.pth",
+      "format": "pytorch",
+      "purpose": "melanoma risk screening signal",
+      "source": "existing DermCareAI research model",
+      "validated": false,
+      "sha256": ""
+    },
+    "skin_lesion_7class": {
+      "file": "FinetunedNasNetMobile.keras",
+      "format": "keras",
+      "purpose": "7-class lesion classification research model",
+      "source": "existing DermCareAI research model",
+      "validated": false,
+      "sha256": ""
+    },
+    "embedded_ham10000": {
+      "repository": "PREMAADC/vit-base-ham10000",
+      "format": "transformers",
+      "purpose": "7-class dermoscopic lesion classification fallback",
+      "validated": false,
+      "research_only": true,
+      "license": "apache-2.0"
+    }
+  }
+}
