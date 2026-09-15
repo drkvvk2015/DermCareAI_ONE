@@ -5,6 +5,7 @@ import { clinicApi, Invoice } from '../../services/clinicApi';
 
 const BillingScreen: React.FC = () => {
   const [patientId, setPatientId] = useState('');
+  const [payerName, setPayerName] = useState('');
   const [description, setDescription] = useState('Consultation');
   const [amount, setAmount] = useState('500');
   const [phone, setPhone] = useState('');
@@ -25,12 +26,12 @@ const BillingScreen: React.FC = () => {
   };
 
   const payByUpi = async () => {
-    if (!invoice || !phone.trim()) {
-      setMessage('Create an invoice and enter the payer mobile number first.');
+    if (!invoice || !phone.trim() || !payerName.trim()) {
+      setMessage('Create an invoice, then enter the payer name and mobile number first.');
       return;
     }
     try {
-      const result = await clinicApi.createUpiPayment({ invoice_id: invoice.id, amount: Math.round(invoice.total * 100), customer_name: patientId || 'Patient', customer_phone: phone });
+      const result = await clinicApi.createUpiPayment({ invoice_id: invoice.id, amount: Math.round(invoice.total * 100), customer_name: payerName.trim(), customer_phone: phone });
       await Linking.openURL(result.short_url);
       setMessage('UPI payment checkout opened.');
     } catch (error) {
@@ -45,6 +46,7 @@ const BillingScreen: React.FC = () => {
         <TextInput label="Patient ID" value={patientId} onChangeText={setPatientId} style={styles.input} />
         <TextInput label="Service / item" value={description} onChangeText={setDescription} style={styles.input} />
         <TextInput label="Amount (INR)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={styles.input} />
+        <TextInput label="Payer name" value={payerName} onChangeText={setPayerName} style={styles.input} />
         <TextInput label="Payer mobile" value={phone} onChangeText={setPhone} keyboardType="phone-pad" style={styles.input} />
         <Button mode="contained" onPress={createInvoice}>Create invoice</Button>
         {invoice && <Card style={styles.card}><Card.Content><Text>{invoice.id}</Text><Text>Total: ₹{invoice.total.toFixed(2)}</Text><Text>Status: {invoice.status}</Text><Button mode="outlined" onPress={payByUpi} style={styles.action}>Pay via UPI</Button></Card.Content></Card>}

@@ -50,12 +50,14 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
     root = Path(model_dir)
     results: Dict[str, Any] = {}
     for key, spec in registry.get("models", {}).items():
-        path = root / spec["file"]
-        exists = path.is_file()
-        actual = sha256(path) if exists else None
+        file_name = spec.get("file")
+        path = root / file_name if file_name else None
+        exists = bool(path and path.is_file())
+        actual = sha256(path) if exists and path is not None else None
         expected = (spec.get("sha256") or "").lower()
         results[key] = {
-            "file": str(path),
+            "file": str(path) if path is not None else None,
+            "repository": spec.get("repository"),
             "exists": exists,
             "sha256": actual,
             "hash_matches": bool(exists and expected and actual == expected),

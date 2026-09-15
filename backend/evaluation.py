@@ -65,6 +65,8 @@ def classification_metrics(
         raise ValueError("y_true and y_pred must have the same length")
     if not y_true:
         raise ValueError("At least one evaluation sample is required")
+    if not labels:
+        raise ValueError("At least one label is required")
 
     correct = sum(actual == predicted for actual, predicted in zip(y_true, y_pred))
     sensitivities = []

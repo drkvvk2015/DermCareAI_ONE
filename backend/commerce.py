@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/commerce", tags=["commerce"])
@@ -101,6 +101,7 @@ async def create_razorpay_payment(req: PaymentRequest):
         "currency": "INR",
         "accept_partial": False,
         "reference_id": req.invoice_id,
+        "notes": {"invoice_id": req.invoice_id},
         "description": f"DermCareAI invoice {req.invoice_id}",
         "customer": {
             "name": req.customer_name,
@@ -130,15 +131,25 @@ async def create_razorpay_payment(req: PaymentRequest):
 
 
 @router.post("/payments/webhook")
-async def payment_webhook(payload: Dict[str, Any], x_razorpay_signature: str | None = None):
+async def payment_webhook(
+    request: Request,
+    payload: Dict[str, Any],
+    x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
+):
     secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-    raw = payload.get("_raw_body")
-    if secret and raw and x_razorpay_signature:
-        expected = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+    raw = await request.body()
+    if secret and x_razorpay_signature:
+        expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, x_razorpay_signature):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
-    reference_id = entity.get("notes", {}).get("invoice_id") or entity.get("order_id")
+    payload_root = payload.get("payload", {})
+    payment_entity = payload_root.get("payment", {}).get("entity", {})
+    payment_link_entity = payload_root.get("payment_link", {}).get("entity", {})
+    reference_id = (
+        payment_entity.get("notes", {}).get("invoice_id")
+        or payment_link_entity.get("reference_id")
+        or payment_entity.get("order_id")
+    )
     if reference_id in INVOICES:
         INVOICES[reference_id]["status"] = "paid"
         INVOICES[reference_id]["paid_at"] = now_iso()

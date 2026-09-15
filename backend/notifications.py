@@ -5,15 +5,15 @@ from typing import Any, Dict
 
 import httpx
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 class RegistrationNotification(BaseModel):
-    patient_name: str = Field(min_length=1, max_length=120)
+    recipient_name: str = Field(min_length=1, max_length=120, validation_alias=AliasChoices("recipient_name", "patient_name"))
     phone: str = Field(min_length=5, max_length=30)
-    appointment_text: str = Field(min_length=1, max_length=500)
+    message_text: str = Field(min_length=1, max_length=500, validation_alias=AliasChoices("message_text", "appointment_text"))
     template_name: str = Field(default="patient_registration", min_length=1, max_length=120)
     template_language: str = "en"
     channels: list[str] = ["whatsapp", "sms"]
@@ -32,7 +32,7 @@ async def send_whatsapp(req: RegistrationNotification) -> Dict[str, Any]:
         "template": {
             "name": req.template_name,
             "language": {"code": req.template_language},
-            "components": [{"type": "body", "parameters": [{"type": "text", "text": req.patient_name}, {"type": "text", "text": req.appointment_text}]}],
+            "components": [{"type": "body", "parameters": [{"type": "text", "text": req.recipient_name}, {"type": "text", "text": req.message_text}]}],
         },
     }
     async with httpx.AsyncClient(timeout=15) as client:
@@ -53,7 +53,7 @@ async def send_sms(req: RegistrationNotification) -> Dict[str, Any]:
         "to": req.phone,
         "sender": sender,
         "template": req.template_name,
-        "message": f"Dear {req.patient_name}, {req.appointment_text}",
+        "message": f"Dear {req.recipient_name}, {req.message_text}",
     }
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
@@ -67,7 +67,7 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
     url = os.getenv("SOCIAL_NOTIFICATION_WEBHOOK_URL")
     if not url:
         return {"channel": "social_webhook", "status": "not_configured"}
-    payload = {"event": "patient_registration", "patient_name": req.patient_name, "appointment_text": req.appointment_text}
+    payload = {"event": "patient_registration", "recipient_name": req.recipient_name, "message_text": req.message_text}
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(url, json=payload)
     if r.status_code >= 400:

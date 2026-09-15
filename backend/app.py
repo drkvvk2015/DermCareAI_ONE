@@ -101,9 +101,12 @@ class ModelService:
         self.reload_count += 1
         return self.load()
 
-    def status(self) -> Dict[str, Any]:
+    def status(self, include_error_details: bool = False) -> Dict[str, Any]:
         paths = self.model_paths
-        return {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "last_error": self.last_error, "registry": verify_models(str(MODEL_DIR)), "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}}
+        status = {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "error_present": bool(self.last_error), "registry": verify_models(str(MODEL_DIR)), "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}}
+        if include_error_details:
+            status["last_error"] = self.last_error
+        return status
 
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":

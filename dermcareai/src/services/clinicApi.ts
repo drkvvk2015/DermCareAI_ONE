@@ -8,7 +8,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
   const text = await response.text();
   if (!response.ok) throw new Error(text || `Request failed: ${response.status}`);
-  return (text ? JSON.parse(text) : {}) as T;
+  if (!text) return {} as T;
+  const contentType = response.headers.get('content-type') || '';
+  return (contentType.includes('application/json') ? JSON.parse(text) : text) as T;
 }
 
 export const clinicApi = {
@@ -27,7 +29,7 @@ export const clinicApi = {
   dispense(payload: { patient_id: string; prescription_id?: string; items: { medicine_id: string; quantity: number }[] }) {
     return request('/commerce/pharmacy/dispense', { method: 'POST', body: JSON.stringify(payload) });
   },
-  sendRegistrationNotification(payload: { patient_name: string; phone: string; appointment_text: string; channels: string[] }) {
+  sendRegistrationNotification(payload: { recipient_name: string; phone: string; message_text: string; channels: string[] }) {
     return request('/notifications/registration', { method: 'POST', body: JSON.stringify(payload) });
   },
   audit(payload: { actor_id: string; actor_role: string; action: string; resource_type: string; resource_id: string; metadata?: Record<string, unknown> }) {
