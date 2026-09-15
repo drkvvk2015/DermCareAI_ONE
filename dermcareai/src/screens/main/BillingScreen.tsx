@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet } from 'react-native';
 import { Button, Card, Surface, Text, TextInput } from 'react-native-paper';
-import { NavigationProps } from '../../navigation/types';
 import { clinicApi, Invoice } from '../../services/clinicApi';
 
-const BillingScreen: React.FC<NavigationProps<'Billing'>> = () => {
+const BillingScreen: React.FC = () => {
   const [patientId, setPatientId] = useState('');
   const [description, setDescription] = useState('Consultation');
   const [amount, setAmount] = useState('500');
