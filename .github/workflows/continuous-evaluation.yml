@@ -2,9 +2,18 @@ name: DermCareAI Continuous Evaluation
 
 on:
   push:
-    branches: [main, pr2-recovery-hardening, pr3-ai-suite, pr3-commerce-billing, pr3-pharmacy, pr3-security-rbac-audit, pr3-mobile-notifications]
+    branches:
+      - main
+      - pr2-recovery-hardening
+      - pr3-ai-suite
+      - pr3-commerce-billing
+      - pr3-pharmacy
+      - pr3-security-rbac-audit
+      - pr3-mobile-notifications
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - pr2-recovery-hardening
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
