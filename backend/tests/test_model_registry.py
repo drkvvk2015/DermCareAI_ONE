@@ -4,6 +4,7 @@ import model_registry
 
 
 def test_repository_backed_models_do_not_require_file(tmp_path, monkeypatch) -> None:
+    """Verify repository-backed registry entries do not require local model files."""
     registry_path = tmp_path / "registry.json"
     registry_path.write_text(
         json.dumps(
