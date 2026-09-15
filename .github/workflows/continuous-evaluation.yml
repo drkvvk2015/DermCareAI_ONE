@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONPATH: backend
+
 jobs:
   backend-static-and-safety:
     runs-on: ubuntu-latest
