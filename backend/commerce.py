@@ -5,6 +5,7 @@ import hmac
 import os
 import uuid
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Any, Dict, List
 
 import httpx
@@ -51,8 +52,19 @@ class DispenseRequest(BaseModel):
     items: List[DispenseItem]
 
 
+class StockItemRequest(BaseModel):
+    medicine_id: str = Field(min_length=1)
+    name: str | None = Field(default=None, max_length=200)
+    quantity: float = Field(ge=0)
+    reorder_level: float | None = Field(default=None, ge=0)
+    batch: str | None = Field(default=None, max_length=120)
+    expiry: str | None = Field(default=None, max_length=40)
+    unit_price: float | None = Field(default=None, ge=0)
+
+
 INVOICES: Dict[str, Dict[str, Any]] = {}
 PHARMACY_STOCK: Dict[str, Dict[str, Any]] = {}
+STOCK_LOCK = Lock()
 
 
 def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
@@ -145,27 +157,32 @@ async def payment_webhook(
     payload_root = payload.get("payload", {})
     payment_entity = payload_root.get("payment", {}).get("entity", {})
     payment_link_entity = payload_root.get("payment_link", {}).get("entity", {})
+    if secret and not x_razorpay_signature:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
     reference_id = (
         payment_entity.get("notes", {}).get("invoice_id")
         or payment_link_entity.get("reference_id")
         or payment_entity.get("order_id")
     )
-    if reference_id in INVOICES:
+    event_name = str(payload.get("event", ""))
+    payment_status = str(payment_entity.get("status", "")).lower()
+    is_paid_event = event_name in {"payment.captured", "payment_link.paid"} or payment_status in {"captured", "paid"}
+    if reference_id in INVOICES and is_paid_event:
         INVOICES[reference_id]["status"] = "paid"
         INVOICES[reference_id]["paid_at"] = now_iso()
     return {"received": True}
 
 
 @router.post("/pharmacy/stock")
-def add_stock(item: Dict[str, Any]):
-    medicine_id = str(item.get("medicine_id", "")).strip()
-    if not medicine_id:
-        raise HTTPException(status_code=400, detail="medicine_id is required")
-    PHARMACY_STOCK[medicine_id] = {
-        **item,
-        "updated_at": now_iso(),
-    }
-    return PHARMACY_STOCK[medicine_id]
+def add_stock(item: StockItemRequest):
+    medicine_id = item.medicine_id.strip()
+    with STOCK_LOCK:
+        PHARMACY_STOCK[medicine_id] = {
+            **item.model_dump(),
+            "medicine_id": medicine_id,
+            "updated_at": now_iso(),
+        }
+        return PHARMACY_STOCK[medicine_id]
 
 
 @router.get("/pharmacy/stock")
@@ -176,14 +193,15 @@ def list_stock():
 @router.post("/pharmacy/dispense")
 def dispense(req: DispenseRequest):
     dispensed: list[Dict[str, Any]] = []
-    for item in req.items:
-        stock = PHARMACY_STOCK.get(item.medicine_id)
-        if not stock:
-            raise HTTPException(status_code=404, detail=f"Medicine {item.medicine_id} not found")
-        available = float(stock.get("quantity", 0))
-        if available < item.quantity:
-            raise HTTPException(status_code=409, detail=f"Insufficient stock for {item.medicine_id}")
-        stock["quantity"] = available - item.quantity
-        stock["updated_at"] = now_iso()
-        dispensed.append({"medicine_id": item.medicine_id, "quantity": item.quantity})
+    with STOCK_LOCK:
+        for item in req.items:
+            stock = PHARMACY_STOCK.get(item.medicine_id)
+            if not stock:
+                raise HTTPException(status_code=404, detail=f"Medicine {item.medicine_id} not found")
+            available = float(stock.get("quantity", 0))
+            if available < item.quantity:
+                raise HTTPException(status_code=409, detail=f"Insufficient stock for {item.medicine_id}")
+            stock["quantity"] = available - item.quantity
+            stock["updated_at"] = now_iso()
+            dispensed.append({"medicine_id": item.medicine_id, "quantity": item.quantity})
     return {"patient_id": req.patient_id, "prescription_id": req.prescription_id, "dispensed": dispensed, "dispensed_at": now_iso()}

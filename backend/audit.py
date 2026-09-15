@@ -20,7 +20,7 @@ class AuditEvent(BaseModel):
     action: str = Field(min_length=1, max_length=200)
     resource_type: str = Field(min_length=1, max_length=100)
     resource_id: str = Field(min_length=1, max_length=200)
-    metadata: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     correlation_id: str | None = None
 
 

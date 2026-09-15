@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", "models/registry.json"))
+MODULE_DIR = Path(__file__).resolve().parent
+MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", str(MODULE_DIR / "models/registry.json")))
 
 DEFAULT_REGISTRY: Dict[str, Any] = {
     "schema_version": 1,

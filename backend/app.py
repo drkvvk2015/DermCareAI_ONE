@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hmac
 import io
 import logging
 import os
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageStat
 from pydantic import BaseModel, Field
@@ -51,6 +52,12 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=Fals
 app.include_router(commerce_router)
 app.include_router(notifications_router)
 app.include_router(audit_router)
+
+
+def require_admin_access(x_admin_token: str | None) -> None:
+    admin_token = os.getenv("ADMIN_API_TOKEN")
+    if admin_token and not hmac.compare_digest(x_admin_token or "", admin_token):
+        raise HTTPException(status_code=401, detail="Administrative access required")
 
 
 class ModelService:
@@ -101,9 +108,15 @@ class ModelService:
         self.reload_count += 1
         return self.load()
 
-    def status(self, include_error_details: bool = False) -> Dict[str, Any]:
+    def status(self, include_error_details: bool = False, include_sensitive_details: bool = False) -> Dict[str, Any]:
         paths = self.model_paths
-        status = {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "error_present": bool(self.last_error), "registry": verify_models(str(MODEL_DIR)), "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}}
+        registry = verify_models(str(MODEL_DIR))
+        if not include_sensitive_details:
+            registry = {name: {"exists": details.get("exists", False), "validated": details.get("validated", False), "purpose": details.get("purpose"), "repository": details.get("repository")} for name, details in registry.items()}
+        models = {name: {"exists": Path(path).is_file()} for name, path in paths.items()}
+        if include_sensitive_details:
+            models = {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}
+        status = {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "error_present": bool(self.last_error), "registry": registry, "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": models}
         if include_error_details:
             status["last_error"] = self.last_error
         return status
@@ -196,14 +209,16 @@ def health_check() -> Dict[str, Any]:
 
 
 @app.post("/self-heal")
-def self_heal() -> Dict[str, Any]:
+def self_heal(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> Dict[str, Any]:
+    require_admin_access(x_admin_token)
     recovered = model_service.recover()
     return {"recovered": recovered, "status": model_service.status()}
 
 
 @app.get("/models")
-def model_status() -> Dict[str, Any]:
-    return {"version": APP_VERSION, **model_service.status()}
+def model_status(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> Dict[str, Any]:
+    require_admin_access(x_admin_token)
+    return {"version": APP_VERSION, **model_service.status(include_error_details=True, include_sensitive_details=True)}
 
 
 @app.post("/predict", response_model=PredictionResponse)

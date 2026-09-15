@@ -16,7 +16,7 @@ class RegistrationNotification(BaseModel):
     message_text: str = Field(min_length=1, max_length=500, validation_alias=AliasChoices("message_text", "appointment_text"))
     template_name: str = Field(default="patient_registration", min_length=1, max_length=120)
     template_language: str = "en"
-    channels: list[str] = ["whatsapp", "sms"]
+    channels: list[str] = Field(default_factory=lambda: ["whatsapp", "sms"])
 
 
 async def send_whatsapp(req: RegistrationNotification) -> Dict[str, Any]:
