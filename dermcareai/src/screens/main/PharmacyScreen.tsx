@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { Button, Card, Divider, Surface, Text, TextInput } from 'react-native-paper';
-import { NavigationProps } from '../../navigation/types';
 import { StockItem, clinicApi } from '../../services/clinicApi';
 
-const PharmacyScreen: React.FC<NavigationProps<'Pharmacy'>> = () => {
+const PharmacyScreen: React.FC = () => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [medicineId, setMedicineId] = useState('');
   const [name, setName] = useState('');
