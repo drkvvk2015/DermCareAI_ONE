@@ -19,7 +19,6 @@ from SkinLesionClassifier import SkinLesionClassifier
 from audit import router as audit_router
 from commerce import router as commerce_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
-from hf_derm_model import EmbeddedDermModel
 from model_registry import verify_models
 from notifications import router as notifications_router
 from resilience import file_sha256
@@ -58,7 +57,7 @@ class ModelService:
         self.preprocessor = ImagePreprocessor(target_size=(224, 224))
         self.mobilenet: MobileNetPredictor | None = None
         self.nasnet: SkinLesionClassifier | None = None
-        self.embedded: EmbeddedDermModel | None = None
+        self.embedded: Any | None = None
         self.mode = "unavailable"
         self.reload_count = 0
         self.last_error: str | None = None
@@ -85,6 +84,10 @@ class ModelService:
             self.last_error = str(exc)
             if ENABLE_EMBEDDED_DERM_MODEL:
                 try:
+                    # Keep the optional transformer dependency out of normal
+                    # application startup/import paths.
+                    from hf_derm_model import EmbeddedDermModel
+
                     self.embedded = EmbeddedDermModel()
                     self.mode = "embedded-ham10000-research-model"
                     self.last_error = None
