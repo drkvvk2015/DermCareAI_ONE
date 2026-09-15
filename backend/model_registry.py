@@ -63,6 +63,7 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
         if not spec.get("file"):
             results[key] = {
                 "repository": spec.get("repository"),
+                "source": "repository",
                 "exists": False,
                 "sha256": None,
                 "hash_matches": False,
