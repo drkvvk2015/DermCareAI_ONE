@@ -4,6 +4,8 @@ uvicorn
 python-multipart
 pydantic
 pyngrok
+httpx
+firebase-admin
 
 # Image processing
 Pillow
@@ -14,6 +16,8 @@ numpy
 torch
 torchvision
 tensorflow
+transformers
+huggingface-hub
 
 # Utilities
 python-dotenv

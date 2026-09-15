@@ -30,22 +30,7 @@ export interface ScreeningReport {
 }
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no-show';
-
-export type Appointment = {
-  id: string;
-  patientId: string;
-  patientName: string;
-  doctorId: string;
-  date: string;
-  time: string;
-  type: string;
-  status: AppointmentStatus;
-  notes?: string;
-  diagnosis?: string;
-  prescription?: string;
-  createdAt: string;
-  updatedAt: string;
-};
+export type Appointment = { id: string; patientId: string; patientName: string; doctorId: string; date: string; time: string; type: string; status: AppointmentStatus; notes?: string; diagnosis?: string; prescription?: string; createdAt: string; updatedAt: string };
 
 export type RootStackParamList = {
   Login: undefined;
@@ -59,6 +44,8 @@ export type RootStackParamList = {
   EditAppointment: { appointment: Appointment };
   Screening: undefined | { patient?: Patient };
   ScreeningReport: { report: ScreeningReport };
+  Billing: undefined;
+  Pharmacy: undefined;
 };
 
 export type NavigationProps<T extends keyof RootStackParamList> = {
