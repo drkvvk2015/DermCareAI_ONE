@@ -26,7 +26,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const doctorData: DoctorData = { fullName: formData.fullName, email: formData.email, licenseNumber: formData.licenseNumber, specialization: formData.specialization, phoneNumber: formData.phoneNumber, createdAt: new Date().toISOString() };
       await setDoc(doc(db, 'doctors', userCredential.user.uid), doctorData);
-      await clinicApi.audit({ actor_id: userCredential.user.uid, actor_role: 'doctor', action: 'doctor_registered', resource_type: 'doctor', resource_id: userCredential.user.uid, metadata: { specialization: formData.specialization } }).catch(() => undefined);
+      await clinicApi.audit({ action: 'doctor_registered', resource_type: 'doctor', resource_id: userCredential.user.uid, metadata: { specialization: formData.specialization } }).catch(() => undefined);
       await clinicApi.sendRegistrationNotification({ patient_name: formData.fullName, phone: formData.phoneNumber, appointment_text: 'Your DermCareAI clinic account has been registered successfully.', channels: ['whatsapp', 'sms'] }).catch(() => undefined);
       setFormData({ email: '', password: '', confirmPassword: '', fullName: '', licenseNumber: '', specialization: '', phoneNumber: '' });
       alert('Registration successful! A confirmation notification was requested.');
