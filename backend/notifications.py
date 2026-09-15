@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any, Dict
 
@@ -81,12 +82,13 @@ async def registration_notifications(req: RegistrationNotification):
     invalid_channels = [channel for channel in req.channels if channel not in supported_channels]
     if invalid_channels:
         raise HTTPException(status_code=400, detail=f"Unsupported notification channels: {', '.join(sorted(set(invalid_channels)))}")
-    results: list[Dict[str, Any]] = []
+    tasks = []
     for channel in req.channels:
         if channel == "whatsapp":
-            results.append(await send_whatsapp(req))
+            tasks.append(send_whatsapp(req))
         elif channel == "sms":
-            results.append(await send_sms(req))
+            tasks.append(send_sms(req))
         elif channel == "social_webhook":
-            results.append(await social_safe_webhook(req))
+            tasks.append(social_safe_webhook(req))
+    results = await asyncio.gather(*tasks)
     return {"results": results}

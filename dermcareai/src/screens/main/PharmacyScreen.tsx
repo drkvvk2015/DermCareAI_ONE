@@ -16,10 +16,10 @@ const PharmacyScreen: React.FC = () => {
   };
   useEffect(() => { void load(); }, []);
 
-  const add = async () => {
+  const addStockReceipt = async () => {
     try {
       await clinicApi.addStock({ medicine_id: medicineId.trim(), name: name.trim(), quantity: Number(quantity) || 0, reorder_level: 5 });
-      setMessage('Stock saved.');
+      setMessage('Stock receipt saved.');
       await load();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to save stock'); }
   };
@@ -39,8 +39,8 @@ const PharmacyScreen: React.FC = () => {
         <Text variant="headlineSmall">Pharmacy</Text>
         <TextInput label="Medicine ID" value={medicineId} onChangeText={setMedicineId} style={styles.input} />
         <TextInput label="Medicine name" value={name} onChangeText={setName} style={styles.input} />
-        <TextInput label="Opening quantity" value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" style={styles.input} />
-        <Button mode="contained" onPress={add}>Add / update stock</Button>
+        <TextInput label="Quantity to add" value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" style={styles.input} />
+        <Button mode="contained" onPress={addStockReceipt}>Add stock receipt</Button>
         <Divider style={styles.divider} />
         <TextInput label="Patient ID for dispensing" value={patientId} onChangeText={setPatientId} style={styles.input} />
         {stock.map(item => {

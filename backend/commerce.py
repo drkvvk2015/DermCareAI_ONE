@@ -108,6 +108,14 @@ async def create_razorpay_payment(req: PaymentRequest):
     key_secret = os.getenv("RAZORPAY_KEY_SECRET")
     if not key_id or not key_secret:
         raise HTTPException(status_code=503, detail="Razorpay is not configured")
+    invoice = INVOICES.get(req.invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.get("status") != "unpaid":
+        raise HTTPException(status_code=409, detail="Invoice is not payable")
+    expected_amount = int(round(float(invoice.get("total", 0)) * 100))
+    if req.amount != expected_amount:
+        raise HTTPException(status_code=400, detail="Payment amount must match the invoice total")
 
     payload = {
         "amount": req.amount,

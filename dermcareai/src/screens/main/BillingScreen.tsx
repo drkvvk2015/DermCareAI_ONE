@@ -32,6 +32,10 @@ const BillingScreen: React.FC = () => {
     }
     try {
       const result = await clinicApi.createUpiPayment({ invoice_id: invoice.id, amount: Math.round(invoice.total * 100), customer_name: payerName.trim(), customer_phone: phone.trim() });
+      if (!result.short_url) {
+        setMessage('Payment provider did not return a checkout link.');
+        return;
+      }
       await Linking.openURL(result.short_url);
       setMessage('UPI payment checkout opened.');
     } catch (error) {
