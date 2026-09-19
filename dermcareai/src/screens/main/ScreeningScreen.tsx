@@ -113,6 +113,7 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
       confidence: result.confidence,
       model: result.model_used,
       recommendations,
+      governance: result.governance,
       doctorNotes: '',
     };
 
@@ -124,6 +125,8 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
         safetyReason: result.safety_reason,
         appVersion: result.app_version,
         imageQuality: result.image_quality,
+        aiGovernance: result.governance,
+        requestId: result.request_id,
       });
       navigation.navigate('ScreeningReport', { report: { id: ref.id, ...reportData } });
     } catch (error) {
@@ -175,8 +178,10 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
                   <Text style={result.accepted ? styles.accepted : styles.abstain}>{result.class_name}</Text>
                   <Text>Confidence: {(result.confidence * 100).toFixed(1)}%</Text>
                   <Text>Model: {result.model_used}</Text>
+                  <Text>Decision provenance: {result.governance.model_provenance}</Text>
                   <Text>Safety gate: {result.accepted ? 'PASSED — clinician review required' : 'ABSTAINED'}</Text>
                   <Text style={styles.caption}>{result.safety_reason}</Text>
+                  <Text style={styles.caption}>Request ID: {result.request_id}</Text>
                   <Text style={styles.caption}>Image quality: {result.image_quality.usable ? 'acceptable' : 'insufficient'} ({result.image_quality.reason})</Text>
                   <Button mode="contained" onPress={() => void saveReport()} style={styles.saveButton}>Save for Clinician Review</Button>
                 </Card.Content>
