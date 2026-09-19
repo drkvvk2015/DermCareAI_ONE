@@ -77,7 +77,7 @@ jobs:
             echo "Result: SUCCESS"
             echo "Backup/restore sentinel: DERMCAREAI-DR-OK"
           } > ../dr-drill/evidence/restore-drill.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dermcareai-disaster-recovery-drill
           path: dr-drill/
