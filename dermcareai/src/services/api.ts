@@ -13,7 +13,22 @@ export type ImageQuality = {
   issues: string[];
 };
 
+export type AIGovernanceCard = {
+  decision_type: 'clinical_decision_support';
+  intended_use: string;
+  diagnostic_status: 'not_a_diagnosis';
+  human_review_required: boolean;
+  abstention_enabled: boolean;
+  confidence_threshold: number;
+  model_provenance: string;
+  model_name: string;
+  research_model: boolean;
+  safety_controls: string[];
+  limitations: string[];
+};
+
 export type PredictionResponse = {
+  request_id: string;
   class_name: string;
   confidence: number;
   model_used: string;
@@ -22,6 +37,7 @@ export type PredictionResponse = {
   safety_reason: string;
   image_quality: ImageQuality;
   app_version: string;
+  governance: AIGovernanceCard;
 };
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
