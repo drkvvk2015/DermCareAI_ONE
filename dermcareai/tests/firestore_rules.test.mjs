@@ -1,9 +1,16 @@
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const testEnv = await initializeTestEnvironment({
   projectId: "demo-dermcareai",
-  firestore: { rules: "../firestore.rules" },
+  firestore: {
+    rules: readFileSync(
+      fileURLToPath(new URL("../../firestore.rules", import.meta.url)),
+      "utf8",
+    ),
+  },
 });
 
 try {
