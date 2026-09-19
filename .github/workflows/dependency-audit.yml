@@ -41,7 +41,7 @@ jobs:
                   out.append(f"Generated {path}")
           Path("dependency-audit-summary.txt").write_text("\n".join(out) + "\n")
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dermcareai-dependency-audit
           path: |
