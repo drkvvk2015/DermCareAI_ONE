@@ -314,6 +314,9 @@ def platform_info() -> PlatformInfo:
             "consent-and-retention-metadata",
             "longitudinal-lesion-tracking",
             "model-validation-and-approval-ledger",
+            "clinical-signoff",
+            "follow-up-management",
+            "clinician-reviewed-ai-assessments",
         ],
         generated_at=utc_now(),
     )
