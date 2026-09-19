@@ -12,14 +12,14 @@ type SignedUpload = {
   resource_type: string;
 };
 
-async function getSignedUpload(patientId: string, purpose: string): Promise<SignedUpload> {
+async function getSignedUpload(subjectId: string, purpose: string): Promise<SignedUpload> {
   const user = auth.currentUser;
   if (!user) throw new Error('Authentication required. Please sign in again.');
   const token = await user.getIdToken();
   const response = await fetch(`${API_URL}/media/sign-upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ patient_id: patientId, purpose }),
+    body: JSON.stringify({ subject_id: subjectId, purpose }),
   });
   const body = await response.text();
   if (!response.ok) throw new Error(body || `Upload authorization failed: ${response.status}`);
@@ -27,7 +27,7 @@ async function getSignedUpload(patientId: string, purpose: string): Promise<Sign
 }
 
 async function uploadFile(filePart: any, patientId: string, purpose: string): Promise<string> {
-  const signed = await getSignedUpload(patientId, purpose);
+  const signed = await getSignedUpload(subjectId, purpose);
   const formData = new FormData();
   formData.append('file', filePart);
   formData.append('api_key', signed.api_key);
@@ -43,7 +43,7 @@ async function uploadFile(filePart: any, patientId: string, purpose: string): Pr
   return data.secure_url as string;
 }
 
-export const uploadImage = async (imageUri: string, patientId: string, purpose = 'clinical-image'): Promise<string> => {
+export const uploadImage = async (imageUri: string, subjectId: string, purpose = 'clinical-image'): Promise<string> => {
   return uploadFile(
     { uri: imageUri, type: 'image/jpeg', name: imageUri.split('/').pop() || 'clinical-image.jpg' } as any,
     patientId,
@@ -51,9 +51,9 @@ export const uploadImage = async (imageUri: string, patientId: string, purpose =
   );
 };
 
-export const uploadDataUri = async (dataUri: string, patientId: string, purpose = 'clinical-artifact'): Promise<string> => {
+export const uploadDataUri = async (dataUri: string, subjectId: string, purpose = 'clinical-artifact'): Promise<string> => {
   if (!dataUri.startsWith('data:')) throw new Error('Expected a data URI');
-  return uploadFile(dataUri, patientId, purpose);
+  return uploadFile(dataUri, subjectId, purpose);
 };
 
 export const getImageUrl = (cloudName: string, publicId: string) => {
