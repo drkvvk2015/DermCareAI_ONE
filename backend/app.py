@@ -384,7 +384,8 @@ def health_check() -> Dict[str, Any]:
 
 @app.post("/self-heal")
 def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
-    enforce_rate_limit(f"self-heal:{client_key(request, user[\"uid\"])}", limit=3, window_seconds=300)
+    user_key = client_key(request, user["uid"])
+    enforce_rate_limit(f"self-heal:{user_key}", limit=3, window_seconds=300)
     recovered = model_service.recover()
     return {"recovered": recovered, "status": model_service.status()}
 
@@ -396,7 +397,8 @@ def model_status(_: dict[str, Any] = Depends(require_roles("admin", "auditor")))
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(request: Request, file: UploadFile = File(...), user: dict[str, Any] = Depends(require_roles("doctor", "admin"))) -> Dict[str, Any]:
-    enforce_rate_limit(f"predict:{client_key(request, user[\"uid\"])}", limit=30, window_seconds=60)
+    user_key = client_key(request, user["uid"])
+    enforce_rate_limit(f"predict:{user_key}", limit=30, window_seconds=60)
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     contents = await file.read()
