@@ -577,6 +577,21 @@ def review_ai_assessment(
     return dict(row)
 
 
+def has_pending_ai_reviews(*, clinic_id: str, encounter_id: str) -> bool:
+    init_store()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 FROM encounter_ai_reviews
+            WHERE clinic_id = ? AND encounter_id = ?
+              AND clinician_decision IS NULL
+            LIMIT 1
+            """,
+            (clinic_id, encounter_id),
+        ).fetchone()
+    return row is not None
+
+
 def list_ai_reviews(*, clinic_id: str, encounter_id: str) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
