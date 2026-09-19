@@ -3,17 +3,21 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
+from contextlib import contextmanager
+from sqlalchemy import Engine
+
+from storage import compat_connection, create_store_engine, require_postgres_in_production
 from pydantic import BaseModel, Field
 
 from auth import require_roles
 
 router = APIRouter(prefix="/audit", tags=["audit"])
-DB_PATH = os.getenv("AUDIT_DB_PATH", "audit.db")
+ENGINE: Engine = create_store_engine("AUDIT_DATABASE_URL", "AUDIT_DB_PATH", "audit.db")
+require_postgres_in_production(ENGINE, "Audit store")
 
 
 class AuditEvent(BaseModel):
@@ -24,10 +28,14 @@ class AuditEvent(BaseModel):
     correlation_id: str | None = None
 
 
+@contextmanager
 def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, actor_id TEXT NOT NULL, actor_role TEXT NOT NULL, action TEXT NOT NULL, resource_type TEXT NOT NULL, resource_id TEXT NOT NULL, metadata_json TEXT NOT NULL, correlation_id TEXT, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL)")
-    return conn
+    with compat_connection(ENGINE) as conn:
+        id_type = "BIGSERIAL PRIMARY KEY" if ENGINE.url.get_backend_name() == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS audit_events (id {id_type}, timestamp TEXT NOT NULL, actor_id TEXT NOT NULL, actor_role TEXT NOT NULL, action TEXT NOT NULL, resource_type TEXT NOT NULL, resource_id TEXT NOT NULL, metadata_json TEXT NOT NULL, correlation_id TEXT, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL)"
+        )
+        yield conn
 
 
 def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
@@ -46,8 +54,21 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
             "previous_hash": previous_hash,
         }
         digest = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-        cursor = conn.execute("INSERT INTO audit_events(timestamp,actor_id,actor_role,action,resource_type,resource_id,metadata_json,correlation_id,previous_hash,event_hash) VALUES(?,?,?,?,?,?,?,?,?,?)", (timestamp, actor_id, actor_role, event.action, event.resource_type, event.resource_id, json.dumps(event.metadata, sort_keys=True), event.correlation_id, previous_hash, digest))
-        event_id = cursor.lastrowid
+        result = conn.execute(
+            """
+            INSERT INTO audit_events(
+              timestamp,actor_id,actor_role,action,resource_type,resource_id,
+              metadata_json,correlation_id,previous_hash,event_hash
+            ) VALUES(?,?,?,?,?,?,?,?,?,?)
+            RETURNING id
+            """,
+            (
+                timestamp, actor_id, actor_role, event.action, event.resource_type,
+                event.resource_id, json.dumps(event.metadata, sort_keys=True),
+                event.correlation_id, previous_hash, digest,
+            ),
+        )
+        event_id = result.fetchone()["id"]
     return {"id": f"AUD-{event_id:09d}", **canonical, "event_hash": digest}
 
 
