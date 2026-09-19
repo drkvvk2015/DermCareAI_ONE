@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install lightweight test dependencies
-        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin
+        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]'
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run safety and metric tests
