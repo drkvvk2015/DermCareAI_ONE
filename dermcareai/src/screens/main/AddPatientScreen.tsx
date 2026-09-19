@@ -17,6 +17,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { collection, addDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
+import { getClinicScope } from '../../services/tenant';
 
 type AddPatientScreenProps = {
   navigation: NativeStackNavigationProp<any>;
@@ -50,9 +51,12 @@ const AddPatientScreen: React.FC<AddPatientScreenProps> = ({ navigation }) => {
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
+      const { organizationId, clinicId } = await getClinicScope();
 
       await addDoc(collection(db, 'patients'), {
         ...formData,
+        organizationId,
+        clinicId,
         doctorId: userId,
         createdAt: new Date().toISOString(),
         upcomingVisit: null,
