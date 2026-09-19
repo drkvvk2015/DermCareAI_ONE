@@ -61,3 +61,65 @@ def transaction(engine: Engine) -> Iterator[Connection]:
 
 def execute(conn: Connection, sql: str, params: dict[str, Any] | None = None) -> Result[Any]:
     return conn.execute(text(sql), params or {})
+
+
+class CompatResult:
+    def __init__(self, result: Result[Any]):
+        self._result = result
+        self.rowcount = result.rowcount
+        try:
+            self.lastrowid = result.inserted_primary_key[0] if result.inserted_primary_key else None
+        except Exception:
+            self.lastrowid = None
+
+    def fetchone(self) -> dict[str, Any] | None:
+        row = self._result.mappings().first()
+        return dict(row) if row is not None else None
+
+    def fetchall(self) -> list[dict[str, Any]]:
+        return [dict(row) for row in self._result.mappings().all()]
+
+
+class CompatConnection:
+    def __init__(self, conn: Connection):
+        self._conn = conn
+
+    def _convert(self, sql: str, params: Any) -> tuple[str, dict[str, Any]]:
+        if params is None:
+            return sql, {}
+        if isinstance(params, dict):
+            return sql, params
+        values = list(params)
+        converted: list[str] = []
+        index = 0
+        for char in sql:
+            if char == "?":
+                name = f"p{index}"
+                converted.append(f":{name}")
+                index += 1
+            else:
+                converted.append(char)
+        if index != len(values):
+            raise ValueError("Parameter count does not match SQL placeholders")
+        return "".join(converted), {f"p{i}": value for i, value in enumerate(values)}
+
+    def execute(self, sql: str, params: Any = None) -> CompatResult:
+        converted_sql, converted_params = self._convert(sql, params)
+        return CompatResult(self._conn.execute(text(converted_sql), converted_params))
+
+    def executescript(self, script: str) -> None:
+        statements = [statement.strip() for statement in script.split(";") if statement.strip()]
+        for statement in statements:
+            self.execute(statement)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def rollback(self) -> None:
+        self._conn.rollback()
+
+
+@contextmanager
+def compat_connection(engine: Engine) -> Iterator[CompatConnection]:
+    with engine.begin() as conn:
+        yield CompatConnection(conn)
