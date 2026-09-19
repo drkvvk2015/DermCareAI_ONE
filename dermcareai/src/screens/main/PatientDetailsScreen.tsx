@@ -321,6 +321,14 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
       <View style={styles.actionButtonsContainer}>
         <Button
           mode="contained"
+          icon="stethoscope"
+          onPress={() => navigation.navigate('NewEncounter', { patient })}
+          style={styles.actionButton}
+        >
+          Start Clinical Encounter
+        </Button>
+        <Button
+          mode="contained"
           onPress={() => navigation.navigate('NewAppointment', { patient })}
           style={styles.actionButton}
         >
