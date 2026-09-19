@@ -10,7 +10,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from auth import get_current_user
+from auth import require_roles
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 DB_PATH = os.getenv("AUDIT_DB_PATH", "audit.db")
@@ -52,12 +52,12 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/events")
-def create_audit_event(event: AuditEvent, user: dict[str, Any] = Depends(get_current_user)):
+def create_audit_event(event: AuditEvent, user: dict[str, Any] = Depends(require_roles("admin", "auditor"))):
     return record_event(event, user)
 
 
 @router.get("/events")
-def list_audit_events(limit: int = 100, user: dict[str, Any] = Depends(get_current_user)):
+def list_audit_events(limit: int = 100, user: dict[str, Any] = Depends(require_roles("admin", "auditor"))):
     with db() as conn:
         rows = conn.execute("SELECT id,timestamp,actor_id,actor_role,action,resource_type,resource_id,metadata_json,correlation_id,previous_hash,event_hash FROM audit_events ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)).fetchall()
     return [{"id": f"AUD-{row[0]:09d}", "timestamp": row[1], "actor_id": row[2], "actor_role": row[3], "action": row[4], "resource_type": row[5], "resource_id": row[6], "metadata": json.loads(row[7]), "correlation_id": row[8], "previous_hash": row[9], "event_hash": row[10]} for row in rows]
