@@ -10,6 +10,7 @@ import { NavigationProps, Patient, ScreeningReport } from '../../navigation/type
 import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
 import { uploadDataUri, uploadImage } from '../../services/cloudinary';
 import { getClinicScope } from '../../services/tenant';
+import { clinicalApi } from '../../services/clinicalApi';
 
 const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, route }) => {
   const theme = useTheme();
@@ -21,6 +22,8 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [result, setResult] = useState<PredictionResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [consentActive, setConsentActive] = useState(false);
+  const [consentLoading, setConsentLoading] = useState(false);
 
   useEffect(() => {
     void fetchPatients();
@@ -31,6 +34,43 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
       setSelectedPatient(route.params.patient);
     }
   }, [isFocused, route?.params?.patient]);
+
+  useEffect(() => {
+    const loadConsent = async () => {
+      if (!selectedPatient) {
+        setConsentActive(false);
+        return;
+      }
+      try {
+        const response = await clinicalApi.getActiveConsent(selectedPatient.id);
+        setConsentActive(response.active);
+      } catch {
+        setConsentActive(false);
+      }
+    };
+    void loadConsent();
+  }, [selectedPatient?.id]);
+
+  const recordExistingConsent = async () => {
+    if (!selectedPatient) return;
+    setConsentLoading(true);
+    try {
+      await clinicalApi.recordExistingConsent({
+        patientId: selectedPatient.id,
+        purpose: 'clinical-image',
+        documentVersion: 'clinic-approved-v1',
+      });
+      setConsentActive(true);
+      Alert.alert(
+        'Consent recorded',
+        'The app recorded the existing patient consent using the clinic-approved consent version. Use your clinic-approved consent process before recording this event.',
+      );
+    } catch (error) {
+      Alert.alert('Consent not recorded', error instanceof Error ? error.message : 'Unable to record consent.');
+    } finally {
+      setConsentLoading(false);
+    }
+  };
 
   const fetchPatients = async () => {
     const userId = auth.currentUser?.uid;
@@ -53,6 +93,17 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
   const captureOrPick = async (mode: 'camera' | 'library') => {
     if (!selectedPatient) {
       Alert.alert('Select patient', 'Please select a patient before screening.');
+      return;
+    }
+    if (!consentActive) {
+      Alert.alert(
+        'Clinical image consent required',
+        'Confirm that the patient consent has already been obtained through your clinic-approved consent process, then record that consent in DermCareAI before capturing or uploading the image.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Record Existing Consent', onPress: () => void recordExistingConsent() },
+        ],
+      );
       return;
     }
     if (!(await requestPermissions())) {
@@ -155,6 +206,29 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
         <Card style={styles.warningCard}>
           <Card.Content>
             <Text style={styles.warning}>AI decision-support only. The system can abstain and does not establish a diagnosis.</Text>
+          </Card.Content>
+        </Card>
+
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium">Clinical image consent</Text>
+            <Text style={styles.caption}>
+              {consentActive
+                ? 'Active consent recorded for clinical-image use.'
+                : 'No active consent is recorded for clinical-image use.'}
+            </Text>
+            <Button
+              mode={consentActive ? 'outlined' : 'contained'}
+              onPress={() => void recordExistingConsent()}
+              loading={consentLoading}
+              disabled={!selectedPatient || consentLoading}
+              style={styles.saveButton}
+            >
+              {consentActive ? 'Re-record clinic consent' : 'Record Existing Consent'}
+            </Button>
+            <Text style={styles.caption}>
+              Use the clinic-approved consent process before recording consent in the app.
+            </Text>
           </Card.Content>
         </Card>
 
