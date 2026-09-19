@@ -1,0 +1,24 @@
+name: DermCareAI Firestore Rules
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install Firestore rules test dependencies
+        working-directory: dermcareai
+        run: npm install --no-save @firebase/rules-unit-testing firebase-tools
+      - name: Run Firestore emulator rules test
+        run: npx firebase emulators:exec --project demo-dermcareai --only firestore "node tests/firestore_rules.test.mjs"
