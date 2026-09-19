@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { API_URL } from '@env';
+import type { AIGovernanceCard } from '../types/platform';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -14,6 +15,7 @@ export type ImageQuality = {
 };
 
 export type PredictionResponse = {
+  request_id: string;
   class_name: string;
   confidence: number;
   model_used: string;
@@ -22,6 +24,7 @@ export type PredictionResponse = {
   safety_reason: string;
   image_quality: ImageQuality;
   app_version: string;
+  governance: AIGovernanceCard;
 };
 
 async function request(path: string, init?: RequestInit): Promise<Response> {

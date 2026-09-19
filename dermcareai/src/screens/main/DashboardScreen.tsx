@@ -20,6 +20,7 @@ import { format, parseISO, isAfter } from 'date-fns';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Appointment, AppointmentStatus } from '../../navigation/types';
+import { platformApi, PlatformInfo, ReadinessResponse } from '../../services/platformApi';
 
 type DashboardStats = {
   totalPatients: number;
@@ -39,6 +40,9 @@ const DashboardScreen = () => {
     todayAppointments: 0,
     pendingFollowUps: 0,
   });
+  const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
+  const [platformLoading, setPlatformLoading] = useState(false);
   const navigation = useNavigation<DashboardScreenNavigationProp>();
 
   const styles = makeStyles(theme);
@@ -58,6 +62,24 @@ const DashboardScreen = () => {
 
   const getAppointmentTypeLabel = (type: string): string => {
     return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
+  const fetchPlatformStatus = async () => {
+    setPlatformLoading(true);
+    try {
+      const [info, ready] = await Promise.all([
+        platformApi.getInfo(),
+        platformApi.getReadiness(),
+      ]);
+      setPlatformInfo(info);
+      setReadiness(ready);
+    } catch (error) {
+      console.error('Platform health check failed:', error);
+      setPlatformInfo(null);
+      setReadiness(null);
+    } finally {
+      setPlatformLoading(false);
+    }
   };
 
   const fetchDashboardData = async () => {
@@ -121,12 +143,13 @@ const DashboardScreen = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    void fetchDashboardData();
+    void fetchPlatformStatus();
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDashboardData();
+    await Promise.all([fetchDashboardData(), fetchPlatformStatus()]);
     setRefreshing(false);
   };
 
@@ -147,6 +170,33 @@ const DashboardScreen = () => {
           {format(new Date(), 'EEEE, MMMM d, yyyy')}
         </Text>
       </Surface>
+
+      <Card style={styles.platformCard}>
+        <Card.Content>
+          <View style={styles.platformHeader}>
+            <View>
+              <Text style={styles.platformTitle}>Clinical Command Center</Text>
+              <Text style={styles.platformSubtitle}>
+                {platformInfo ? `API v${platformInfo.api_version} • ${platformInfo.environment}` : 'Platform status unavailable'}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.platformStatus,
+                { color: readiness?.status === 'ready' ? theme.colors.tertiary : theme.colors.error },
+              ]}
+            >
+              {platformLoading ? 'CHECKING' : readiness?.status?.toUpperCase() || 'OFFLINE'}
+            </Text>
+          </View>
+          <Text style={styles.platformDetail}>
+            AI safety: abstention + mandatory clinician review + model provenance
+          </Text>
+          <Text style={styles.platformDetail}>
+            Authentication: {readiness?.components.clinic_auth?.status === 'ok' ? 'ENFORCED' : 'CHECK CONFIGURATION'}
+          </Text>
+        </Card.Content>
+      </Card>
 
       <View style={styles.statsContainer}>
         <Card style={styles.statsCard}>
@@ -252,6 +302,35 @@ const makeStyles = (theme: MD3Theme) => StyleSheet.create({
   header: {
     padding: 20,
     elevation: 4,
+  },
+  platformCard: {
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 4,
+    elevation: 2,
+  },
+  platformHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  platformTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  platformSubtitle: {
+    fontSize: 13,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  platformStatus: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  platformDetail: {
+    fontSize: 13,
+    opacity: 0.8,
+    marginTop: 8,
   },
   welcomeText: {
     fontSize: 24,

@@ -2,7 +2,20 @@
 
 DermCareAI is a healthcare-oriented dermatology clinic platform that combines patient and appointment management with AI-assisted image screening, clinical documentation, billing and hosted UPI checkout, pharmacy inventory/dispensing, audit logging, and authenticated notifications.
 
+> **v4 platform revolution:** The platform now has a versioned `/api/v1` runtime contract, request correlation IDs, readiness/liveness endpoints, privacy-safe aggregate observability, explicit AI governance/provenance metadata, and a clinician-facing platform command centre. See [docs/REVOLUTION_V4_ARCHITECTURE.md](docs/REVOLUTION_V4_ARCHITECTURE.md).
+
+
 > **Clinical safety:** DermCareAI is an assistive software platform. AI screening output is not a diagnosis and must not be used as the sole basis for treatment. The embedded HAM10000 model is a research fallback and is not clinically validated for routine patient care.
+
+## v4 platform capabilities
+
+- Versioned platform API contract under `/api/v1`
+- Runtime readiness and liveness signals
+- Request correlation via `X-Request-ID`
+- Aggregate observability without patient payload persistence
+- AI governance card attached to every screening decision
+- Explicit model provenance, threshold, abstention and human-review metadata
+- Mobile Clinical Command Center exposing backend readiness and authentication posture
 
 ## Current capabilities
 

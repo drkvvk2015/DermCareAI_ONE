@@ -18,7 +18,7 @@ import {
   Divider,
 } from 'react-native-paper';
 import { NavigationProps, Patient, Appointment, ScreeningReport } from '../../navigation/types';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, writeBatch, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { format } from 'date-fns';
 
@@ -26,6 +26,16 @@ interface ScreeningSection {
   screenings: ScreeningReport[];
   loading: boolean;
 }
+
+type PatientTimelineEvent = {
+  id: string;
+  date: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  appointment?: Appointment;
+  screening?: ScreeningReport;
+};
 
 const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
   navigation,
@@ -124,46 +134,41 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
     return unsubscribe;
   }, [navigation]);
 
+  const timeline: PatientTimelineEvent[] = [
+    ...appointments.map(appointment => ({
+      id: `appointment-${appointment.id}`,
+      date: appointment.date,
+      title: `Appointment • ${appointment.type}`,
+      subtitle: appointment.diagnosis || appointment.status,
+      icon: 'calendar',
+      appointment,
+    })),
+    ...screeningSection.screenings.map(screening => ({
+      id: `screening-${screening.id}`,
+      date: screening.date,
+      title: `AI screening • ${screening.condition}`,
+      subtitle: `${(screening.confidence * 100).toFixed(1)}% confidence`,
+      icon: 'brain',
+      screening,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchPatientData();
+    await Promise.all([fetchPatientData(), fetchScreenings()]);
     setRefreshing(false);
   };
 
   const handleDeletePatient = async () => {
     try {
-      // Reference to the patient's appointments
-      const appointmentsRef = collection(db, 'appointments');
-      const appointmentsQuery = query(
-        appointmentsRef,
-        where('patientId', '==', patient.id)
-      );
-  
-      const appointmentsSnapshot = await getDocs(appointmentsQuery);
-      const batch = writeBatch(db);
-  
-      // Delete all appointments for the patient
-      appointmentsSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-  
-      // Commit the batch deletion
-      await batch.commit();
-  
-      // Mark the patient as deleted (soft delete)
       const patientRef = doc(db, 'patients', patient.id);
       await updateDoc(patientRef, {
         deleted: true,
         deletedAt: new Date().toISOString(),
       });
-
-      // Delete patient (hard delete)
-      await deleteDoc(patientRef);
-
-      // Navigate back after deletion
       navigation.goBack();
     } catch (error) {
-      console.error('Error deleting patient and appointments:', error);
+      console.error('Error archiving patient:', error);
     }
   };  
 
@@ -233,7 +238,36 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
           </List.Section>
 
           <Divider style={styles.divider} />
+        </Card.Content>
+      </Card>
 
+      <Card style={styles.section}>
+        <Card.Content>
+          <Text style={styles.sectionTitle}>Patient 360 Timeline</Text>
+          {timeline.length === 0 ? (
+            <Text style={styles.noAppointments}>No longitudinal events recorded</Text>
+          ) : (
+            timeline.map(event => (
+              <List.Item
+                key={event.id}
+                title={event.title}
+                description={`${format(new Date(event.date), 'MMM d, yyyy')} • ${event.subtitle}`}
+                left={props => <List.Icon {...props} icon={event.icon} />}
+                onPress={() => {
+                  if (event.appointment) {
+                    navigation.navigate('AppointmentDetails', { appointment: event.appointment });
+                  } else if (event.screening) {
+                    navigation.navigate('ScreeningReport', { report: event.screening });
+                  }
+                }}
+              />
+            ))
+          )}
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.card}>
+        <Card.Content>
           <List.Section>
             <List.Subheader>Appointments</List.Subheader>
             {appointments.length === 0 ? (
@@ -267,6 +301,7 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
                   </Text>
                   <Text>Condition: {screening.condition}</Text>
                   <Text>Confidence: {(screening.confidence * 100).toFixed(1)}%</Text>
+                  <Text style={styles.timelineMeta}>Provenance: {screening.governance?.model_provenance || screening.model}</Text>
                   <Button
                     mode="contained"
                     onPress={() => navigation.navigate('ScreeningReport', { report: screening })}
@@ -302,14 +337,14 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
 
       <Portal>
         <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)}>
-          <Dialog.Title>Delete Patient</Dialog.Title>
+          <Dialog.Title>Archive Patient</Dialog.Title>
           <Dialog.Content>
-            <Text>Are you sure you want to delete {patient.name}?</Text>
+            <Text>Archive {patient.name} from the active patient list? Clinical history will be retained for audit and follow-up.</Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDeleteDialogVisible(false)}>Cancel</Button>
             <Button onPress={handleDeletePatient} textColor={theme.colors.error}>
-              Delete
+              Archive
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -374,6 +409,11 @@ const styles = StyleSheet.create({
   },
   viewButton: {
     marginTop: 8,
+  },
+  timelineMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    opacity: 0.7,
   },
 });
 
