@@ -1,5 +1,6 @@
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
+import type { AIGovernanceCard } from '../types/platform';
 
 export type Patient = {
   id: string;
@@ -14,8 +15,6 @@ export type Patient = {
   currentMedications?: string;
   upcomingVisit?: string;
 };
-
-import { AIGovernanceCard } from '../types/platform';
 
 export interface ScreeningReport {
   id: string;
