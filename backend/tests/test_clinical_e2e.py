@@ -179,3 +179,9 @@ def test_signoff_followup_and_ai_review_workflow() -> None:
     signed = client.get(f"/api/v1/clinical/encounters/{encounter_id}")
     assert signed.status_code == 200
     assert signed.json()["status"] == "signed"
+
+    summary = client.get("/api/v1/clinical/patients/patient-2/summary")
+    assert summary.status_code == 200
+    assert summary.json()["patient_id"] == "patient-2"
+    assert any(item["encounter_id"] == encounter_id for item in summary.json()["followups"])
+    assert any(item["encounter_id"] == encounter_id for item in summary.json()["signoffs"])
