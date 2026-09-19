@@ -4,11 +4,12 @@ import base64
 import io
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageStat
 from pydantic import BaseModel, Field
@@ -16,16 +17,20 @@ from pydantic import BaseModel, Field
 from ImagePreprocessing import ImagePreprocessor
 from MelanomaClassifier import MobileNetPredictor
 from SkinLesionClassifier import SkinLesionClassifier
+from ai_governance import build_governance_card
 from audit import router as audit_router
 from commerce import router as commerce_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
 from model_registry import verify_models
 from notifications import router as notifications_router
+from observability import record_prediction, record_request, snapshot as observability_snapshot
+from platform_contracts import AIGovernanceCard, PlatformInfo, ReadinessComponent, ReadinessResponse, utc_now
+from request_context import get_request_id, new_request_id, reset_request_id, set_request_id
 from resilience import file_sha256
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-APP_VERSION = os.getenv("APP_VERSION", "3.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "4.0.0")
 MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.70"))
 MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
@@ -33,6 +38,7 @@ ENABLE_EMBEDDED_DERM_MODEL = os.getenv("ENABLE_EMBEDDED_DERM_MODEL", "true").low
 
 
 class PredictionResponse(BaseModel):
+    request_id: str
     class_name: str
     confidence: float = Field(ge=0.0, le=1.0)
     model_used: str
@@ -41,12 +47,31 @@ class PredictionResponse(BaseModel):
     safety_reason: str
     image_quality: Dict[str, Any]
     app_version: str
+    governance: AIGovernanceCard
 
 
 app = FastAPI(title="DermCareAI Clinic Platform API", version=APP_VERSION)
 configured_origins = os.getenv("CORS_ORIGINS", "*")
 origins = [item.strip() for item in configured_origins.split(",") if item.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False if origins == ["*"] else True, allow_methods=["GET", "POST", "PUT", "PATCH"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = new_request_id(request.headers.get("X-Request-ID"))
+    token = set_request_id(request_id)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        record_request(response.status_code, elapsed_ms)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Response-Time-ms"] = f"{elapsed_ms:.2f}"
+        return response
+    finally:
+        reset_request_id(token)
+
+
 app.include_router(commerce_router)
 app.include_router(notifications_router)
 app.include_router(audit_router)
@@ -84,8 +109,6 @@ class ModelService:
             self.last_error = str(exc)
             if ENABLE_EMBEDDED_DERM_MODEL:
                 try:
-                    # Keep the optional transformer dependency out of normal
-                    # application startup/import paths.
                     from hf_derm_model import EmbeddedDermModel
 
                     self.embedded = EmbeddedDermModel()
@@ -106,7 +129,18 @@ class ModelService:
 
     def status(self) -> Dict[str, Any]:
         paths = self.model_paths
-        return {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "last_error": self.last_error, "registry": verify_models(str(MODEL_DIR)), "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}}
+        return {
+            "loaded": self.mode != "unavailable",
+            "mode": self.mode,
+            "reload_count": self.reload_count,
+            "has_error": self.last_error is not None,
+            "registry": verify_models(str(MODEL_DIR)),
+            "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL,
+            "models": {
+                name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)}
+                for name, path in paths.items()
+            },
+        }
 
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":
@@ -114,14 +148,36 @@ class ModelService:
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         quality = assess_image_quality(image)
         if not quality["usable"]:
-            return {"class_name": ABSTAIN_LABEL, "confidence": 0.0, "model_used": "quality-gate", "visualization": "", "accepted": False, "safety_reason": quality["reason"], "image_quality": quality, "app_version": APP_VERSION}
+            model_name = "quality-gate"
+            result = {
+                "request_id": get_request_id() or new_request_id(),
+                "class_name": ABSTAIN_LABEL,
+                "confidence": 0.0,
+                "model_used": model_name,
+                "visualization": "",
+                "accepted": False,
+                "safety_reason": quality["reason"],
+                "image_quality": quality,
+                "app_version": APP_VERSION,
+                "governance": build_governance_card(
+                    model_name=model_name,
+                    model_provenance="Pre-inference image-quality safety gate",
+                    confidence_threshold=MIN_CONFIDENCE,
+                    research_model=False,
+                ),
+            }
+            record_prediction(model=model_name, accepted=False)
+            return result
 
         visualization = None
+        model_provenance = "Controlled local DermCareAI research weights"
+        research_model = True
         if self.mode == "embedded-ham10000-research-model" and self.embedded is not None:
             embedded_result = self.embedded.predict(image)
             final_class = embedded_result["class_name"]
             final_confidence = float(embedded_result["confidence"])
             model_used = embedded_result["model_used"]
+            model_provenance = "PREMAADC/vit-base-ham10000 research fallback"
         else:
             image_array = np.array(image)
             processed_image = self.preprocessor.preprocess(image_array)
@@ -132,6 +188,7 @@ class ModelService:
             mobilenet_confidence = float(mobilenet_result["probabilities"][mobilenet_predicted_class])
             if mobilenet_predicted_class == 0:
                 import tensorflow as tf
+
                 nasnet_image = tf.cast(processed_image, tf.float32) / 255.0
                 nasnet_result = self.nasnet.predict_with_gradcam(nasnet_image)  # type: ignore[union-attr]
                 final_class = self.nasnet_classes[nasnet_result["class_index"]]
@@ -144,16 +201,40 @@ class ModelService:
                 model_used = "MobileNetV2"
                 visualization = self.mobilenet.gradcam_visualization(processed_image, mobilenet_predicted_class)  # type: ignore[union-attr]
 
-        decision = safety_gate(class_name=final_class, confidence=final_confidence, image_quality_ok=bool(quality["usable"]), minimum_confidence=MIN_CONFIDENCE)
+        decision = safety_gate(
+            class_name=final_class,
+            confidence=final_confidence,
+            image_quality_ok=bool(quality["usable"]),
+            minimum_confidence=MIN_CONFIDENCE,
+        )
         if not decision.accepted:
             final_class = ABSTAIN_LABEL
+
         visualization_str = ""
         if visualization is not None:
             visualization_img = Image.fromarray(np.clip(visualization * 255, 0, 255).astype(np.uint8))
             buffered = io.BytesIO()
             visualization_img.save(buffered, format="JPEG", quality=88)
             visualization_str = base64.b64encode(buffered.getvalue()).decode()
-        result = {"class_name": final_class, "confidence": final_confidence, "model_used": model_used, "visualization": visualization_str, "accepted": decision.accepted, "safety_reason": decision.reason, "image_quality": quality, "app_version": APP_VERSION}
+
+        result = {
+            "request_id": get_request_id() or new_request_id(),
+            "class_name": final_class,
+            "confidence": final_confidence,
+            "model_used": model_used,
+            "visualization": visualization_str,
+            "accepted": decision.accepted,
+            "safety_reason": decision.reason,
+            "image_quality": quality,
+            "app_version": APP_VERSION,
+            "governance": build_governance_card(
+                model_name=model_used,
+                model_provenance=model_provenance,
+                confidence_threshold=MIN_CONFIDENCE,
+                research_model=research_model,
+            ),
+        }
+        record_prediction(model=model_used, accepted=decision.accepted)
         errors = validate_prediction_payload(result)
         if errors:
             raise ValueError(f"Invalid prediction payload: {errors}")
@@ -176,12 +257,106 @@ def assess_image_quality(image: Image.Image) -> Dict[str, Any]:
     variance = float(stat.var[0])
     megapixels = (width * height) / 1_000_000
     issues: list[str] = []
-    if width < 256 or height < 256: issues.append("resolution_too_low")
-    if megapixels > 40: issues.append("resolution_too_high")
-    if mean < 18: issues.append("image_too_dark")
-    if mean > 242: issues.append("image_too_bright")
-    if variance < 40: issues.append("low_contrast_or_blur")
-    return {"usable": not issues, "reason": "Image passed the basic quality gate." if not issues else ", ".join(issues), "width": width, "height": height, "mean_luminance": round(mean, 2), "luminance_variance": round(variance, 2), "issues": issues}
+    if width < 256 or height < 256:
+        issues.append("resolution_too_low")
+    if megapixels > 40:
+        issues.append("resolution_too_high")
+    if mean < 18:
+        issues.append("image_too_dark")
+    if mean > 242:
+        issues.append("image_too_bright")
+    if variance < 40:
+        issues.append("low_contrast_or_blur")
+    return {
+        "usable": not issues,
+        "reason": "Image passed the basic quality gate." if not issues else ", ".join(issues),
+        "width": width,
+        "height": height,
+        "mean_luminance": round(mean, 2),
+        "luminance_variance": round(variance, 2),
+        "issues": issues,
+    }
+
+
+@app.get("/api/v1/platform", response_model=PlatformInfo)
+def platform_info() -> PlatformInfo:
+    return PlatformInfo(
+        api_version="v1",
+        app_version=APP_VERSION,
+        service="DermCareAI Clinic Platform API",
+        environment=os.getenv("APP_ENV", "development"),
+        capabilities=[
+            "clinical-workflow",
+            "ai-decision-support",
+            "ai-safety-abstention",
+            "model-provenance",
+            "billing-and-payments",
+            "pharmacy-integrity",
+            "notifications",
+            "hash-chained-audit",
+            "request-correlation",
+            "privacy-safe-observability",
+        ],
+        generated_at=utc_now(),
+    )
+
+
+@app.get("/api/v1/health/live")
+def platform_liveness() -> Dict[str, Any]:
+    return {"status": "alive", "version": APP_VERSION, "request_id": get_request_id()}
+
+
+@app.get("/api/v1/health/ready", response_model=ReadinessResponse)
+def platform_readiness() -> ReadinessResponse:
+    model_status = model_service.status()
+    registry = model_status["registry"]
+    registry_ok = all(
+        (not item.get("materialized")) or bool(item.get("hash_matches"))
+        for item in registry.values()
+    )
+    auth_enabled = os.getenv("FIREBASE_AUTH_REQUIRED", "true").lower() == "true"
+    components = {
+        "model_service": ReadinessComponent(
+            status="ok" if model_status["loaded"] else "degraded",
+            detail=model_status["mode"],
+        ),
+        "model_registry": ReadinessComponent(
+            status="ok" if registry_ok else "degraded",
+            detail="registry integrity checks passed"
+            if registry_ok
+            else "one or more materialized model hashes do not match",
+        ),
+        "clinic_auth": ReadinessComponent(
+            status="ok" if auth_enabled else "not_configured",
+            detail="Firebase authentication enforced"
+            if auth_enabled
+            else "FIREBASE_AUTH_REQUIRED is disabled",
+        ),
+    }
+    overall = "ready" if all(component.status == "ok" for component in components.values()) else "degraded"
+    return ReadinessResponse(
+        status=overall,
+        version=APP_VERSION,
+        components=components,
+        generated_at=utc_now(),
+    )
+
+
+@app.get("/api/v1/observability/metrics")
+def platform_metrics() -> Dict[str, Any]:
+    return {"version": APP_VERSION, "metrics": observability_snapshot()}
+
+
+@app.get("/api/v1/ai/policy", response_model=AIGovernanceCard)
+def ai_policy() -> AIGovernanceCard:
+    return AIGovernanceCard(
+        **build_governance_card(
+            model_name="DermCareAI decision-support policy",
+            model_provenance="Application-level safety contract",
+            confidence_threshold=MIN_CONFIDENCE,
+            research_model=True,
+        )
+    )
 
 
 @app.get("/")
@@ -192,7 +367,12 @@ def read_root() -> Dict[str, str]:
 @app.get("/health")
 def health_check() -> Dict[str, Any]:
     status = model_service.status()
-    return {"status": "healthy" if status["loaded"] else "degraded", "version": APP_VERSION, "service": status}
+    return {
+        "status": "healthy" if status["loaded"] else "degraded",
+        "version": APP_VERSION,
+        "request_id": get_request_id(),
+        "service": status,
+    }
 
 
 @app.post("/self-heal")
@@ -211,14 +391,18 @@ async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     contents = await file.read()
-    if not contents: raise HTTPException(status_code=400, detail="Empty image upload")
-    if len(contents) > MAX_IMAGE_BYTES: raise HTTPException(status_code=413, detail="Image exceeds configured size limit")
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty image upload")
+    if len(contents) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image exceeds configured size limit")
     try:
         return model_service.process_image(contents)
     except RuntimeError as exc:
         if model_service.recover():
-            try: return model_service.process_image(contents)
-            except Exception as retry_exc: raise HTTPException(status_code=503, detail="AI service temporarily unavailable") from retry_exc
+            try:
+                return model_service.process_image(contents)
+            except Exception as retry_exc:
+                raise HTTPException(status_code=503, detail="AI service temporarily unavailable") from retry_exc
         raise HTTPException(status_code=503, detail="AI service unavailable") from exc
     except Exception as exc:
         logger.exception("Prediction failed")
