@@ -23,6 +23,8 @@ import EditAppointmentScreen from '../screens/main/EditAppointmentScreen';
 import ScreeningReportScreen from '../screens/main/ScreeningReportScreen';
 import BillingScreen from '../screens/main/BillingScreen';
 import PharmacyScreen from '../screens/main/PharmacyScreen';
+import NewEncounterScreen from '../screens/main/NewEncounterScreen';
+import EncounterScreen from '../screens/main/EncounterScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -60,6 +62,8 @@ const AppNavigator = () => {
             <Stack.Screen name="AddPatient" component={AddPatientScreen} />
             <Stack.Screen name="EditPatient" component={EditPatientScreen} />
             <Stack.Screen name="PatientDetails" component={PatientDetailsScreen} />
+            <Stack.Screen name="NewEncounter" component={NewEncounterScreen} />
+            <Stack.Screen name="Encounter" component={EncounterScreen} />
             <Stack.Screen name="NewAppointment" component={NewAppointmentScreen} />
             <Stack.Screen name="AppointmentDetails" component={AppointmentDetailsScreen} />
             <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
