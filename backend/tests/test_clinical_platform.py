@@ -6,10 +6,6 @@ from clinical_store import create_consent, create_encounter, create_media, has_a
 
 
 def setup_function() -> None:
-    try:
-        os.remove(os.environ["CLINICAL_DB_PATH"])
-    except FileNotFoundError:
-        pass
     init_store()
 
 
