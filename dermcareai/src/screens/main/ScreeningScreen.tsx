@@ -10,7 +10,7 @@ import { NavigationProps, Patient, ScreeningReport } from '../../navigation/type
 import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
 import { uploadDataUri, uploadImage } from '../../services/cloudinary';
 import { getClinicScope } from '../../services/tenant';
-import { clinicalApi } from '../../services/clinicalApi';
+import { clinicalApi, encounterApi } from '../../services/clinicalApi';
 
 const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, route }) => {
   const theme = useTheme();
@@ -24,6 +24,7 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
   const [loading, setLoading] = useState(false);
   const [consentActive, setConsentActive] = useState(false);
   const [consentLoading, setConsentLoading] = useState(false);
+  const [aiAttaching, setAIAttaching] = useState(false);
 
   useEffect(() => {
     void fetchPatients();
@@ -150,6 +151,27 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
     }
   };
 
+  const attachToEncounter = async () => {
+    const encounterId = route?.params?.encounterId;
+    if (!encounterId || !result) return;
+    setAIAttaching(true);
+    try {
+      await encounterApi.addAIReview(encounterId, {
+        request_id: result.request_id,
+        model_name: result.model_used,
+        model_provenance: result.governance.model_provenance,
+        predicted_label: result.class_name,
+        confidence: result.confidence,
+        accepted: result.accepted,
+      });
+      Alert.alert('AI review attached', 'The AI result is now linked to the clinical encounter. Review and override it from the encounter workspace.');
+    } catch (error) {
+      Alert.alert('Attachment failed', error instanceof Error ? error.message : 'Unable to attach the AI result to the encounter.');
+    } finally {
+      setAIAttaching(false);
+    }
+  };
+
   const saveReport = async () => {
     if (!selectedPatient || !image || !result) return;
     const userId = auth.currentUser?.uid;
@@ -269,6 +291,17 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
                   <Text style={styles.caption}>Request ID: {result.request_id}</Text>
                   <Text style={styles.caption}>Image quality: {result.image_quality.usable ? 'acceptable' : 'insufficient'} ({result.image_quality.reason})</Text>
                   <Button mode="contained" onPress={() => void saveReport()} style={styles.saveButton}>Save for Clinician Review</Button>
+                  {route?.params?.encounterId ? (
+                    <Button
+                      mode="outlined"
+                      onPress={() => void attachToEncounter()}
+                      loading={aiAttaching}
+                      disabled={aiAttaching}
+                      style={styles.saveButton}
+                    >
+                      Attach to Current Encounter
+                    </Button>
+                  ) : null}
                 </Card.Content>
               </Card>
             )}
