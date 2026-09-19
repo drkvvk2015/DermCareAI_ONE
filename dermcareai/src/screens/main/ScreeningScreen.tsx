@@ -9,6 +9,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { NavigationProps, Patient, ScreeningReport } from '../../navigation/types';
 import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
 import { uploadDataUri, uploadImage } from '../../services/cloudinary';
+import { getClinicScope } from '../../services/tenant';
 
 const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, route }) => {
   const theme = useTheme();
@@ -107,6 +108,8 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
     const reportData: Omit<ScreeningReport, 'id'> = {
       patientId: selectedPatient.id,
       patientName: selectedPatient.name,
+      organizationId,
+      clinicId,
       date: new Date().toISOString(),
       imageUrl: image,
       processedImageUrl: processedImage || '',
@@ -122,6 +125,8 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
       const ref = await addDoc(collection(db, 'screeningReports'), {
         ...reportData,
         doctorId: userId,
+        organizationId,
+        clinicId,
         aiAccepted: result.accepted,
         safetyReason: result.safety_reason,
         appVersion: result.app_version,
