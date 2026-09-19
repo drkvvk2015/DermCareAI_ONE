@@ -15,6 +15,13 @@ from clinical_store import (
     list_lesion_timeline,
     upsert_lesion,
     update_encounter,
+    create_signoff,
+    get_signoff,
+    create_followup,
+    list_followups,
+    record_ai_review,
+    review_ai_assessment,
+    list_ai_reviews,
 )
 
 router = APIRouter(prefix="/api/v1/clinical", tags=["clinical"])
@@ -90,6 +97,34 @@ class ClinicalMediaCreate(BaseModel):
     byte_size: int = Field(ge=1)
     captured_at: str
     retention_until: str | None = None
+
+
+
+class EncounterSignoffCreate(BaseModel):
+    attestation: str = Field(
+        default="I reviewed the encounter documentation and clinical decision-making.",
+        min_length=20,
+        max_length=500,
+    )
+
+
+class FollowupCreate(BaseModel):
+    due_at: str
+    instructions: str = Field(min_length=3, max_length=2000)
+
+
+class AIReviewCreate(BaseModel):
+    request_id: str = Field(min_length=1, max_length=120)
+    model_name: str = Field(min_length=1, max_length=120)
+    model_provenance: str | None = Field(default=None, max_length=500)
+    predicted_label: str = Field(min_length=1, max_length=200)
+    confidence: float = Field(ge=0, le=1)
+    accepted: bool = False
+
+
+class AIReviewDecision(BaseModel):
+    clinician_decision: str = Field(pattern="^(accepted|overridden|rejected)$")
+    clinician_override_label: str | None = Field(default=None, max_length=200)
 
 
 @router.post("/encounters")
@@ -183,3 +218,163 @@ def active_consent(
         "purpose": purpose,
         "active": has_active_consent(clinic_id=clinic_id, patient_id=patient_id, purpose=purpose),
     }
+
+
+
+@router.post("/encounters/{encounter_id}/sign")
+def sign_encounter(
+    encounter_id: str,
+    req: EncounterSignoffCreate,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+    organization_id, clinic_id = _tenant(user)
+    encounter = get_encounter(encounter_id, clinic_id)
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    if encounter["status"] == "signed":
+        existing = get_signoff(clinic_id=clinic_id, encounter_id=encounter_id)
+        return existing or {"status": "signed"}
+    result = create_signoff(
+        organization_id=organization_id,
+        clinic_id=clinic_id,
+        encounter_id=encounter_id,
+        signed_by=user["uid"],
+        attestation=req.attestation,
+    )
+    record_event(
+        AuditEvent(
+            action="encounter_signed",
+            resource_type="encounter",
+            resource_id=encounter_id,
+            metadata={"patient_id": encounter["patient_id"]},
+        ),
+        user,
+    )
+    return result
+
+
+@router.get("/encounters/{encounter_id}/signoff")
+def read_signoff(
+    encounter_id: str,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
+):
+    _, clinic_id = _tenant(user)
+    if not get_encounter(encounter_id, clinic_id):
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    return get_signoff(clinic_id=clinic_id, encounter_id=encounter_id)
+
+
+@router.post("/encounters/{encounter_id}/followups")
+def post_followup(
+    encounter_id: str,
+    req: FollowupCreate,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+    organization_id, clinic_id = _tenant(user)
+    encounter = get_encounter(encounter_id, clinic_id)
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    result = create_followup(
+        organization_id=organization_id,
+        clinic_id=clinic_id,
+        encounter_id=encounter_id,
+        patient_id=encounter["patient_id"],
+        due_at=req.due_at,
+        instructions=req.instructions,
+        created_by=user["uid"],
+    )
+    record_event(
+        AuditEvent(
+            action="followup_planned",
+            resource_type="followup",
+            resource_id=result["id"],
+            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id},
+        ),
+        user,
+    )
+    return result
+
+
+@router.get("/patients/{patient_id}/followups")
+def patient_followups(
+    patient_id: str,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin", "receptionist", "auditor")),
+):
+    _, clinic_id = _tenant(user)
+    return list_followups(clinic_id=clinic_id, patient_id=patient_id)
+
+
+@router.post("/encounters/{encounter_id}/ai-reviews")
+def post_ai_review(
+    encounter_id: str,
+    req: AIReviewCreate,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+    organization_id, clinic_id = _tenant(user)
+    encounter = get_encounter(encounter_id, clinic_id)
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    result = record_ai_review(
+        organization_id=organization_id,
+        clinic_id=clinic_id,
+        encounter_id=encounter_id,
+        **req.model_dump(),
+    )
+    record_event(
+        AuditEvent(
+            action="ai_assessment_attached",
+            resource_type="encounter_ai_review",
+            resource_id=result["id"],
+            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id},
+        ),
+        user,
+    )
+    return result
+
+
+@router.patch("/encounters/{encounter_id}/ai-reviews/{review_id}")
+def patch_ai_review(
+    encounter_id: str,
+    review_id: str,
+    req: AIReviewDecision,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+    _, clinic_id = _tenant(user)
+    encounter = get_encounter(encounter_id, clinic_id)
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    try:
+        result = review_ai_assessment(
+            clinic_id=clinic_id,
+            review_id=review_id,
+            clinician_decision=req.clinician_decision,
+            clinician_override_label=req.clinician_override_label,
+            reviewed_by=user["uid"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record_event(
+        AuditEvent(
+            action="ai_assessment_reviewed",
+            resource_type="encounter_ai_review",
+            resource_id=review_id,
+            metadata={
+                "patient_id": encounter["patient_id"],
+                "encounter_id": encounter_id,
+                "decision": req.clinician_decision,
+            },
+        ),
+        user,
+    )
+    return result
+
+
+@router.get("/encounters/{encounter_id}/ai-reviews")
+def encounter_ai_reviews(
+    encounter_id: str,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
+):
+    _, clinic_id = _tenant(user)
+    if not get_encounter(encounter_id, clinic_id):
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    return list_ai_reviews(clinic_id=clinic_id, encounter_id=encounter_id)
