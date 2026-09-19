@@ -110,6 +110,56 @@ def init_store() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_media_patient
               ON clinical_media(clinic_id, patient_id, captured_at DESC);
+
+            CREATE TABLE IF NOT EXISTS encounter_signoffs (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
+                encounter_id TEXT NOT NULL,
+                signed_by TEXT NOT NULL,
+                signed_at TEXT NOT NULL,
+                attestation TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff
+              ON encounter_signoffs(clinic_id, encounter_id);
+
+            CREATE TABLE IF NOT EXISTS encounter_followups (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
+                encounter_id TEXT NOT NULL,
+                patient_id TEXT NOT NULL,
+                due_at TEXT NOT NULL,
+                instructions TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                completed_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_followups_clinic_due
+              ON encounter_followups(clinic_id, due_at, status);
+
+            CREATE TABLE IF NOT EXISTS encounter_ai_reviews (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
+                encounter_id TEXT NOT NULL,
+                request_id TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                model_provenance TEXT,
+                predicted_label TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                accepted INTEGER NOT NULL,
+                clinician_decision TEXT,
+                clinician_override_label TEXT,
+                reviewed_by TEXT,
+                reviewed_at TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_reviews_encounter
+              ON encounter_ai_reviews(clinic_id, encounter_id, created_at DESC);
             """
         )
 
@@ -371,3 +421,163 @@ def create_media(**payload: Any) -> dict[str, Any]:
         )
         row = conn.execute("SELECT * FROM clinical_media WHERE id = ?", (media_id,)).fetchone()
     return dict(row)
+
+
+
+def create_signoff(
+    *, organization_id: str, clinic_id: str, encounter_id: str,
+    signed_by: str, attestation: str,
+) -> dict[str, Any]:
+    signoff_id = f"SIG-{uuid.uuid4().hex[:12].upper()}"
+    now = _now()
+    with transaction() as conn:
+        existing = conn.execute(
+            "SELECT * FROM encounter_signoffs WHERE clinic_id = ? AND encounter_id = ?",
+            (clinic_id, encounter_id),
+        ).fetchone()
+        if existing:
+            return dict(existing)
+        conn.execute(
+            """
+            INSERT INTO encounter_signoffs
+            (id, organization_id, clinic_id, encounter_id, signed_by, signed_at, attestation, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (signoff_id, organization_id, clinic_id, encounter_id, signed_by, now, attestation, now),
+        )
+        conn.execute(
+            """
+            UPDATE encounters
+            SET status = 'signed', closed_at = COALESCE(closed_at, ?),
+                version = version + 1, updated_at = ?
+            WHERE id = ? AND clinic_id = ?
+            """,
+            (now, now, encounter_id, clinic_id),
+        )
+        row = conn.execute("SELECT * FROM encounter_signoffs WHERE id = ?", (signoff_id,)).fetchone()
+    return dict(row)
+
+
+def get_signoff(*, clinic_id: str, encounter_id: str) -> dict[str, Any] | None:
+    init_store()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM encounter_signoffs WHERE clinic_id = ? AND encounter_id = ?",
+            (clinic_id, encounter_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_followup(
+    *, organization_id: str, clinic_id: str, encounter_id: str, patient_id: str,
+    due_at: str, instructions: str, created_by: str,
+) -> dict[str, Any]:
+    followup_id = f"FUP-{uuid.uuid4().hex[:12].upper()}"
+    now = _now()
+    with transaction() as conn:
+        conn.execute(
+            """
+            INSERT INTO encounter_followups
+            (id, organization_id, clinic_id, encounter_id, patient_id, due_at,
+             instructions, status, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)
+            """,
+            (
+                followup_id, organization_id, clinic_id, encounter_id, patient_id,
+                due_at, instructions, created_by, now, now,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM encounter_followups WHERE id = ?", (followup_id,)
+        ).fetchone()
+    return dict(row)
+
+
+def list_followups(*, clinic_id: str, patient_id: str | None = None) -> list[dict[str, Any]]:
+    init_store()
+    with _connect() as conn:
+        if patient_id:
+            rows = conn.execute(
+                """
+                SELECT * FROM encounter_followups
+                WHERE clinic_id = ? AND patient_id = ?
+                ORDER BY due_at ASC
+                """,
+                (clinic_id, patient_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM encounter_followups
+                WHERE clinic_id = ?
+                ORDER BY due_at ASC
+                """,
+                (clinic_id,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def record_ai_review(
+    *, organization_id: str, clinic_id: str, encounter_id: str,
+    request_id: str, model_name: str, model_provenance: str | None,
+    predicted_label: str, confidence: float, accepted: bool,
+) -> dict[str, Any]:
+    review_id = f"AIR-{uuid.uuid4().hex[:12].upper()}"
+    now = _now()
+    with transaction() as conn:
+        conn.execute(
+            """
+            INSERT INTO encounter_ai_reviews
+            (id, organization_id, clinic_id, encounter_id, request_id, model_name,
+             model_provenance, predicted_label, confidence, accepted, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                review_id, organization_id, clinic_id, encounter_id, request_id,
+                model_name, model_provenance, predicted_label, float(confidence),
+                int(accepted), now,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM encounter_ai_reviews WHERE id = ?", (review_id,)
+        ).fetchone()
+    return dict(row)
+
+
+def review_ai_assessment(
+    *, clinic_id: str, review_id: str, clinician_decision: str,
+    clinician_override_label: str | None, reviewed_by: str,
+) -> dict[str, Any]:
+    if clinician_decision not in {"accepted", "overridden", "rejected"}:
+        raise ValueError("Unsupported clinician decision")
+    now = _now()
+    with transaction() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE encounter_ai_reviews
+            SET clinician_decision = ?, clinician_override_label = ?,
+                reviewed_by = ?, reviewed_at = ?
+            WHERE id = ? AND clinic_id = ?
+            """,
+            (clinician_decision, clinician_override_label, reviewed_by, now, review_id, clinic_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("AI review not found")
+        row = conn.execute(
+            "SELECT * FROM encounter_ai_reviews WHERE id = ?", (review_id,)
+        ).fetchone()
+    return dict(row)
+
+
+def list_ai_reviews(*, clinic_id: str, encounter_id: str) -> list[dict[str, Any]]:
+    init_store()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM encounter_ai_reviews
+            WHERE clinic_id = ? AND encounter_id = ?
+            ORDER BY created_at DESC
+            """,
+            (clinic_id, encounter_id),
+        ).fetchall()
+    return [dict(row) for row in rows]
