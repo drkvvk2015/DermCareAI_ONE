@@ -188,4 +188,41 @@ export const encounterApi = {
       `/api/v1/clinical/encounters/${encodeURIComponent(encounterId)}/ai-reviews`,
     );
   },
+  saveLesion(payload: {
+    patientId: string;
+    encounterId: string;
+    lesionCode: string;
+    bodySite: string;
+    laterality?: string;
+    morphology: Record<string, unknown>;
+    sizeMm?: number;
+    durationDays?: number;
+    evolution?: string;
+    symptoms?: Record<string, unknown>;
+    clinicalImpression?: string;
+    differential?: string[];
+  }) {
+    return authorizedRequest(
+      '/api/v1/clinical/lesions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_id: payload.patientId,
+          encounter_id: payload.encounterId,
+          lesion_code: payload.lesionCode,
+          body_site: payload.bodySite,
+          laterality: payload.laterality,
+          morphology: payload.morphology,
+          size_mm: payload.sizeMm,
+          duration_days: payload.durationDays,
+          evolution: payload.evolution,
+          symptoms: payload.symptoms || {},
+          clinical_impression: payload.clinicalImpression,
+          differential: payload.differential || [],
+        }),
+      },
+    );
+  },
+
 };
