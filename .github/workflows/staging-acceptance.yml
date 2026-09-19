@@ -1,0 +1,49 @@
+name: DermCareAI Staging Acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  staging-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and start staging stack
+        env:
+          POSTGRES_PASSWORD: staging-acceptance-password
+          CORS_ORIGINS: http://localhost:8081
+        run: docker compose -f docker-compose.staging.yml up -d --build
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health/live; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f docker-compose.staging.yml logs
+          exit 1
+      - name: Initialize staging schemas
+        run: docker compose -f docker-compose.staging.yml exec -T backend python scripts/migrate_postgres.py
+      - name: Run clinical acceptance tests
+        run: |
+          docker compose -f docker-compose.staging.yml exec -T backend             pytest -q tests/test_clinical_e2e.py tests/test_clinical_platform.py tests/test_ai_governance_api.py
+      - name: Capture staging diagnostics
+        if: always()
+        run: |
+          mkdir -p staging-evidence
+          docker compose -f docker-compose.staging.yml ps > staging-evidence/services.txt
+          docker compose -f docker-compose.staging.yml logs --no-color > staging-evidence/logs.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dermcareai-staging-acceptance
+          path: staging-evidence/
+      - name: Shut down staging
+        if: always()
+        run: docker compose -f docker-compose.staging.yml down -v
