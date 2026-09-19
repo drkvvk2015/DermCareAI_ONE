@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import require_roles
+from clinical_store import has_active_consent
 from rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/media", tags=["media"])
@@ -46,6 +47,12 @@ def sign_upload(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ) -> SignUploadResponse:
     enforce_rate_limit(f"media-sign:{user['uid']}", limit=30, window_seconds=60)
+    claims = user.get('claims', {})
+    clinic_id = claims.get('clinic_id') or claims.get('clinicId')
+    if not clinic_id:
+        raise HTTPException(status_code=403, detail='Clinic context is missing')
+    if not has_active_consent(clinic_id=str(clinic_id), patient_id=req.patient_id, purpose=req.purpose):
+        raise HTTPException(status_code=409, detail='Active consent is required before clinical image upload authorization')
 
     cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
     api_key = os.getenv("CLOUDINARY_API_KEY")
