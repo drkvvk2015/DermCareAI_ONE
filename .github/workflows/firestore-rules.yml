@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Install Firestore rules test dependencies
         working-directory: dermcareai
         run: npm install --no-save @firebase/rules-unit-testing@4.0.1 firebase-tools
