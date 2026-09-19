@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 const testEnv = await initializeTestEnvironment({
   projectId: "demo-dermcareai",
-  firestore: { rules: "../firestore.rules" },
+  firestore: { rules: "../../firestore.rules" },
 });
 
 try {
