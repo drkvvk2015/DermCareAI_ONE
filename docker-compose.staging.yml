@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dermcareai
+      POSTGRES_USER: dermcareai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-staging-only-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dermcareai -d dermcareai"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - dermcareai-staging-postgres:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      APP_VERSION: 5.1.0
+      FIREBASE_AUTH_REQUIRED: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
+      DATABASE_URL: postgresql+psycopg://dermcareai:${POSTGRES_PASSWORD:-staging-only-change-me}@postgres:5432/dermcareai
+      ENABLE_EMBEDDED_DERM_MODEL: "false"
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  dermcareai-staging-postgres:
