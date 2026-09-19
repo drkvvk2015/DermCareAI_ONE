@@ -22,6 +22,7 @@ from clinical_store import (
     record_ai_review,
     review_ai_assessment,
     list_ai_reviews,
+    get_patient_clinical_summary,
 )
 
 router = APIRouter(prefix="/api/v1/clinical", tags=["clinical"])
@@ -203,6 +204,15 @@ def post_media(req: ClinicalMediaCreate, user: dict[str, Any] = Depends(require_
         return result
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/patients/{patient_id}/summary")
+def patient_clinical_summary(
+    patient_id: str,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor", "receptionist")),
+):
+    _, clinic_id = _tenant(user)
+    return get_patient_clinical_summary(clinic_id=clinic_id, patient_id=patient_id)
 
 
 @router.get("/consents/{patient_id}/active")
