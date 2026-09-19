@@ -8,7 +8,8 @@ declare module '@env' {
   export const FIREBASE_APP_ID: string;
   export const CLOUDINARY_CLOUD_NAME: string;
   export const CLOUDINARY_API_KEY: string;
-  export const CLOUDINARY_API_SECRET: string;
   export const APP_NAME: string;
   export const APP_ENV: string;
-} 
+  export const FIREBASE_ORGANIZATION_ID: string;
+  export const FIREBASE_CLINIC_ID: string;
+}
