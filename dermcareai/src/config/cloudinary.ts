@@ -33,8 +33,8 @@ const generateSignature = (timestamp: number) => {
   // Create the exact string that Cloudinary expects
   const stringToSign = `timestamp=${timestamp}&upload_preset=dermcareai_preset${CLOUDINARY_API_SECRET}`;
   
-  // Generate the SHA-1 signature
-  return crypto.SHA1(stringToSign).toString();
+  // Generate a stronger SHA-256 signature
+  return crypto.SHA256(stringToSign).toString();
 };
 
 export const uploadImage = async (imageUri: string): Promise<string | null> => {

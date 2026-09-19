@@ -106,7 +106,7 @@ class ModelService:
 
     def status(self) -> Dict[str, Any]:
         paths = self.model_paths
-        return {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "last_error": self.last_error, "registry": verify_models(str(MODEL_DIR)), "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}}
+        return {"loaded": self.mode != "unavailable", "mode": self.mode, "reload_count": self.reload_count, "has_error": self.last_error is not None, "registry": verify_models(str(MODEL_DIR)), "embedded_model_enabled": ENABLE_EMBEDDED_DERM_MODEL, "models": {name: {"path": path, "exists": Path(path).is_file(), "sha256": file_sha256(path)} for name, path in paths.items()}}
 
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":
