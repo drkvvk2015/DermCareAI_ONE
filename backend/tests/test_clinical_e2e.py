@@ -150,6 +150,24 @@ def test_signoff_followup_and_ai_review_workflow() -> None:
     assert decision.status_code == 200
     assert decision.json()["clinician_decision"] == "overridden"
 
+    other = client.post(
+        "/api/v1/clinical/encounters",
+        json={
+            "patient_id": "patient-3",
+            "complaints": {"chief_complaint": "another case"},
+            "examination": {},
+            "assessment": {},
+            "plan": {},
+        },
+    )
+    assert other.status_code == 200
+    other_id = other.json()["id"]
+    cross_encounter = client.patch(
+        f"/api/v1/clinical/encounters/{other_id}/ai-reviews/{review_id}",
+        json={"clinician_decision": "rejected"},
+    )
+    assert cross_encounter.status_code == 409
+
     signoff = client.post(
         f"/api/v1/clinical/encounters/{encounter_id}/sign",
         json={
