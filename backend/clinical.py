@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import require_roles
+from audit import AuditEvent, record_event
 from clinical_store import (
     create_consent,
     create_encounter,
@@ -94,7 +95,7 @@ class ClinicalMediaCreate(BaseModel):
 @router.post("/encounters")
 def post_encounter(req: EncounterCreate, user: dict[str, Any] = Depends(require_roles("doctor", "admin"))):
     organization_id, clinic_id = _tenant(user)
-    return create_encounter(
+    result = create_encounter(
         organization_id=organization_id,
         clinic_id=clinic_id,
         patient_id=req.patient_id,
@@ -105,6 +106,8 @@ def post_encounter(req: EncounterCreate, user: dict[str, Any] = Depends(require_
         assessment=req.assessment,
         plan=req.plan,
     )
+    record_event(AuditEvent(action='encounter_created', resource_type='encounter', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'clinic_id': clinic_id}), user)
+    return result
 
 
 @router.get("/encounters/{encounter_id}")
@@ -132,7 +135,9 @@ def post_lesion(req: LesionUpsert, user: dict[str, Any] = Depends(require_roles(
     encounter = get_encounter(req.encounter_id, clinic_id)
     if not encounter or encounter["patient_id"] != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient")
-    return upsert_lesion(organization_id=organization_id, clinic_id=clinic_id, **req.model_dump())
+    result = upsert_lesion(organization_id=organization_id, clinic_id=clinic_id, **req.model_dump())
+    record_event(AuditEvent(action='lesion_upserted', resource_type='lesion', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'lesion_code': req.lesion_code}), user)
+    return result
 
 
 @router.get("/patients/{patient_id}/lesions/{lesion_code}/timeline")
@@ -144,18 +149,22 @@ def lesion_timeline(patient_id: str, lesion_code: str, user: dict[str, Any] = De
 @router.post("/consents")
 def post_consent(req: ConsentCreate, user: dict[str, Any] = Depends(require_roles("doctor", "admin", "receptionist"))):
     organization_id, clinic_id = _tenant(user)
-    return create_consent(organization_id=organization_id, clinic_id=clinic_id, recorded_by=user["uid"], **req.model_dump())
+    result = create_consent(organization_id=organization_id, clinic_id=clinic_id, recorded_by=user['uid'], **req.model_dump())
+    record_event(AuditEvent(action='consent_recorded', resource_type='consent', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'purpose': req.purpose, 'status': req.status}), user)
+    return result
 
 
 @router.post("/media")
 def post_media(req: ClinicalMediaCreate, user: dict[str, Any] = Depends(require_roles("doctor", "admin"))):
     organization_id, clinic_id = _tenant(user)
     try:
-        return create_media(
+        result = create_media(
             organization_id=organization_id,
             clinic_id=clinic_id,
             captured_by=user["uid"],
             **req.model_dump(),
         )
+        record_event(AuditEvent(action='clinical_media_recorded', resource_type='clinical_media', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'kind': req.kind}), user)
+        return result
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
