@@ -18,7 +18,7 @@ import {
   Button,
   MD3Theme,
 } from 'react-native-paper';
-import { collection, query, where, getDocs, deleteDoc, doc, FirestoreError, QuerySnapshot, DocumentData, writeBatch, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, FirestoreError, QuerySnapshot, DocumentData, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -33,6 +33,7 @@ interface Patient {
   upcomingVisit: string;
   condition: string;
   doctorId: string;
+  deleted?: boolean;
 }
 
 type TabParamList = {
@@ -68,10 +69,9 @@ const PatientsScreen: React.FC<PatientsScreenProps> = ({ navigation }) => {
       const patientsRef = collection(db, 'patients');
       const patientsQuery = query(patientsRef, where('doctorId', '==', userId));
       const patientsSnapshot: QuerySnapshot<DocumentData> = await getDocs(patientsQuery);
-      const patientsData = patientsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Patient[];
+      const patientsData = patientsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }) as Patient)
+        .filter(patient => patient.deleted !== true);
 
       setPatients(patientsData);
     } catch (error) {
@@ -93,42 +93,19 @@ const PatientsScreen: React.FC<PatientsScreenProps> = ({ navigation }) => {
   const handleDeletePatient = async (): Promise<void> => {
     if (!selectedPatient) return;
 
-      try {
-        // Reference to the patient's appointments
-        const appointmentsRef = collection(db, 'appointments');
-        const appointmentsQuery = query(
-          appointmentsRef,
-          where('patientId', '==', selectedPatient.id)
-        );
-    
-        const appointmentsSnapshot = await getDocs(appointmentsQuery);
-        const batch = writeBatch(db);
-    
-        // Delete all appointments for the patient
-        appointmentsSnapshot.docs.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
-    
-        // Commit the batch deletion
-        await batch.commit();
-    
-        // Mark the patient as deleted first (soft delete)
-        const patientRef = doc(db, 'patients', selectedPatient.id);
-        await updateDoc(patientRef, {
-          deleted: true,
-          deletedAt: new Date().toISOString(),
-        });
-      
-      // Delete patient (hard delete)  
-      await deleteDoc(patientRef);
+    try {
+      const patientRef = doc(db, 'patients', selectedPatient.id);
+      await updateDoc(patientRef, {
+        deleted: true,
+        deletedAt: new Date().toISOString(),
+      });
       setPatients(prev => prev.filter(p => p.id !== selectedPatient.id));
       setDeleteDialogVisible(false);
       setSelectedPatient(null);
-
-      } catch (error) {
-        console.error('Error deleting patient and appointments:', error);
-      }
-    };
+    } catch (error) {
+      console.error('Error archiving patient:', error);
+    }
+  };
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase())
