@@ -41,13 +41,16 @@ def main() -> int:
         if not scheme.startswith("postgresql") and scheme != "postgres":
             problems.append(f"{name} must resolve to PostgreSQL in production.")
 
-    required_secret_names = [
-        "FIREBASE_SERVICE_ACCOUNT_JSON",
-        "CLOUDINARY_API_SECRET",
-        "RAZORPAY_KEY_SECRET",
-        "RAZORPAY_WEBHOOK_SECRET",
-    ]
-    for name in required_secret_names:
+    if not any(
+        os.getenv(name)
+        for name in ("FIREBASE_SERVICE_ACCOUNT_JSON", "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT")
+    ):
+        problems.append(
+            "Firebase Admin credentials are missing. Configure FIREBASE_SERVICE_ACCOUNT_JSON, "
+            "GOOGLE_APPLICATION_CREDENTIALS, or workload identity/GOOGLE_CLOUD_PROJECT."
+        )
+
+    for name in ("CLOUDINARY_API_SECRET", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"):
         if not os.getenv(name):
             problems.append(f"{name} is missing.")
 
