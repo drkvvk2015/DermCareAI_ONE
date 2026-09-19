@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin
+        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]'
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run regression tests
