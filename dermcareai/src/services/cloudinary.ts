@@ -26,10 +26,10 @@ async function getSignedUpload(patientId: string, purpose: string): Promise<Sign
   return JSON.parse(body) as SignedUpload;
 }
 
-export const uploadImage = async (imageUri: string, patientId: string, purpose = 'clinical-image'): Promise<string> => {
+async function uploadFile(filePart: any, patientId: string, purpose: string): Promise<string> {
   const signed = await getSignedUpload(patientId, purpose);
   const formData = new FormData();
-  formData.append('file', { uri: imageUri, type: 'image/jpeg', name: imageUri.split('/').pop() || 'clinical-image.jpg' } as any);
+  formData.append('file', filePart);
   formData.append('api_key', signed.api_key);
   formData.append('timestamp', String(signed.timestamp));
   formData.append('signature', signed.signature);
@@ -41,6 +41,19 @@ export const uploadImage = async (imageUri: string, patientId: string, purpose =
   const data = JSON.parse(body);
   if (!data.secure_url) throw new Error('Cloudinary did not return a secure URL');
   return data.secure_url as string;
+}
+
+export const uploadImage = async (imageUri: string, patientId: string, purpose = 'clinical-image'): Promise<string> => {
+  return uploadFile(
+    { uri: imageUri, type: 'image/jpeg', name: imageUri.split('/').pop() || 'clinical-image.jpg' } as any,
+    patientId,
+    purpose,
+  );
+};
+
+export const uploadDataUri = async (dataUri: string, patientId: string, purpose = 'clinical-artifact'): Promise<string> => {
+  if (!dataUri.startsWith('data:')) throw new Error('Expected a data URI');
+  return uploadFile(dataUri, patientId, purpose);
 };
 
 export const getImageUrl = (cloudName: string, publicId: string) => {
