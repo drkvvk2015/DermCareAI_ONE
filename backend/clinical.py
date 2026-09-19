@@ -23,6 +23,7 @@ from clinical_store import (
     review_ai_assessment,
     list_ai_reviews,
     get_patient_clinical_summary,
+    has_pending_ai_reviews,
 )
 
 router = APIRouter(prefix="/api/v1/clinical", tags=["clinical"])
@@ -244,6 +245,11 @@ def sign_encounter(
     if encounter["status"] == "signed":
         existing = get_signoff(clinic_id=clinic_id, encounter_id=encounter_id)
         return existing or {"status": "signed"}
+    if has_pending_ai_reviews(clinic_id=clinic_id, encounter_id=encounter_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Clinical sign-off requires an explicit clinician decision on every attached AI assessment.",
+        )
     result = create_signoff(
         organization_id=organization_id,
         clinic_id=clinic_id,
