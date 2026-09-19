@@ -45,6 +45,8 @@ export type RootStackParamList = {
   AddPatient: undefined;
   EditPatient: { patient: Patient };
   PatientDetails: { patient: Patient };
+  NewEncounter: { patient: Patient };
+  Encounter: { encounterId: string; patient: Patient };
   NewAppointment: undefined | { patient?: Patient };
   AppointmentDetails: { appointment: Appointment };
   EditAppointment: { appointment: Appointment };
