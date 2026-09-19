@@ -6,20 +6,68 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 
 > ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are implemented on PR #42. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
 >
-> **Release candidate:** `3a1a01d185466a2f8c562fc5b465559e805eb7b0`. All current automated PR gates are green. PR #42 remains separate from `main` until the environment-specific deployment, independent clinical/AI evidence, privacy/regulatory review and accountable release approval are complete.
+> **Release candidate:** `00020e6ea0ea92ab587918fccab6588edb66a349`. Automated PR gates are green and squash auto-merge is enabled. PR #42 remains separate from `main` until GitHub branch-protection requirements and the remaining deployment/review gates are satisfied.
 
 ## Visual overview
 
-These are repository-local SVG diagrams, so the README does not depend on an external image host.
+The README uses **repository-local SVG diagrams** so the documentation renders without relying on an external image host. Each visual is also linked to its source file for full-size inspection.
 
+| Visual | Purpose |
+|---|---|
+| [Production architecture](docs/assets/architecture.svg) | Client, API, AI governance, object storage and PostgreSQL boundaries |
+| [Clinical encounter workflow](docs/assets/clinical-workflow.svg) | Patient 360 → encounter → examination → lesion → assessment → review → sign-off |
+| [AI safety boundary](docs/assets/ai-safety.svg) | Consent, quality gate, model provenance, abstention and clinician controls |
+| [Production release pipeline](docs/assets/release-pipeline.svg) | CI, PostgreSQL, staging, security, DR and clinical/AI evidence gates |
 
-![DermCareAI production architecture](docs/assets/architecture.svg)
+### 1. Production architecture
 
-![DermCareAI clinical encounter workflow](docs/assets/clinical-workflow.svg)
+![DermCareAI production architecture — tenant-scoped clinical platform with governed AI and PostgreSQL](docs/assets/architecture.svg)
 
-![DermCareAI AI safety boundary](docs/assets/ai-safety.svg)
+The architecture separates the clinician experience, authenticated FastAPI platform, AI governance, object storage and durable SQL persistence. **PostgreSQL is the production persistence boundary; SQLite is a development fallback only.**
 
-![DermCareAI production release pipeline](docs/assets/release-pipeline.svg)
+### 2. Clinical encounter workflow
+
+![DermCareAI clinical encounter workflow — Patient 360 to signed encounter](docs/assets/clinical-workflow.svg)
+
+The **encounter is the central clinical record**. Longitudinal lesion data and optional AI assessment are attached to it, with explicit clinician review before final sign-off.
+
+### 3. AI safety boundary
+
+![DermCareAI AI safety boundary — consent, abstention and clinician review](docs/assets/ai-safety.svg)
+
+AI output remains **traceable and reviewable**. An attached AI assessment cannot silently become a signed diagnosis; pending AI reviews block final encounter sign-off.
+
+### 4. Production release pipeline
+
+![DermCareAI production release pipeline — automated engineering gates plus clinical and regulatory evidence](docs/assets/release-pipeline.svg)
+
+The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
+
+## System at a glance
+
+```text
+Clinician
+   │
+   ▼
+Patient 360
+   │
+   ▼
+Clinical Encounter
+   ├── History / Examination
+   ├── Longitudinal Lesion
+   ├── Clinical Image + Consent
+   ├── Assessment + Plan
+   └── AI Decision Support (optional)
+             │
+             ▼
+      Accept / Reject / Override
+             │
+             ▼
+       Follow-up + Sign-off
+             │
+             ▼
+     Audit + Governance Trace
+```
 
 ## What is implemented
 
@@ -102,17 +150,13 @@ See [Wave 4 Clinical Workflow](docs/WAVE4_CLINICAL_WORKFLOW.md).
 
 ## Production architecture
 
-![Production architecture](docs/assets/architecture.svg)
-
 The production persistence boundary is PostgreSQL. The application rejects SQLite in production mode.
 
 Durable domains include clinical encounters/lesions/consents/media metadata, billing/pharmacy, audit, and AI governance/evaluation/deployment records.
 
 ## Release pipeline
 
-![Production release pipeline](docs/assets/release-pipeline.svg)
-
-GitHub Actions now provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit reporting, disaster-recovery drills, and container release with SBOM/provenance.
+GitHub Actions provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit reporting, disaster-recovery drills, and container release with SBOM/provenance.
 
 The repository intentionally keeps the **software release gate** separate from the **clinical validation gate** and **regulatory/privacy gate**.
 
