@@ -13,7 +13,7 @@
     "@expo/config-plugins": "~9.0.0",
     "@expo/metro-config": "^0.19.12",
     "@expo/metro-runtime": "~4.0.1",
-    "@expo/prebuild-config": "~8.0.0",
+    "@expo/prebuild-config": "~57.0.16",
     "@firebase/auth": "^1.9.1",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/datetimepicker": "8.2.0",
