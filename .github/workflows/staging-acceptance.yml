@@ -30,9 +30,12 @@ jobs:
           exit 1
       - name: Initialize staging schemas
         run: docker compose -f docker-compose.staging.yml exec -T backend python scripts/migrate_postgres.py
+      - name: Install transient staging test tooling
+        run: docker compose -f docker-compose.staging.yml exec -T backend python -m pip install --no-cache-dir pytest
+
       - name: Run clinical acceptance tests
         run: |
-          docker compose -f docker-compose.staging.yml exec -T backend             pytest -q tests/test_clinical_e2e.py tests/test_clinical_platform.py tests/test_ai_governance_api.py
+          docker compose -f docker-compose.staging.yml exec -T backend             python -m pytest -q tests/test_clinical_e2e.py tests/test_clinical_platform.py tests/test_ai_governance_api.py
       - name: Capture staging diagnostics
         if: always()
         run: |
