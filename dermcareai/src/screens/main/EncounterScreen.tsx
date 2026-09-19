@@ -30,6 +30,12 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ route }) => {
   const [managementPlan, setManagementPlan] = useState('');
   const [followupAt, setFollowupAt] = useState('');
   const [followupInstructions, setFollowupInstructions] = useState('');
+  const [lesionCode, setLesionCode] = useState('L-001');
+  const [lesionBodySite, setLesionBodySite] = useState('');
+  const [lesionLaterality, setLesionLaterality] = useState('');
+  const [lesionEvolution, setLesionEvolution] = useState('');
+  const [lesionImpression, setLesionImpression] = useState('');
+  const [lesionSaving, setLesionSaving] = useState(false);
   const [aiReviews, setAIReviews] = useState<ClinicalAIReview[]>([]);
 
   const readForm = (record: ClinicalEncounter) => {
@@ -97,6 +103,30 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ route }) => {
     } finally { setSaving(false); }
   };
 
+  const saveLesion = async () => {
+    if (!encounter || !lesionCode.trim() || !lesionBodySite.trim() || signed) return;
+    setLesionSaving(true);
+    try {
+      await encounterApi.saveLesion({
+        patientId: patient.id,
+        encounterId: encounter.id,
+        lesionCode: lesionCode.trim(),
+        bodySite: lesionBodySite.trim(),
+        laterality: lesionLaterality.trim() || undefined,
+        morphology: { primary: primaryMorphology, surface, color, border, size_mm: size },
+        sizeMm: Number(size) || undefined,
+        evolution: lesionEvolution.trim() || undefined,
+        clinicalImpression: lesionImpression.trim() || provisionalDiagnosis || undefined,
+        differential: differential.split(',').map(item => item.trim()).filter(Boolean),
+      });
+      setSnack('Lesion saved to longitudinal tracking');
+    } catch (err) {
+      setSnack(err instanceof Error ? err.message : 'Unable to save lesion');
+    } finally {
+      setLesionSaving(false);
+    }
+  };
+
   const planFollowup = async () => {
     if (!encounter || !followupAt || !followupInstructions.trim() || encounter.status === 'signed') return;
     try {
@@ -156,6 +186,20 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ route }) => {
           <TextInput mode="outlined" label="Differential diagnoses (comma separated)" value={differential} onChangeText={setDifferential} disabled={signed} style={styles.input} multiline />
           <TextInput mode="outlined" label="Management plan" value={managementPlan} onChangeText={setManagementPlan} disabled={signed} style={styles.input} multiline />
         </Card.Content></Card>
+
+        <Card>
+          <Card.Title title="Longitudinal lesion" subtitle="Stable lesion ID enables comparison across visits" />
+          <Card.Content>
+            <View style={styles.row}>
+              <TextInput mode="outlined" label="Lesion code" value={lesionCode} onChangeText={setLesionCode} disabled={signed} style={styles.half} />
+              <TextInput mode="outlined" label="Laterality" value={lesionLaterality} onChangeText={setLesionLaterality} disabled={signed} style={styles.half} />
+            </View>
+            <TextInput mode="outlined" label="Body site" value={lesionBodySite} onChangeText={setLesionBodySite} disabled={signed} style={styles.input} />
+            <TextInput mode="outlined" label="Evolution since last review" value={lesionEvolution} onChangeText={setLesionEvolution} disabled={signed} style={styles.input} multiline />
+            <TextInput mode="outlined" label="Clinical impression" value={lesionImpression} onChangeText={setLesionImpression} disabled={signed} style={styles.input} />
+            <Button mode="outlined" onPress={saveLesion} loading={lesionSaving} disabled={signed || !lesionBodySite.trim()} style={styles.button}>Save Lesion to Timeline</Button>
+          </Card.Content>
+        </Card>
 
         {aiReviews.length ? <Card><Card.Title title="AI decision-support review" subtitle="Clinician review remains required" /><Card.Content>{aiReviews.map(review => <View key={review.id} style={styles.aiBlock}><Text variant="titleMedium">{review.predicted_label}</Text><Text>Confidence: {(review.confidence * 100).toFixed(1)}%</Text><Text>Model: {review.model_name}</Text><Text>Decision: {review.clinician_decision || 'Pending clinician review'}</Text>{review.clinician_override_label ? <Text>Override: {review.clinician_override_label}</Text> : null}<Divider style={styles.input} /></View>)}</Card.Content></Card> : null}
 
