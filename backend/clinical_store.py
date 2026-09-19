@@ -545,7 +545,7 @@ def record_ai_review(
 
 
 def review_ai_assessment(
-    *, clinic_id: str, review_id: str, clinician_decision: str,
+    *, clinic_id: str, encounter_id: str, review_id: str, clinician_decision: str,
     clinician_override_label: str | None, reviewed_by: str,
 ) -> dict[str, Any]:
     if clinician_decision not in {"accepted", "overridden", "rejected"}:
@@ -557,9 +557,17 @@ def review_ai_assessment(
             UPDATE encounter_ai_reviews
             SET clinician_decision = ?, clinician_override_label = ?,
                 reviewed_by = ?, reviewed_at = ?
-            WHERE id = ? AND clinic_id = ?
+            WHERE id = ? AND clinic_id = ? AND encounter_id = ?
             """,
-            (clinician_decision, clinician_override_label, reviewed_by, now, review_id, clinic_id),
+            (
+                clinician_decision,
+                clinician_override_label,
+                reviewed_by,
+                now,
+                review_id,
+                clinic_id,
+                encounter_id,
+            ),
         )
         if cursor.rowcount != 1:
             raise ValueError("AI review not found")
