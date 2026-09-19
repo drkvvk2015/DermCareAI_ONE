@@ -76,6 +76,14 @@ export type ClinicalFollowup = {
   status: string;
 };
 
+export type ClinicalPatientSummary = {
+  patient_id: string;
+  encounters: ClinicalEncounter[];
+  lesions: Array<Record<string, unknown>>;
+  followups: ClinicalFollowup[];
+  signoffs: Array<Record<string, unknown>>;
+};
+
 export type ClinicalAIReview = {
   id: string;
   request_id: string;
@@ -86,6 +94,14 @@ export type ClinicalAIReview = {
   accepted: boolean;
   clinician_decision?: string | null;
   clinician_override_label?: string | null;
+};
+
+export const patientClinicalApi = {
+  getSummary(patientId: string) {
+    return authorizedRequest<ClinicalPatientSummary>(
+      `/api/v1/clinical/patients/${encodeURIComponent(patientId)}/summary`,
+    );
+  },
 };
 
 export const encounterApi = {
