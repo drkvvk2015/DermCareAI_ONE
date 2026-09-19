@@ -20,6 +20,8 @@ from SkinLesionClassifier import SkinLesionClassifier
 from ai_governance import build_governance_card
 from audit import router as audit_router
 from auth import require_roles
+from clinical import router as clinical_router
+from ai_registry import router as ai_registry_router
 from media import router as media_router
 from commerce import router as commerce_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
@@ -82,6 +84,8 @@ app.include_router(commerce_router)
 app.include_router(notifications_router)
 app.include_router(audit_router)
 app.include_router(media_router)
+app.include_router(clinical_router)
+app.include_router(ai_registry_router)
 
 
 class ModelService:
@@ -303,6 +307,11 @@ def platform_info() -> PlatformInfo:
             "hash-chained-audit",
             "request-correlation",
             "privacy-safe-observability",
+            "encounter-first-clinical-record",
+            "multi-clinic-tenant-scope",
+            "consent-and-retention-metadata",
+            "longitudinal-lesion-tracking",
+            "model-validation-and-approval-ledger",
         ],
         generated_at=utc_now(),
     )
