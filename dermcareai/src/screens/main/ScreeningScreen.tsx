@@ -8,6 +8,7 @@ import { auth, db } from '../../config/firebase';
 import { useIsFocused } from '@react-navigation/native';
 import { NavigationProps, Patient, ScreeningReport } from '../../navigation/types';
 import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
+import { uploadDataUri, uploadImage } from '../../services/cloudinary';
 
 const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, route }) => {
   const theme = useTheme();
