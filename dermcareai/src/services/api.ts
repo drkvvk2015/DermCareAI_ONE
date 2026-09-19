@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { API_URL } from '@env';
+import type { AIGovernanceCard } from '../types/platform';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -12,8 +13,6 @@ export type ImageQuality = {
   luminance_variance: number;
   issues: string[];
 };
-
-import { AIGovernanceCard } from '../types/platform';
 
 export type PredictionResponse = {
   request_id: string;
