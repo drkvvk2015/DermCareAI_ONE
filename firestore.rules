@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn()
+        && request.auth.token.roles is list
+        && role in request.auth.token.roles;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function ownsDoctor(data) {
+      return signedIn() && data.doctorId == request.auth.uid;
+    }
+
+    match /doctors/{uid} {
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow read: if isAdmin() || uid == request.auth.uid;
+      allow update: if isAdmin()
+        || (
+          uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['fullName', 'phoneNumber', 'specialization'])
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAdmin() || ownsDoctor(resource.data);
+      allow create: if isAdmin() || ownsDoctor(request.resource.data);
+      allow update: if isAdmin()
+        || (
+          ownsDoctor(resource.data)
+          && ownsDoctor(request.resource.data)
+          && request.resource.data.doctorId == resource.data.doctorId
+        );
+      allow delete: if false;
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAdmin() || ownsDoctor(resource.data);
+      allow create: if isAdmin() || ownsDoctor(request.resource.data);
+      allow update: if isAdmin()
+        || (
+          ownsDoctor(resource.data)
+          && ownsDoctor(request.resource.data)
+          && request.resource.data.doctorId == resource.data.doctorId
+        );
+      allow delete: if false;
+    }
+
+    match /screeningReports/{reportId} {
+      allow read: if isAdmin() || ownsDoctor(resource.data);
+      allow create: if isAdmin() || (hasRole('doctor') && ownsDoctor(request.resource.data));
+      allow update: if isAdmin()
+        || (
+          hasRole('doctor')
+          && ownsDoctor(resource.data)
+          && ownsDoctor(request.resource.data)
+          && request.resource.data.doctorId == resource.data.doctorId
+        );
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
