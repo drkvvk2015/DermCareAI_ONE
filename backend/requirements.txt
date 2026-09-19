@@ -27,3 +27,7 @@ typing-extensions
 # Optional but recommended
 gunicorn
 setuptools
+
+# Production persistence
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
