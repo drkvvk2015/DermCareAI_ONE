@@ -103,6 +103,34 @@ def test_clinical_workflow_and_tenant_isolation() -> None:
 
 
 
+def test_signoff_is_blocked_by_pending_ai_review() -> None:
+    client = TestClient(app)
+    encounter = client.post(
+        "/api/v1/clinical/encounters",
+        json={"patient_id": "patient-pending", "complaints": {}, "examination": {}, "assessment": {}, "plan": {}},
+    )
+    assert encounter.status_code == 200
+    encounter_id = encounter.json()["id"]
+
+    review = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/ai-reviews",
+        json={
+            "request_id": "REQ-PENDING",
+            "model_name": "research-demo",
+            "predicted_label": "Uncertain / Needs Clinical Review",
+            "confidence": 0.42,
+            "accepted": False,
+        },
+    )
+    assert review.status_code == 200
+
+    signoff = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/sign",
+        json={"attestation": "I reviewed the clinical history examination assessment and plan and accept responsibility for this clinical record."},
+    )
+    assert signoff.status_code == 409
+
+
 def test_signoff_followup_and_ai_review_workflow() -> None:
     client = TestClient(app)
 
