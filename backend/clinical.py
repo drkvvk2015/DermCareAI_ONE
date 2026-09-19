@@ -168,3 +168,18 @@ def post_media(req: ClinicalMediaCreate, user: dict[str, Any] = Depends(require_
         return result
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/consents/{patient_id}/active")
+def active_consent(
+    patient_id: str,
+    purpose: str = "clinical-image",
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin", "receptionist")),
+):
+    _, clinic_id = _tenant(user)
+    from clinical_store import has_active_consent
+    return {
+        "patient_id": patient_id,
+        "purpose": purpose,
+        "active": has_active_consent(clinic_id=clinic_id, patient_id=patient_id, purpose=purpose),
+    }
