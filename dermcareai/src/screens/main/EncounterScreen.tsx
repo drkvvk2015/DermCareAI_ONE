@@ -38,6 +38,8 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
   const [lesionImpression, setLesionImpression] = useState('');
   const [lesionSaving, setLesionSaving] = useState(false);
   const [aiReviews, setAIReviews] = useState<ClinicalAIReview[]>([]);
+  const [aiOverrideLabel, setAIOverrideLabel] = useState('');
+  const [aiReviewingId, setAIReviewingId] = useState<string | null>(null);
 
   const readForm = (record: ClinicalEncounter) => {
     const complaints = record.complaints || {};
@@ -125,6 +127,25 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
       setSnack(err instanceof Error ? err.message : 'Unable to save lesion');
     } finally {
       setLesionSaving(false);
+    }
+  };
+
+  const reviewAI = async (reviewId: string, decision: 'accepted' | 'rejected' | 'overridden') => {
+    setAIReviewingId(reviewId);
+    try {
+      const updated = await encounterApi.reviewAI(
+        encounterId,
+        reviewId,
+        decision,
+        decision === 'overridden' ? aiOverrideLabel.trim() || undefined : undefined,
+      );
+      setAIReviews(prev => prev.map(item => item.id === reviewId ? updated : item));
+      setAIOverrideLabel('');
+      setSnack('AI assessment review recorded');
+    } catch (err) {
+      setSnack(err instanceof Error ? err.message : 'Unable to record AI review');
+    } finally {
+      setAIReviewingId(null);
     }
   };
 
@@ -219,6 +240,46 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
                 <Text>Model: {review.model_name}</Text>
                 <Text>Decision: {review.clinician_decision || 'Pending clinician review'}</Text>
                 {review.clinician_override_label ? <Text>Override: {review.clinician_override_label}</Text> : null}
+                {!review.clinician_decision && !signed ? (
+                  <>
+                    <TextInput
+                      mode="outlined"
+                      label="Override label (only for override)"
+                      value={aiOverrideLabel}
+                      onChangeText={setAIOverrideLabel}
+                      style={styles.input}
+                    />
+                    <View style={styles.row}>
+                      <Button
+                        mode="outlined"
+                        onPress={() => void reviewAI(review.id, 'accepted')}
+                        loading={aiReviewingId === review.id}
+                        disabled={aiReviewingId !== null}
+                        style={styles.half}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        onPress={() => void reviewAI(review.id, 'rejected')}
+                        loading={aiReviewingId === review.id}
+                        disabled={aiReviewingId !== null}
+                        style={styles.half}
+                      >
+                        Reject
+                      </Button>
+                    </View>
+                    <Button
+                      mode="contained-tonal"
+                      onPress={() => void reviewAI(review.id, 'overridden')}
+                      loading={aiReviewingId === review.id}
+                      disabled={aiReviewingId !== null || !aiOverrideLabel.trim()}
+                      style={styles.button}
+                    >
+                      Record Override
+                    </Button>
+                  </>
+                ) : null}
                 <Divider style={styles.input} />
               </View>
             )) : <Text style={styles.meta}>No AI assessment is attached to this encounter.</Text>}
