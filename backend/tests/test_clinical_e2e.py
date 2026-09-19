@@ -100,3 +100,64 @@ def test_clinical_workflow_and_tenant_isolation() -> None:
     timeline = client.get("/api/v1/clinical/patients/patient-1/lesions/L-001/timeline")
     assert timeline.status_code == 200
     assert timeline.json()[0]["lesion_code"] == "L-001"
+
+
+
+def test_signoff_followup_and_ai_review_workflow() -> None:
+    client = TestClient(app)
+
+    encounter = client.post(
+        "/api/v1/clinical/encounters",
+        json={
+            "patient_id": "patient-2",
+            "complaints": {"chief_complaint": "new rash"},
+            "examination": {"dermatology": {"primary_morphology": "plaque"}},
+            "assessment": {"provisional_diagnosis": "dermatitis"},
+            "plan": {"management_plan": "topical treatment"},
+        },
+    )
+    assert encounter.status_code == 200
+    encounter_id = encounter.json()["id"]
+
+    followup = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/followups",
+        json={
+            "due_at": "2026-10-03T09:00:00+05:30",
+            "instructions": "Review treatment response and lesion evolution.",
+        },
+    )
+    assert followup.status_code == 200
+    assert followup.json()["status"] == "planned"
+
+    ai_review = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/ai-reviews",
+        json={
+            "request_id": "REQ-1",
+            "model_name": "research-demo",
+            "model_provenance": "test",
+            "predicted_label": "Dermatitis",
+            "confidence": 0.81,
+            "accepted": False,
+        },
+    )
+    assert ai_review.status_code == 200
+    review_id = ai_review.json()["id"]
+
+    decision = client.patch(
+        f"/api/v1/clinical/encounters/{encounter_id}/ai-reviews/{review_id}",
+        json={"clinician_decision": "overridden", "clinician_override_label": "Tinea corporis"},
+    )
+    assert decision.status_code == 200
+    assert decision.json()["clinician_decision"] == "overridden"
+
+    signoff = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/sign",
+        json={
+            "attestation": "I reviewed the clinical history examination assessment and plan and accept responsibility for this clinical record."
+        },
+    )
+    assert signoff.status_code == 200
+
+    signed = client.get(f"/api/v1/clinical/encounters/{encounter_id}")
+    assert signed.status_code == 200
+    assert signed.json()["status"] == "signed"
