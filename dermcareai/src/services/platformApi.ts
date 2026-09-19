@@ -1,4 +1,5 @@
 import { API_URL } from '@env';
+import type { AIGovernanceCard } from '../types/platform';
 
 export type PlatformInfo = {
   api_version: string;
@@ -20,8 +21,6 @@ export type ReadinessResponse = {
   components: Record<string, ReadinessComponent>;
   generated_at: string;
 };
-
-import { AIGovernanceCard } from '../types/platform';
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
