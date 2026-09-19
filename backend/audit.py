@@ -45,7 +45,7 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
     actor_role = roles[0] if roles else "staff"
     with db() as conn:
         previous = conn.execute("SELECT event_hash FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
-        previous_hash = previous[0] if previous else "GENESIS"
+        previous_hash = previous["event_hash"] if previous else "GENESIS"
         canonical = {
             "timestamp": timestamp,
             "actor_id": actor_id,
