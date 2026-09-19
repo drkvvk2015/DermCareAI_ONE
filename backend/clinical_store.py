@@ -306,7 +306,16 @@ def list_lesion_timeline(*, clinic_id: str, patient_id: str, lesion_code: str) -
 def create_consent(**payload: Any) -> dict[str, Any]:
     consent_id = f"CNS-{uuid.uuid4().hex[:12].upper()}"
     now = _now()
-    with _connect() as conn:
+    with transaction() as conn:
+        if payload["status"] == "withdrawn":
+            conn.execute(
+                """
+                UPDATE consents
+                SET status = 'withdrawn', withdrawn_at = COALESCE(withdrawn_at, ?)
+                WHERE clinic_id = ? AND patient_id = ? AND purpose = ? AND status = 'granted'
+                """,
+                (payload.get("withdrawn_at") or now, payload["clinic_id"], payload["patient_id"], payload["purpose"]),
+            )
         conn.execute(
             """
             INSERT INTO consents (
