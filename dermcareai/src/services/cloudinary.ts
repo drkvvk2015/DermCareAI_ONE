@@ -26,7 +26,7 @@ async function getSignedUpload(subjectId: string, purpose: string): Promise<Sign
   return JSON.parse(body) as SignedUpload;
 }
 
-async function uploadFile(filePart: any, patientId: string, purpose: string): Promise<string> {
+async function uploadFile(filePart: any, subjectId: string, purpose: string): Promise<string> {
   const signed = await getSignedUpload(subjectId, purpose);
   const formData = new FormData();
   formData.append('file', filePart);
@@ -46,7 +46,7 @@ async function uploadFile(filePart: any, patientId: string, purpose: string): Pr
 export const uploadImage = async (imageUri: string, subjectId: string, purpose = 'clinical-image'): Promise<string> => {
   return uploadFile(
     { uri: imageUri, type: 'image/jpeg', name: imageUri.split('/').pop() || 'clinical-image.jpg' } as any,
-    patientId,
+    subjectId,
     purpose,
   );
 };
