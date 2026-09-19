@@ -2,23 +2,22 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
+from sqlalchemy import Engine
+
+from storage import compat_connection, create_store_engine, require_postgres_in_production
 from typing import Any, Iterator
 
-DB_PATH = Path(os.getenv("CLINICAL_DB_PATH", "clinical.db"))
+ENGINE: Engine = create_store_engine("CLINICAL_DATABASE_URL", "CLINICAL_DB_PATH", "clinical.db")
+require_postgres_in_production(ENGINE, "Clinical store")
 
 
-def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+@contextmanager
+def _connect():
+    with compat_connection(ENGINE) as conn:
+        yield conn
 
 
 def _now() -> str:
@@ -116,21 +115,13 @@ def init_store() -> None:
 
 
 @contextmanager
-def transaction() -> Iterator[sqlite3.Connection]:
+def transaction():
     init_store()
-    conn = _connect()
-    try:
-        conn.execute("BEGIN IMMEDIATE")
+    with compat_connection(ENGINE) as conn:
         yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
 
 
-def _decode(row: sqlite3.Row) -> dict[str, Any]:
+def _decode(row: dict[str, Any]) -> dict[str, Any]:
     item = dict(row)
     for field in (
         "complaints_json", "examination_json", "assessment_json",
