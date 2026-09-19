@@ -4,12 +4,13 @@ import { Button, Card, Chip, Divider, Snackbar, Text, TextInput, ActivityIndicat
 import { NavigationProps } from '../../navigation/types';
 import { ClinicalAIReview, ClinicalEncounter, encounterApi } from '../../services/clinicalApi';
 
-const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ route }) => {
+const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, route }) => {
   const { encounterId, patient } = route.params;
   const [encounter, setEncounter] = useState<ClinicalEncounter | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [aiAttaching, setAIAttaching] = useState(false);
   const [snack, setSnack] = useState('');
 
   const [chiefComplaint, setChiefComplaint] = useState('');
@@ -127,6 +128,10 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ route }) => {
     }
   };
 
+  const openAIScreening = () => {
+    navigation.navigate('Screening', { patient, encounterId: encounter.id });
+  };
+
   const planFollowup = async () => {
     if (!encounter || !followupAt || !followupInstructions.trim() || encounter.status === 'signed') return;
     try {
@@ -201,7 +206,24 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ route }) => {
           </Card.Content>
         </Card>
 
-        {aiReviews.length ? <Card><Card.Title title="AI decision-support review" subtitle="Clinician review remains required" /><Card.Content>{aiReviews.map(review => <View key={review.id} style={styles.aiBlock}><Text variant="titleMedium">{review.predicted_label}</Text><Text>Confidence: {(review.confidence * 100).toFixed(1)}%</Text><Text>Model: {review.model_name}</Text><Text>Decision: {review.clinician_decision || 'Pending clinician review'}</Text>{review.clinician_override_label ? <Text>Override: {review.clinician_override_label}</Text> : null}<Divider style={styles.input} /></View>)}</Card.Content></Card> : null}
+        <Card>
+          <Card.Title title="AI decision-support" subtitle="Attach results to this encounter for human review" />
+          <Card.Content>
+            <Button mode="outlined" icon="camera" onPress={openAIScreening} disabled={signed || aiAttaching}>
+              Open Clinical Image Screening
+            </Button>
+            {aiReviews.length ? aiReviews.map(review => (
+              <View key={review.id} style={styles.aiBlock}>
+                <Text variant="titleMedium">{review.predicted_label}</Text>
+                <Text>Confidence: {(review.confidence * 100).toFixed(1)}%</Text>
+                <Text>Model: {review.model_name}</Text>
+                <Text>Decision: {review.clinician_decision || 'Pending clinician review'}</Text>
+                {review.clinician_override_label ? <Text>Override: {review.clinician_override_label}</Text> : null}
+                <Divider style={styles.input} />
+              </View>
+            )) : <Text style={styles.meta}>No AI assessment is attached to this encounter.</Text>}
+          </Card.Content>
+        </Card>
 
         <Card><Card.Title title="Follow-up" subtitle="Record the intended review point" /><Card.Content>
           <TextInput mode="outlined" label="Due date/time (ISO 8601)" value={followupAt} onChangeText={setFollowupAt} disabled={signed} />
