@@ -105,14 +105,19 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
     if (!userId) return;
 
     const recommendations = api.getRecommendations(result.class_name);
+    const { organizationId, clinicId } = await getClinicScope();
+    const durableImageUrl = await uploadImage(image, selectedPatient.id, 'clinical-original');
+    const durableProcessedImageUrl = processedImage && processedImage.startsWith('data:')
+      ? await uploadDataUri(processedImage, selectedPatient.id, 'ai-focus-map')
+      : '';
     const reportData: Omit<ScreeningReport, 'id'> = {
       patientId: selectedPatient.id,
       patientName: selectedPatient.name,
       organizationId,
       clinicId,
       date: new Date().toISOString(),
-      imageUrl: image,
-      processedImageUrl: processedImage || '',
+      imageUrl: durableImageUrl,
+      processedImageUrl: durableProcessedImageUrl,
       condition: result.class_name,
       confidence: result.confidence,
       model: result.model_used,
