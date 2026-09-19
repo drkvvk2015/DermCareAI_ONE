@@ -81,4 +81,19 @@ def create_audit_event(event: AuditEvent, user: dict[str, Any] = Depends(require
 def list_audit_events(limit: int = 100, user: dict[str, Any] = Depends(require_roles("admin", "auditor"))):
     with db() as conn:
         rows = conn.execute("SELECT id,timestamp,actor_id,actor_role,action,resource_type,resource_id,metadata_json,correlation_id,previous_hash,event_hash FROM audit_events ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)).fetchall()
-    return [{"id": f"AUD-{row[0]:09d}", "timestamp": row[1], "actor_id": row[2], "actor_role": row[3], "action": row[4], "resource_type": row[5], "resource_id": row[6], "metadata": json.loads(row[7]), "correlation_id": row[8], "previous_hash": row[9], "event_hash": row[10]} for row in rows]
+    return [
+        {
+            "id": f"AUD-{row['id']:09d}",
+            "timestamp": row["timestamp"],
+            "actor_id": row["actor_id"],
+            "actor_role": row["actor_role"],
+            "action": row["action"],
+            "resource_type": row["resource_type"],
+            "resource_id": row["resource_id"],
+            "metadata": json.loads(row["metadata_json"]),
+            "correlation_id": row["correlation_id"],
+            "previous_hash": row["previous_hash"],
+            "event_hash": row["event_hash"],
+        }
+        for row in rows
+    ]
