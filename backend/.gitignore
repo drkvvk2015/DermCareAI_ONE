@@ -63,3 +63,5 @@ dist/
 # Docker
 *.pid
 docker-compose.override.yml
+
+*.db
