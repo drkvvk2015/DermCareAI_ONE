@@ -346,6 +346,7 @@ def patch_ai_review(
     try:
         result = review_ai_assessment(
             clinic_id=clinic_id,
+            encounter_id=encounter_id,
             review_id=review_id,
             clinician_decision=req.clinician_decision,
             clinician_override_label=req.clinician_override_label,
