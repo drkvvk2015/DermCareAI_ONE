@@ -16,6 +16,12 @@ service cloud.firestore {
       return hasRole('admin');
     }
 
+    function activeDoctor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/doctors/$(request.auth.uid))
+        && get(/databases/$(database)/documents/doctors/$(request.auth.uid)).data.status == 'active';
+    }
+
     function ownsDoctor(data) {
       return signedIn() && data.doctorId == request.auth.uid;
     }
@@ -35,11 +41,12 @@ service cloud.firestore {
     }
 
     match /patients/{patientId} {
-      allow read: if isAdmin() || ownsDoctor(resource.data);
-      allow create: if isAdmin() || ownsDoctor(request.resource.data);
+      allow read: if isAdmin() || (activeDoctor() && ownsDoctor(resource.data));
+      allow create: if isAdmin() || (activeDoctor() && ownsDoctor(request.resource.data));
       allow update: if isAdmin()
         || (
-          ownsDoctor(resource.data)
+          activeDoctor()
+          && ownsDoctor(resource.data)
           && ownsDoctor(request.resource.data)
           && request.resource.data.doctorId == resource.data.doctorId
         );
@@ -47,11 +54,12 @@ service cloud.firestore {
     }
 
     match /appointments/{appointmentId} {
-      allow read: if isAdmin() || ownsDoctor(resource.data);
-      allow create: if isAdmin() || ownsDoctor(request.resource.data);
+      allow read: if isAdmin() || (activeDoctor() && ownsDoctor(resource.data));
+      allow create: if isAdmin() || (activeDoctor() && ownsDoctor(request.resource.data));
       allow update: if isAdmin()
         || (
-          ownsDoctor(resource.data)
+          activeDoctor()
+          && ownsDoctor(resource.data)
           && ownsDoctor(request.resource.data)
           && request.resource.data.doctorId == resource.data.doctorId
         );
@@ -59,11 +67,11 @@ service cloud.firestore {
     }
 
     match /screeningReports/{reportId} {
-      allow read: if isAdmin() || ownsDoctor(resource.data);
-      allow create: if isAdmin() || (hasRole('doctor') && ownsDoctor(request.resource.data));
+      allow read: if isAdmin() || (activeDoctor() && ownsDoctor(resource.data));
+      allow create: if isAdmin() || (activeDoctor() && ownsDoctor(request.resource.data));
       allow update: if isAdmin()
         || (
-          hasRole('doctor')
+          activeDoctor()
           && ownsDoctor(resource.data)
           && ownsDoctor(request.resource.data)
           && request.resource.data.doctorId == resource.data.doctorId
