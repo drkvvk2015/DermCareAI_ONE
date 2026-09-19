@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  PYTHONPATH: backend
+  PYTHONPATH: .
 
 jobs:
   backend-static-and-safety:
@@ -29,15 +29,15 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install lightweight test dependencies
-        run: python -m pip install --upgrade pip pytest
+        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run safety and metric tests
-        run: pytest -q tests/test_evaluation.py
+        run: pytest -q tests
       - name: Validate required model files are not committed
         shell: bash
         run: |
-          if find . -maxdepth 2 -type f \( -name '*.pth' -o -name '*.keras' -o -name '*.h5' \) | grep -q .; then
+          if find . -maxdepth 3 -type f \( -name '*.pth' -o -name '*.keras' -o -name '*.h5' \) | grep -q .; then
             echo 'Model binaries must be provided through controlled deployment storage, not committed to Git.'
             exit 1
           fi
