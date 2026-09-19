@@ -1,44 +1,217 @@
 # DermCareAI — Dermatology Clinic Operating System
 
-DermCareAI now combines patient/appointment management with AI-assisted lesion screening, billing, UPI checkout, pharmacy inventory/dispensing, durable audit logging, and configurable WhatsApp/SMS notifications.
+DermCareAI is a healthcare-oriented dermatology clinic platform that combines patient and appointment management with AI-assisted image screening, clinical documentation, billing and hosted UPI checkout, pharmacy inventory/dispensing, audit logging, and authenticated notifications.
 
-## AI models
+> **Clinical safety:** DermCareAI is an assistive software platform. AI screening output is not a diagnosis and must not be used as the sole basis for treatment. The embedded HAM10000 model is a research fallback and is not clinically validated for routine patient care.
 
-The backend supports the existing DermCareAI research weights and an optional locally cached embedded HAM10000 7-class transformer model (`PREMAADC/vit-base-ham10000`). The embedded model is a research fallback and is **not clinically validated**. The application must not treat model output as a diagnosis or use it as the sole basis for treatment decisions.
+## Current capabilities
 
-Model versions and local weights are represented in `backend/models/registry.json`. Hash verification is exposed by `/models` and the service retains bounded self-healing/reload behaviour.
+### Clinical and patient workflow
+- Patient profiles and clinic records
+- Appointment and clinical workflow support
+- Prescription and clinical-note support
+- Dermatology image screening and screening reports
+- Authenticated clinic APIs using Firebase ID tokens
+- Role-based authorization for protected clinic operations
 
-## Billing and UPI
+### AI and model management
+- Repository-backed model registry
+- Optional locally cached embedded dermatology model: `PREMAADC/vit-base-ham10000`
+- Model hash verification and registry integrity checks
+- Bounded model reload/self-healing behaviour
+- Automated backend evaluation and regression tests
+- No model binaries are committed to Git; controlled deployment storage is expected
 
-The mobile app includes billing and invoice creation. Razorpay integration creates hosted payment links; the hosted checkout can provide UPI Intent/QR. Do not implement new UPI Collect flows. Configure Razorpay credentials in `backend/.env.example`.
+### Billing and payments
+- Invoice creation and payment lifecycle support
+- Razorpay hosted payment links
+- UPI Intent/QR through hosted checkout
+- Server-side invoice amount calculation
+- Razorpay signature verification using the exact request body
+- Provider amount validation against the stored invoice
+- Idempotent payment handling
 
-Razorpay notes that UPI Collect is deprecated for most use cases from 28 February 2026 and recommends UPI Intent or UPI QR for new integrations. See the provider documentation before production launch.
+Do not add new UPI Collect flows. Confirm current Razorpay requirements before production deployment.
 
-## Pharmacy
+### Pharmacy
+- Medicine master and stock management
+- Batch and expiry tracking
+- Reorder thresholds
+- Prescription-linked dispensing
+- Duplicate medicine-ID aggregation for stock validation/deduction
+- Validation before mutation to avoid partial stock updates
 
-The pharmacy module provides medicine master/stock endpoints, batch/expiry fields, reorder thresholds, stock deduction and prescription-linked dispensing. Production deployment should add role-based pharmacy authorization and a persistent transactional database before using it for a live dispensing operation.
+A persistent transactional database and production pharmacy authorization model are still required for a live dispensing deployment.
 
-## Auditing
+### Notifications
+- WhatsApp Cloud API adapter
+- Indian SMS-provider integration
+- Privacy-safe operational webhook
+- Explicit channel allow-listing
+- Authenticated provider configuration
 
-`/audit/events` stores timestamped, hash-chained audit events in SQLite. Critical events should be generated for patient changes, prescriptions, dispensing, invoices, payments, notifications, AI screening and administrative actions. For multi-instance production deployments, move the audit store to a managed append-only datastore.
+Never transmit diagnoses, prescriptions, payment details, lesion images, or other protected health information to public social networks.
 
-## Notifications
+### Auditing
+- Timestamped audit events
+- Hash-chained audit records
+- Coverage for critical workflow events such as patients, prescriptions, dispensing, invoices, payments, notifications, AI screening, and administrative actions
+- SQLite-backed local audit store for development/single-instance use
 
-The notification adapter supports:
-- WhatsApp Cloud API template messages
-- Indian SMS-provider integration using DLT-approved templates
-- a privacy-safe social webhook for operational events
+For multi-instance production deployments, move auditing to a managed append-only datastore with appropriate retention, backup, access control, and monitoring.
 
-Never send diagnoses, prescriptions, payment details, lesion images or other sensitive health information to public social networks. Register and approve message templates/headers and collect consent where required.
+## Architecture
 
-## Regulatory and security boundary
+```text
+Mobile / Web (Expo + React Native)
+        |
+        | Firebase ID token
+        v
+Clinic API / Backend (FastAPI)
+        |
+        +-- Auth / RBAC
+        +-- Clinical workflow
+        +-- AI model registry + evaluation
+        +-- Billing / Razorpay
+        +-- Pharmacy
+        +-- Notifications
+        +-- Audit logging
+        |
+        +-- Controlled model storage
+        +-- SQLite / managed production datastore
+```
 
-This is a healthcare software platform and AI module, not automatically a licensed medical device or pharmacy system. In India, Medical Device Software can fall under the Medical Devices Rules, 2017 and CDSCO guidance; the actual classification depends on intended use and claims. Conduct a formal regulatory/privacy/security assessment before commercialization.
+## Repository layout
+
+```text
+.
+├── backend/
+│   ├── app.py
+│   ├── auth.py
+│   ├── commerce.py
+│   ├── evaluation.py
+│   ├── model_registry.py
+│   ├── notifications.py
+│   ├── resilience.py
+│   ├── audit.py
+│   ├── main.py
+│   └── tests/
+├── dermcareai/
+│   └── src/
+├── docs/
+├── .github/
+│   └── workflows/
+└── README.md
+```
 
 ## Configuration
 
-Copy `backend/.env.example` to your deployment environment and provide only server-side secrets. Never commit API keys, access tokens, webhook secrets or patient data to Git.
+Start from `backend/.env.example`.
 
-## Existing mobile features
+Important server-side settings include:
 
-Patient profiles, appointments, clinical records, prescriptions/notes, screening reports and the continuous evaluation/self-healing infrastructure remain part of the application.
+- `FIREBASE_AUTH_REQUIRED=true`
+- Firebase service-account configuration
+- Razorpay credentials and webhook secret
+- WhatsApp Cloud API credentials
+- SMS provider / DLT template configuration
+- Optional privacy-safe operational webhook
+- Audit database path
+- Model directory and model selection settings
+
+Never commit API keys, access tokens, webhook secrets, Firebase credentials, or patient data.
+
+## Local development
+
+### Backend
+
+```bash
+cd backend
+python -m pip install -U pip
+python -m pip install pytest fastapi pydantic httpx firebase-admin
+pytest -q tests
+python -m compileall -q .
+```
+
+### Mobile
+
+```bash
+cd dermcareai
+npm ci
+npx tsc --noEmit
+npx expo export --platform web
+```
+
+## Continuous validation
+
+The repository runs automated validation on GitHub Actions.
+
+### Backend gate
+- Python compilation
+- Full backend test suite
+- Safety/evaluation regression checks
+- Protection against accidentally committed model binaries
+
+### Mobile gate
+- Clean `npm ci`
+- TypeScript compilation
+- Expo web export smoke test
+
+### Security scanning
+CodeQL scans:
+- GitHub Actions
+- JavaScript / TypeScript
+- Python
+
+The project should treat a failing security or regression gate as a release blocker.
+
+## Security model
+
+Production clinics should keep the following controls enabled:
+
+1. Firebase authentication for clinic APIs
+2. Server-side role enforcement
+3. Audit identity derived from the verified user
+4. Server-side payment amount calculation
+5. Payment webhook signature verification
+6. Provider amount validation
+7. Idempotent payment processing
+8. Channel allow-listing for outbound notifications
+9. No PHI in public/social notification payloads
+10. Controlled storage for model binaries and secrets
+11. CodeQL and regression checks before production merges
+
+## Regulatory and clinical boundary
+
+Healthcare software and AI functionality may fall under medical-device, privacy, cybersecurity, pharmacy, payment, and professional-practice requirements depending on intended use, claims, geography, and deployment model.
+
+For India, conduct a formal assessment against applicable CDSCO / Medical Devices Rules requirements, privacy obligations, pharmacy requirements, payment-provider rules, and institutional policies before commercialization or clinical deployment.
+
+The repository does not by itself establish regulatory clearance or clinical validation.
+
+## Production readiness checklist
+
+Before a real clinic deployment:
+
+- Use a managed transactional database instead of development SQLite where required
+- Enable encrypted backups, restore testing, and disaster recovery
+- Configure Firebase production authentication and least-privilege service credentials
+- Store secrets outside Git
+- Configure Razorpay webhooks and verify signatures
+- Configure approved WhatsApp/SMS templates and patient consent workflows
+- Establish pharmacy authorization and stock audit controls
+- Move audit logging to durable append-only infrastructure for multi-instance deployment
+- Complete penetration testing and dependency/security review
+- Complete clinical validation and intended-use documentation for any AI-enabled claim
+- Configure GitHub branch protection/rulesets so production merges require reviewed pull requests and passing CI/security checks
+
+## Important limitations
+
+- AI screening is assistive and not a substitute for dermatologist assessment, histopathology, or other indicated investigations.
+- The embedded HAM10000 model is a research fallback, not a clinically validated diagnostic model.
+- Production payment, pharmacy, audit, notification, and identity infrastructure requires deployment-specific hardening.
+- Regulatory status depends on the actual product claims, workflow, jurisdiction, and implementation.
+
+## License
+
+See the repository for the applicable project licensing and dependency notices.
