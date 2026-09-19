@@ -65,3 +65,6 @@ dist/
 docker-compose.override.yml
 
 *.db
+
+clinical.db
+ai_governance.db
