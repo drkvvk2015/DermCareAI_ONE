@@ -238,6 +238,8 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
           </List.Section>
 
           <Divider style={styles.divider} />
+        </Card.Content>
+      </Card>
 
       <Card style={styles.section}>
         <Card.Content>
