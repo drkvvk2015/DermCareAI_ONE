@@ -18,7 +18,7 @@ router = APIRouter(prefix="/media", tags=["media"])
 
 
 class SignUploadRequest(BaseModel):
-    patient_id: str = Field(min_length=1, max_length=120)
+    subject_id: str = Field(min_length=1, max_length=120)
     purpose: str = Field(default="clinical-image", min_length=1, max_length=60)
 
 
@@ -51,7 +51,10 @@ def sign_upload(
     clinic_id = claims.get('clinic_id') or claims.get('clinicId')
     if not clinic_id:
         raise HTTPException(status_code=403, detail='Clinic context is missing')
-    if not has_active_consent(clinic_id=str(clinic_id), patient_id=req.patient_id, purpose=req.purpose):
+    safe_non_clinical = {'profile-avatar', 'staff-avatar', 'clinic-logo'}
+    if req.purpose not in safe_non_clinical and not has_active_consent(
+        clinic_id=str(clinic_id), patient_id=req.subject_id, purpose=req.purpose
+    ):
         raise HTTPException(status_code=409, detail='Active consent is required before clinical image upload authorization')
 
     cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
@@ -63,7 +66,8 @@ def sign_upload(
         raise HTTPException(status_code=503, detail="Cloudinary signing is not configured")
 
     timestamp = int(time.time())
-    folder = f"dermcareai/patients/{_safe_segment(req.patient_id)}/{_safe_segment(req.purpose)}"
+    root = 'patients' if req.purpose not in {'profile-avatar', 'staff-avatar', 'clinic-logo'} else 'actors'
+    folder = f"dermcareai/{root}/{_safe_segment(req.subject_id)}/{_safe_segment(req.purpose)}"
     params = {"folder": folder, "timestamp": timestamp, "upload_preset": upload_preset}
     return SignUploadResponse(
         cloud_name=cloud_name,
