@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from contextlib import contextmanager
+from sqlalchemy import Engine
+
+from storage import compat_connection, create_store_engine, require_postgres_in_production
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,15 +15,15 @@ from pydantic import BaseModel, Field
 
 from auth import require_roles
 
-DB_PATH = Path(os.getenv("AI_GOVERNANCE_DB_PATH", "ai_governance.db"))
+ENGINE: Engine = create_store_engine("AI_GOVERNANCE_DATABASE_URL", "AI_GOVERNANCE_DB_PATH", "ai_governance.db")
+require_postgres_in_production(ENGINE, "AI governance store")
 router = APIRouter(prefix="/api/v1/ai", tags=["ai-governance"])
 
 
-def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    return conn
+@contextmanager
+def _connect():
+    with compat_connection(ENGINE) as conn:
+        yield conn
 
 
 def _now() -> str:
@@ -130,8 +132,11 @@ def register_model(req: ModelVersionCreate, user: dict[str, Any] = Depends(requi
                     req.calibration_method, now,
                 ),
             )
-        except sqlite3.IntegrityError as exc:
-            raise HTTPException(status_code=409, detail="Model version already registered") from exc
+        except Exception as exc:
+            message = str(exc).lower()
+            if "unique" in message or "duplicate" in message:
+                raise HTTPException(status_code=409, detail="Model version already registered") from exc
+            raise
     return {"id": model_id, "created_at": now, **req.model_dump(), "registered_by": user["uid"]}
 
 
