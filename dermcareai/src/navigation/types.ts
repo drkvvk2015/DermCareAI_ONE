@@ -50,7 +50,7 @@ export type RootStackParamList = {
   NewAppointment: undefined | { patient?: Patient };
   AppointmentDetails: { appointment: Appointment };
   EditAppointment: { appointment: Appointment };
-  Screening: undefined | { patient?: Patient };
+  Screening: undefined | { patient?: Patient; encounterId?: string };
   ScreeningReport: { report: ScreeningReport };
   Billing: undefined;
   Pharmacy: undefined;
