@@ -1,159 +1,44 @@
-# DermCareAI  - Dermatologist Patient Management App
+# DermCareAI — Dermatology Clinic Operating System
 
-### A comprehensive mobile clinic for dermatologists to manage their patients, appointments, and medical records.
-### It is designed for independent dermatologists and use in remote/rural areas where PC setup might be too costly and difficult to maintain.
+DermCareAI now combines patient/appointment management with AI-assisted lesion screening, billing, UPI checkout, pharmacy inventory/dispensing, durable audit logging, and configurable WhatsApp/SMS notifications.
 
-## ⚠️ Medical Disclaimer
+## AI models
 
-DermCareAI is a mobile application developed as part of an undergraduate major research project. It is intended to support dermatologists in managing patients, appointments, and medical records, especially in remote or resource-limited environments where conventional setups may not be feasible.
+The backend supports the existing DermCareAI research weights and an optional locally cached embedded HAM10000 7-class transformer model (`PREMAADC/vit-base-ham10000`). The embedded model is a research fallback and is **not clinically validated**. The application must not treat model output as a diagnosis or use it as the sole basis for treatment decisions.
 
-The AI-based skin cancer screening feature is experimental, developed strictly for research and educational purposes, and has not been clinically validated or approved by any regulatory or medical authority. It is not intended for clinical diagnosis or treatment, and must not be used for medical decision-making.
+Model versions and local weights are represented in `backend/models/registry.json`. Hash verification is exposed by `/models` and the service retains bounded self-healing/reload behaviour.
 
-DermCareAI is a digital aid tool and not a substitute for professional medical advice, diagnosis, or treatment. Always consult a licensed medical professional for any health-related concerns or decisions.
+## Billing and UPI
 
-## Features
+The mobile app includes billing and invoice creation. Razorpay integration creates hosted payment links; the hosted checkout can provide UPI Intent/QR. Do not implement new UPI Collect flows. Configure Razorpay credentials in `backend/.env.example`.
 
-- Patient Profile Management
-- Appointment Scheduling
-- Medical Records Management
-- AI-based Skin Cancer Screening *(Research prototype; not clinically validated)*
-- Digital Prescriptions & Notes
-- Reports & Analytics
-- Secure Data Storage
-- Calendar Integration
-- Multi-User Support
-- AI Assistance
+Razorpay notes that UPI Collect is deprecated for most use cases from 28 February 2026 and recommends UPI Intent or UPI QR for new integrations. See the provider documentation before production launch.
 
-⚠️ **Disclaimer**: AI-based Skin Cancer Screening feature is designed solely for research and educational purposes. This feature is not clinically validated and is not approved for medical diagnosis, treatment, or decision-making. It must not be used as a substitute for professional medical judgment. Clinicians and dermatologists are advised to consult certified diagnostic tools and rely on licensed medical expertise for all clinical evaluations and treatment decisions.
+## Pharmacy
 
-## Tech Stack
+The pharmacy module provides medicine master/stock endpoints, batch/expiry fields, reorder thresholds, stock deduction and prescription-linked dispensing. Production deployment should add role-based pharmacy authorization and a persistent transactional database before using it for a live dispensing operation.
 
-### Mobile App
-- React Native with Expo
-- Firebase (Backend & Authentication)
-- Cloudinary (Image Storage)
-- React Navigation
-- React Native Paper (UI Components)
-- TypeScript
+## Auditing
 
-### Backend
-- Python
-- FastAPI
-- TensorFlow
-- PyTorch
-- OpenCV
+`/audit/events` stores timestamped, hash-chained audit events in SQLite. Critical events should be generated for patient changes, prescriptions, dispensing, invoices, payments, notifications, AI screening and administrative actions. For multi-instance production deployments, move the audit store to a managed append-only datastore.
 
-## Setup Instructions
+## Notifications
 
-### Running the Backend
+The notification adapter supports:
+- WhatsApp Cloud API template messages
+- Indian SMS-provider integration using DLT-approved templates
+- a privacy-safe social webhook for operational events
 
-1. Navigate to the `backend` directory
-    ```
-    cd backend
-    ```
+Never send diagnoses, prescriptions, payment details, lesion images or other sensitive health information to public social networks. Register and approve message templates/headers and collect consent where required.
 
-2. Create the Models Folder
+## Regulatory and security boundary
 
-First, create a folder named `models` in the backend directory and place the following model weight files inside it:
-- `models/FinetunedNasNetMobile.keras`
-- `models/melanoma_classifier.pth` (MobileNetV2)
+This is a healthcare software platform and AI module, not automatically a licensed medical device or pharmacy system. In India, Medical Device Software can fall under the Medical Devices Rules, 2017 and CDSCO guidance; the actual classification depends on intended use and claims. Conduct a formal regulatory/privacy/security assessment before commercialization.
 
-Ensure the files follow the exact naming convention mentioned above.
+## Configuration
 
-**Requesting Model Weights** : For model weights, contact [Ananya Gupta](https://github.com/Ananya2003Gupta)
+Copy `backend/.env.example` to your deployment environment and provide only server-side secrets. Never commit API keys, access tokens, webhook secrets or patient data to Git.
 
-3. Set Up a Virtual Environment
+## Existing mobile features
 
-Run the following commands to create and activate a virtual environment:
-
-**For Windows (Command Prompt):**
-```sh
-python -m venv venv
-venv\Scripts\activate
-```
-
-**For macOS/Linux (Terminal):**
-```sh
-python3 -m venv venv
-source venv/bin/activate
-```
-
-4. Install Dependencies
-
-Install the required dependencies using the `requirements.txt` file:
-```sh
-pip install -r requirements.txt
-```
-
-5. Configure ngrok
-
-To expose the backend to the internet, set up `ngrok`:
-- Sign up at [ngrok](https://ngrok.com/) and get your authentication token.
-- Run the following command to add your `ngrok` authtoken:
-   ```sh
-   ngrok config add-authtoken YOUR_AUTHTOKEN
-   ```
-- Verify that `ngrok` is configured correctly by running:
-   ```sh
-   ngrok http 8000
-   ```
-
-6. Run the Backend
-
-Start the backend server by running:
-```sh
-python main.py
-```
-
-7. Get the Backend Endpoint
-
-After running the backend, you will receive an `ngrok` URL. This URL serves as the backend endpoint for API requests.
-
-Ensure `ngrok` is properly configured if you face any issues.
-
-
-### Running the Mobile App (Client Side)
-
-1. Navigate to the `dermcareai` directory
-    ```
-    cd dermcareai
-    ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file in the `dermcareai` directory with the following variables:
-   ```
-   FIREBASE_API_KEY=your_firebase_api_key
-   FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
-   FIREBASE_PROJECT_ID=your_firebase_project_id
-   FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
-   FIREBASE_MESSAGING_SENDER_ID=your_firebase_messaging_sender_id
-   FIREBASE_APP_ID=your_firebase_app_id
-   CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-   CLOUDINARY_API_KEY=your_cloudinary_api_key
-   CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-   API_URL=your_backend_endpoint_url
-   APP_NAME=DermCareAI
-   APP_ENV=development
-   ```
-
-4. Start the development server:
-   ```bash
-   npx expo start
-   ```
-
-5. Run on your preferred platform:
-   - iOS: Press 'i'
-   - Android: Press 'a'
-   - Web: Press 'w'
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+Patient profiles, appointments, clinical records, prescriptions/notes, screening reports and the continuous evaluation/self-healing infrastructure remain part of the application.

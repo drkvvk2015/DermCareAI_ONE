@@ -1,5 +1,5 @@
 # DermCareAI CI Contract
 
-The executable pull-request gate is defined in `.github/workflows/pull-request-gates.yml`.
+The executable pull-request gates validate backend compilation and regression tests, reject committed model binaries, and run mobile TypeScript and Expo web-export smoke checks.
 
-It validates backend compilation and regression tests, rejects committed model binaries, and runs mobile TypeScript and Expo web-export smoke checks.
+The recovery/integration workflow uses the backend working directory with `PYTHONPATH=.` so local backend modules resolve correctly.
