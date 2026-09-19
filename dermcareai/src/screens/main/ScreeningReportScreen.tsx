@@ -292,6 +292,20 @@ const ScreeningReportScreen: React.FC<NavigationProps<'ScreeningReport'>> = ({
           </Card.Content>
         </Card>
 
+        {report.governance && (
+          <Card style={styles.section}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>AI Governance & Provenance</Text>
+              <Text>Decision type: Clinical decision support</Text>
+              <Text>Diagnostic status: Not a diagnosis</Text>
+              <Text>Human review: {report.governance.human_review_required ? 'Required' : 'Not required'}</Text>
+              <Text>Model provenance: {report.governance.model_provenance}</Text>
+              <Text>Confidence threshold: {(report.governance.confidence_threshold * 100).toFixed(0)}%</Text>
+              <Text style={styles.governanceCaption}>This provenance metadata documents the safety contract applied to this screening event.</Text>
+            </Card.Content>
+          </Card>
+        )}
+
         <Card style={styles.section}>
           <Card.Content>
             <Text style={styles.sectionTitle}>Recommendations</Text>
@@ -465,6 +479,11 @@ const styles = StyleSheet.create({
   },
   viewButton: {
     marginTop: 8,
+  },
+  governanceCaption: {
+    marginTop: 8,
+    opacity: 0.7,
+    fontSize: 12,
   },
 });
 
