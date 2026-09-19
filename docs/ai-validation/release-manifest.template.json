@@ -1,0 +1,52 @@
+{
+  "release_status": "not_ready",
+  "intended_use_statement": "Describe the exact intended clinical use and limitations.",
+  "research_only": true,
+  "model": {
+    "name": "MODEL_NAME",
+    "version": "MODEL_VERSION",
+    "artifact_sha256": "64_HEX_SHA256"
+  },
+  "dataset": {
+    "name": "LOCKED_TEST_SET_NAME",
+    "version": "DATASET_VERSION",
+    "locked_test_set_manifest": "PATH_OR_DIGEST"
+  },
+  "metrics": {
+    "sensitivity": "RESULT_WITH_CI",
+    "specificity": "RESULT_WITH_CI",
+    "ppv": "RESULT_WITH_CI",
+    "npv": "RESULT_WITH_CI",
+    "roc_auc": "RESULT_WITH_CI",
+    "pr_auc": "RESULT_WITH_CI"
+  },
+  "calibration": {
+    "method": "METHOD",
+    "result": "RESULT"
+  },
+  "subgroups": {
+    "status": "completed",
+    "results": "ATTACHMENT_OR_TABLE"
+  },
+  "ood": {
+    "status": "completed",
+    "results": "ATTACHMENT_OR_TABLE"
+  },
+  "abstention": {
+    "status": "completed",
+    "results": "ATTACHMENT_OR_TABLE"
+  },
+  "clinician_review": {
+    "status": "completed",
+    "override_analysis": "ATTACHMENT_OR_TABLE"
+  },
+  "external_validation": {
+    "status": "completed",
+    "site_or_dataset": "INDEPENDENT_SITE_OR_DATASET"
+  },
+  "approval": {
+    "status": "completed",
+    "approved_by": "ACCOUNTABLE_APPROVER",
+    "approved_at": "ISO8601"
+  }
+}
