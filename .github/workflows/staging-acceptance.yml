@@ -42,7 +42,7 @@ jobs:
           mkdir -p staging-evidence
           docker compose -f docker-compose.staging.yml ps > staging-evidence/services.txt
           docker compose -f docker-compose.staging.yml logs --no-color > staging-evidence/logs.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dermcareai-staging-acceptance
