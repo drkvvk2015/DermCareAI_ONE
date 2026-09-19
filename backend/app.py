@@ -36,7 +36,7 @@ from resilience import file_sha256
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-APP_VERSION = os.getenv("APP_VERSION", "5.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "5.1.0")
 APP_ENV = os.getenv("APP_ENV", "development")
 MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.70"))
