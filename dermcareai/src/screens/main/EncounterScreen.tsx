@@ -150,6 +150,7 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
   };
 
   const openAIScreening = () => {
+    if (!encounter) return;
     navigation.navigate('Screening', { patient, encounterId: encounter.id });
   };
 
