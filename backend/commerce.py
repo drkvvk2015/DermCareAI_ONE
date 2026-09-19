@@ -20,6 +20,13 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def verify_razorpay_signature(raw_body: bytes, secret: str, signature: str | None) -> bool:
+    if not signature:
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
 class InvoiceItem(BaseModel):
     description: str = Field(min_length=1, max_length=300)
     quantity: float = Field(gt=0)
@@ -132,12 +139,8 @@ async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depen
 async def payment_webhook(request: Request, x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature")):
     secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
     raw_body = await request.body()
-    if secret:
-        if not x_razorpay_signature:
-            raise HTTPException(status_code=401, detail="Missing webhook signature")
-        expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, x_razorpay_signature):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    if secret and not verify_razorpay_signature(raw_body, secret, x_razorpay_signature):
+        raise HTTPException(status_code=401, detail="Missing or invalid webhook signature")
     try:
         payload = await request.json()
     except Exception as exc:
@@ -146,11 +149,26 @@ async def payment_webhook(request: Request, x_razorpay_signature: str | None = H
     entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
     notes = entity.get("notes") or {}
     reference_id = notes.get("invoice_id") or entity.get("order_id")
-    if reference_id in INVOICES:
-        INVOICES[reference_id]["status"] = "paid"
-        INVOICES[reference_id]["paid_at"] = now_iso()
-        INVOICES[reference_id]["razorpay_payment_id"] = entity.get("id")
-    return {"received": True}
+    invoice = INVOICES.get(reference_id)
+    if invoice is None:
+        return {"received": True, "ignored": True, "reason": "invoice_not_found"}
+
+    expected_amount = int(round(float(invoice["total"]) * 100))
+    provider_amount = int(entity.get("amount") or 0)
+    if provider_amount != expected_amount:
+        raise HTTPException(status_code=409, detail="Payment amount does not match invoice total")
+
+    payment_id = entity.get("id")
+    if invoice.get("status") == "paid" and invoice.get("razorpay_payment_id") == payment_id:
+        return {"received": True, "idempotent": True}
+    if invoice.get("status") != "unpaid":
+        raise HTTPException(status_code=409, detail="Invoice is already settled by another payment")
+
+    invoice["status"] = "paid"
+    invoice["paid_at"] = now_iso()
+    invoice["razorpay_payment_id"] = payment_id
+    invoice["paid_amount_paise"] = provider_amount
+    return {"received": True, "updated": True}
 
 
 @router.post("/pharmacy/stock")
