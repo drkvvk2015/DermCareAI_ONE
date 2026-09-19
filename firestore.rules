@@ -24,6 +24,9 @@ service cloud.firestore {
 
     function tenantMatches(data) {
       return signedIn()
+        && data.keys().hasAll(['organizationId', 'clinicId'])
+        && request.auth.token.organization_id != null
+        && request.auth.token.clinic_id != null
         && data.organizationId == request.auth.token.organization_id
         && data.clinicId == request.auth.token.clinic_id;
     }
