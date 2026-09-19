@@ -28,11 +28,13 @@ def _firebase_app():
         return firebase_admin.get_app()
     except ValueError:
         raw = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-        if not raw:
-            raise HTTPException(status_code=503, detail="Firebase service credentials are not configured")
-        return firebase_admin.initialize_app(
-            firebase_admin.credentials.Certificate(json.loads(raw))
-        )
+        if raw:
+            return firebase_admin.initialize_app(
+                firebase_admin.credentials.Certificate(json.loads(raw))
+            )
+        # Production cloud deployments may provide Google Application
+        # Default Credentials / workload identity instead of a JSON key.
+        return firebase_admin.initialize_app()
 
 
 class ClinicianActivation(BaseModel):
