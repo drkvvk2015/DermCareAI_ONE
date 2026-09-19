@@ -22,6 +22,7 @@ from audit import router as audit_router
 from auth import require_roles
 from clinical import router as clinical_router
 from ai_registry import router as ai_registry_router
+from admin import router as admin_router
 from media import router as media_router
 from commerce import router as commerce_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
@@ -86,6 +87,7 @@ app.include_router(audit_router)
 app.include_router(media_router)
 app.include_router(clinical_router)
 app.include_router(ai_registry_router)
+app.include_router(admin_router)
 
 
 class ModelService:
