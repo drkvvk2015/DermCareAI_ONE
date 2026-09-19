@@ -5,6 +5,10 @@ DermCareAI is a healthcare-oriented dermatology clinic platform that combines pa
 > **v4 platform revolution:** The platform now has a versioned `/api/v1` runtime contract, request correlation IDs, readiness/liveness endpoints, privacy-safe aggregate observability, explicit AI governance/provenance metadata, and a clinician-facing platform command centre. See [docs/REVOLUTION_V4_ARCHITECTURE.md](docs/REVOLUTION_V4_ARCHITECTURE.md).
 
 
+> **v5 production hardening:** Persistent clinical, commerce, audit and AI-governance stores now use a shared PostgreSQL-capable storage layer, with a PostgreSQL CI staging gate, production configuration fail-closed checks, backup/restore tooling, and container release automation.
+>
+> **Wave 4 clinical workflow:** Patient 360 now launches an encounter-centered workspace with structured dermatology examination, longitudinal lesion capture, clinician-reviewed AI assessments, follow-up planning and signed encounter closure.
+>
 > **Clinical safety:** DermCareAI is an assistive software platform. AI screening output is not a diagnosis and must not be used as the sole basis for treatment. The embedded HAM10000 model is a research fallback and is not clinically validated for routine patient care.
 
 ## v4 platform capabilities
@@ -16,6 +20,30 @@ DermCareAI is a healthcare-oriented dermatology clinic platform that combines pa
 - AI governance card attached to every screening decision
 - Explicit model provenance, threshold, abstention and human-review metadata
 - Mobile Clinical Command Center exposing backend readiness and authentication posture
+
+## Wave 4 clinical workflow
+
+- Patient 360 → encounter workspace
+- Structured dermatology history and examination fields
+- Stable lesion codes for longitudinal tracking
+- Encounter-linked clinical image/AI review workflow
+- Explicit clinician review state for AI assessments
+- Clinician override/rejection recording with audit events
+- Follow-up planning linked to patient and encounter
+- Encounter sign-off with clinician attestation
+- Optimistic versioning to reduce concurrent edit conflicts
+
+## Production infrastructure
+
+- Shared SQLAlchemy storage layer
+- PostgreSQL production mode with SQLite development fallback
+- Fail-closed production configuration validator
+- PostgreSQL staging CI service
+- Containerized backend
+- PostgreSQL backup/restore scripts
+- Controlled SQLite → PostgreSQL migration utility
+- GHCR release workflow with SBOM/provenance generation
+- Firestore tenant-aware rules and Firebase token-based API authorization
 
 ## Current capabilities
 
@@ -69,7 +97,8 @@ Never transmit diagnoses, prescriptions, payment details, lesion images, or othe
 - Timestamped audit events
 - Hash-chained audit records
 - Coverage for critical workflow events such as patients, prescriptions, dispensing, invoices, payments, notifications, AI screening, and administrative actions
-- SQLite-backed local audit store for development/single-instance use
+- Shared SQLAlchemy-backed audit store
+- PostgreSQL production support with local SQLite fallback for development
 
 For multi-instance production deployments, move auditing to a managed append-only datastore with appropriate retention, backup, access control, and monitoring.
 
@@ -91,7 +120,8 @@ Clinic API / Backend (FastAPI)
         +-- Audit logging
         |
         +-- Controlled model storage
-        +-- SQLite / managed production datastore
+        +-- PostgreSQL (production)
+        +-- SQLite (development fallback)
 ```
 
 ## Repository layout
@@ -206,7 +236,8 @@ The repository does not by itself establish regulatory clearance or clinical val
 
 Before a real clinic deployment:
 
-- Use a managed transactional database instead of development SQLite where required
+- Use managed PostgreSQL for production and complete the deployment migration/restore drill
+- Run the PostgreSQL staging gate before clinical acceptance
 - Enable encrypted backups, restore testing, and disaster recovery
 - Configure Firebase production authentication and least-privilege service credentials
 - Store secrets outside Git
