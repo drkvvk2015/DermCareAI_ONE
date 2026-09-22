@@ -6,7 +6,7 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 
 > ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are merged into `main`. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
 >
-> **Dermatology Completion:** v5.1 development is now organized as parallel domain workstreams merged through `develop`; `main` remains the stable production baseline.
+> **Dermatology Completion:** v5.1 Wave 1 + Wave 2 are integrated into `main` through the validated `develop` release path. `main` is the stable engineering baseline; clinical validation and regulatory/privacy approval remain separate gates.
 
 ## Visual overview
 
@@ -129,7 +129,7 @@ Clinical Encounter
 | Tenant isolation | ✅ Automated |
 | AI-review/sign-off safety | ✅ Automated |
 | CodeQL | ✅ Automated |
-| Staging acceptance workflow | ✅ Implemented |
+| Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
 | Dependency audit | ✅ Reporting enabled |
 | SBOM/provenance | ✅ Container workflow enabled |

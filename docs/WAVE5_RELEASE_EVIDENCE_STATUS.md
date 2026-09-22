@@ -1,6 +1,6 @@
 # Wave 5 — Release Evidence Status
 
-Updated: 2026-09-19
+Updated: 2026-09-22
 
 This document separates automated software evidence from clinical, regulatory and deployment evidence that requires real-world data, environments or accountable human review.
 
@@ -11,11 +11,13 @@ This document separates automated software evidence from clinical, regulatory an
 | CodeQL | PASS | GitHub Actions |
 | PostgreSQL integration | PASS | PostgreSQL staging gate |
 | Clinical API workflow | PASS | Clinical E2E tests |
+| Dermatology Wave 2 API integration | PASS | Integrated router registration + regression tests |
+| Clinical media integrity / retention | PASS | Deterministic metadata validation + regression tests |
 | Encounter sign-off safety | PASS | Pending-AI review gate |
 | Tenant isolation | PASS | Clinical E2E tests |
 | Backup/restore automation | READY | Monthly DR workflow |
-| Staging acceptance | READY | Docker staging workflow |
-| Dependency audit | INVENTORY ENABLED | Weekly/PR audit artifact |
+| Staging acceptance | PASS in current release gating | Docker staging workflow; current hotfix gate passed build, schema init and clinical acceptance |
+| Dependency audit | PASS / INVENTORY ENABLED | Current release gate + machine-readable audit artifact |
 | SBOM/provenance | ENABLED | Container release workflow |
 | Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation |
 | Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence |
@@ -74,7 +76,7 @@ The CDSCO site currently lists a guidance document on Medical Device Software un
 
 A build can be technically deployable while still being clinically or regulatorily unapproved. Keep these gates separate.
 
-**Software release gate:** automated CI + staging + DR + security evidence.
+**Software release gate:** automated CI + staging + DR + security evidence. The current v5.1 engineering promotion is complete in `main`; environment-specific production deployment remains separate.
 
 **Clinical release gate:** independent clinical/AI evidence + intended-use review + accountable clinician approval.
 
