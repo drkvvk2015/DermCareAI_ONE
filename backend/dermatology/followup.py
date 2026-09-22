@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final
-
-
 VALID_STATUSES: Final[tuple[str, ...]] = (
     "planned",
     "confirmed",
