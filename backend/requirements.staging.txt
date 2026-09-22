@@ -1,0 +1,18 @@
+# Staging runtime dependencies. The embedded research model is disabled in staging,
+# and model packages are lazy-loaded only when controlled weights are present.
+fastapi
+uvicorn
+python-multipart
+pydantic
+httpx
+firebase-admin
+Pillow
+opencv-python-headless
+numpy
+python-dotenv
+python-jose
+typing-extensions
+gunicorn
+setuptools
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
