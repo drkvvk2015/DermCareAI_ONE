@@ -11,10 +11,11 @@ from typing import Any, Dict
 import numpy as np
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image, ImageStat
+from PIL import Image
 from pydantic import BaseModel, Field
 
 from ImagePreprocessing import ImagePreprocessor
+from dermatology.image_quality import assess_image_quality as assess_dermatology_image_quality
 from MelanomaClassifier import MobileNetPredictor
 from SkinLesionClassifier import SkinLesionClassifier
 from ai_governance import build_governance_card
@@ -263,31 +264,17 @@ async def startup_event() -> None:
 
 
 def assess_image_quality(image: Image.Image) -> Dict[str, Any]:
-    width, height = image.size
-    gray = image.convert("L")
-    stat = ImageStat.Stat(gray)
-    mean = float(stat.mean[0])
-    variance = float(stat.var[0])
-    megapixels = (width * height) / 1_000_000
-    issues: list[str] = []
-    if width < 256 or height < 256:
-        issues.append("resolution_too_low")
-    if megapixels > 40:
-        issues.append("resolution_too_high")
-    if mean < 18:
-        issues.append("image_too_dark")
-    if mean > 242:
-        issues.append("image_too_bright")
-    if variance < 40:
-        issues.append("low_contrast_or_blur")
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG", quality=92)
+    quality = assess_dermatology_image_quality(buffered.getvalue())
     return {
-        "usable": not issues,
-        "reason": "Image passed the basic quality gate." if not issues else ", ".join(issues),
-        "width": width,
-        "height": height,
-        "mean_luminance": round(mean, 2),
-        "luminance_variance": round(variance, 2),
-        "issues": issues,
+        "usable": quality.usable,
+        "reason": quality.reason,
+        "width": quality.width,
+        "height": quality.height,
+        "mean_luminance": quality.mean_luminance,
+        "luminance_variance": quality.luminance_variance,
+        "issues": list(quality.issues),
     }
 
 
