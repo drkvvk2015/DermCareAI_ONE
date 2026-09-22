@@ -1,4 +1,4 @@
-from production_preflight import evaluate_environment
+from scripts.production_preflight import evaluate_environment
 
 
 def base_env() -> dict[str, str]:
