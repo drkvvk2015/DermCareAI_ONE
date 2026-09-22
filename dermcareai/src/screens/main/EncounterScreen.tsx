@@ -225,6 +225,7 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
             <TextInput mode="outlined" label="Evolution since last review" value={lesionEvolution} onChangeText={setLesionEvolution} disabled={signed} style={styles.input} multiline />
             <TextInput mode="outlined" label="Clinical impression" value={lesionImpression} onChangeText={setLesionImpression} disabled={signed} style={styles.input} />
             <Button mode="outlined" onPress={saveLesion} loading={lesionSaving} disabled={signed || !lesionBodySite.trim()} style={styles.button}>Save Lesion to Timeline</Button>
+            <Button mode="contained-tonal" icon="map-marker-radius" onPress={() => navigation.navigate('BodyMap', { encounterId: encounter.id, patient })} disabled={signed} style={styles.button}>Open Body Map</Button>
           </Card.Content>
         </Card>
 
