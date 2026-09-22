@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final
-
-
 SUPPORTED_PROCEDURES: Final[tuple[str, ...]] = (
     "biopsy",
     "cryotherapy",
