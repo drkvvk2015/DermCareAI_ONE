@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_roles
 from audit import AuditEvent, record_event
+from dermatology.clinical_workflow import TEMPLATES, get_history_template
 from clinical_store import (
     create_consent,
     create_encounter,
@@ -43,6 +44,7 @@ def _tenant(user: dict[str, Any]) -> tuple[str, str]:
 
 class EncounterCreate(BaseModel):
     patient_id: str = Field(min_length=1, max_length=120)
+    template: str | None = Field(default=None, min_length=1, max_length=80)
     appointment_id: str | None = None
     complaints: Dict[str, Any] = {}
     examination: Dict[str, Any] = {}
@@ -129,16 +131,32 @@ class AIReviewDecision(BaseModel):
     clinician_override_label: str | None = Field(default=None, max_length=200)
 
 
+@router.get("/templates")
+def clinical_templates(user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor"))):
+    _tenant(user)
+    return {
+        "templates": [
+            {
+                "condition": template.condition,
+                "required_sections": template.required_sections,
+                "scoring_tools": template.scoring_tools,
+            }
+            for template in TEMPLATES.values()
+        ]
+    }
+
+
 @router.post("/encounters")
 def post_encounter(req: EncounterCreate, user: dict[str, Any] = Depends(require_roles("doctor", "admin"))):
     organization_id, clinic_id = _tenant(user)
+    selected_template = get_history_template(req.template) if req.template else None
     result = create_encounter(
         organization_id=organization_id,
         clinic_id=clinic_id,
         patient_id=req.patient_id,
         doctor_id=user["uid"],
         appointment_id=req.appointment_id,
-        complaints=req.complaints,
+        complaints={**req.complaints, **({"template": selected_template.condition} if selected_template else {})},
         examination=req.examination,
         assessment=req.assessment,
         plan=req.plan,
