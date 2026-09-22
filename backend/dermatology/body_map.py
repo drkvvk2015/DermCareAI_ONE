@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 from typing import Final
+
 
 BODY_SITES: Final[tuple[str, ...]] = (
     "scalp", "face", "neck", "chest", "back", "abdomen",
