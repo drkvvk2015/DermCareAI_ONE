@@ -5,8 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
-COPY requirements.txt ./
-RUN python -m pip install --upgrade pip && pip install -r requirements.txt
+ARG REQUIREMENTS_FILE=requirements.txt
+COPY requirements.txt requirements.staging.txt ./
+RUN python -m pip install --upgrade pip && pip install -r "$REQUIREMENTS_FILE"
 COPY . .
 RUN python -m compileall -q .
 EXPOSE 8000
