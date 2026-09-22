@@ -21,6 +21,7 @@ import { NavigationProps, Patient, Appointment, ScreeningReport } from '../../na
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { format } from 'date-fns';
+import { patientClinicalApi, ClinicalPatientSummary } from '../../services/clinicalApi';
 
 interface ScreeningSection {
   screenings: ScreeningReport[];
@@ -51,6 +52,8 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
     screenings: [],
     loading: true
   });
+  const [clinicalSummary, setClinicalSummary] = useState<ClinicalPatientSummary | null>(null);
+  const [clinicalSummaryLoading, setClinicalSummaryLoading] = useState(true);
 
   const fetchPatientData = async () => {
     try {
@@ -95,6 +98,19 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
     }
   };
 
+  const fetchClinicalSummary = async () => {
+    setClinicalSummaryLoading(true);
+    try {
+      const summary = await patientClinicalApi.getSummary(patient.id);
+      setClinicalSummary(summary);
+    } catch (error) {
+      console.error('Clinical summary loading failed:', error);
+      setClinicalSummary(null);
+    } finally {
+      setClinicalSummaryLoading(false);
+    }
+  };
+
   const fetchScreenings = async () => {
     try {
       const screeningsRef = collection(db, 'screeningReports');
@@ -123,12 +139,14 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
   useEffect(() => {
     fetchPatientData();
     fetchScreenings();
+    fetchClinicalSummary();
   }, [patient.id]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchScreenings();
       fetchPatientData();
+      fetchClinicalSummary();
     });
 
     return unsubscribe;
@@ -243,6 +261,33 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
 
       <Card style={styles.section}>
         <Card.Content>
+          <Text style={styles.sectionTitle}>Clinical Record</Text>
+          {clinicalSummaryLoading ? (
+            <ActivityIndicator />
+          ) : clinicalSummary ? (
+            <>
+              <Text>Encounters: {clinicalSummary.encounters.length}</Text>
+              <Text>Tracked lesions: {clinicalSummary.lesions.length}</Text>
+              <Text>Planned follow-ups: {clinicalSummary.followups.filter(item => item.status === 'planned').length}</Text>
+              <Text>Signed encounters: {clinicalSummary.signoffs.length}</Text>
+              {clinicalSummary.encounters.slice(0, 3).map(item => (
+                <List.Item
+                  key={item.id}
+                  title={item.id + ' • ' + item.status}
+                  description={item.opened_at ? format(new Date(item.opened_at), 'MMM d, yyyy HH:mm') : 'Clinical encounter'}
+                  left={props => <List.Icon {...props} icon={item.status === 'signed' ? 'file-check' : 'file-edit'} />}
+                  onPress={() => navigation.navigate('Encounter', { encounterId: item.id, patient })}
+                />
+              ))}
+            </>
+          ) : (
+            <Text style={styles.noAppointments}>Clinical record unavailable</Text>
+          )}
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.section}>
+        <Card.Content>
           <Text style={styles.sectionTitle}>Patient 360 Timeline</Text>
           {timeline.length === 0 ? (
             <Text style={styles.noAppointments}>No longitudinal events recorded</Text>
@@ -319,6 +364,14 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
       </Card>
 
       <View style={styles.actionButtonsContainer}>
+        <Button
+          mode="contained"
+          icon="stethoscope"
+          onPress={() => navigation.navigate('NewEncounter', { patient })}
+          style={styles.actionButton}
+        >
+          Start Clinical Encounter
+        </Button>
         <Button
           mode="contained"
           onPress={() => navigation.navigate('NewAppointment', { patient })}

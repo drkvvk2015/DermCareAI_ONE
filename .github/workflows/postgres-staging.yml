@@ -1,0 +1,79 @@
+name: DermCareAI PostgreSQL Staging Gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: dermcareai
+          POSTGRES_USER: dermcareai
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dermcareai -d dermcareai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+psycopg://dermcareai:test-password@127.0.0.1:5432/dermcareai
+      COMMERCE_DATABASE_URL: postgresql+psycopg://dermcareai:test-password@127.0.0.1:5432/dermcareai
+      CLINICAL_DATABASE_URL: postgresql+psycopg://dermcareai:test-password@127.0.0.1:5432/dermcareai
+      AUDIT_DATABASE_URL: postgresql+psycopg://dermcareai:test-password@127.0.0.1:5432/dermcareai
+      AI_GOVERNANCE_DATABASE_URL: postgresql+psycopg://dermcareai:test-password@127.0.0.1:5432/dermcareai
+      FIREBASE_AUTH_REQUIRED: "true"
+      PYTHONPATH: .
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install storage test dependencies
+        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]'
+
+      - name: Compile persistence layer
+        run: python -m py_compile storage.py commerce_store.py clinical_store.py ai_registry.py audit.py
+
+      - name: Initialize PostgreSQL schemas
+        run: python scripts/migrate_postgres.py
+
+      - name: Run PostgreSQL persistence tests
+        run: >-
+          pytest -q
+          tests/test_commerce_security.py
+          tests/test_pharmacy_integrity.py
+          tests/test_clinical_platform.py
+          tests/test_media_security.py
+
+      - name: Assert PostgreSQL deployment mode
+        run: |
+          python - <<'PY'
+          from commerce_store import ENGINE as commerce
+          from clinical_store import ENGINE as clinical
+          from ai_registry import ENGINE as ai
+          from audit import ENGINE as audit
+
+          engines = {"commerce": commerce, "clinical": clinical, "ai": ai, "audit": audit}
+          bad = [name for name, engine in engines.items() if engine.url.get_backend_name() != "postgresql"]
+          if bad:
+              raise SystemExit(f"Stores are not PostgreSQL-backed: {bad}")
+          print("All durable stores are PostgreSQL-backed.")
+          PY

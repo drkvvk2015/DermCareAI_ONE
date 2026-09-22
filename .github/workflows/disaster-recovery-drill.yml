@@ -1,0 +1,83 @@
+name: DermCareAI Disaster Recovery Drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 2 15 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  restore-drill:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: dermcareai
+          POSTGRES_USER: dermcareai
+          POSTGRES_PASSWORD: drill-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dermcareai -d dermcareai"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+psycopg://dermcareai:drill-password@127.0.0.1:5432/dermcareai
+      COMMERCE_DATABASE_URL: postgresql+psycopg://dermcareai:drill-password@127.0.0.1:5432/dermcareai
+      CLINICAL_DATABASE_URL: postgresql+psycopg://dermcareai:drill-password@127.0.0.1:5432/dermcareai
+      AUDIT_DATABASE_URL: postgresql+psycopg://dermcareai:drill-password@127.0.0.1:5432/dermcareai
+      AI_GOVERNANCE_DATABASE_URL: postgresql+psycopg://dermcareai:drill-password@127.0.0.1:5432/dermcareai
+      APP_ENV: staging
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install database tooling
+        run: python -m pip install --upgrade pip SQLAlchemy 'psycopg[binary]' pytest fastapi pydantic httpx firebase-admin
+      - name: Initialize schemas
+        run: python scripts/migrate_postgres.py
+      - name: Seed sentinel
+        run: |
+          PGPASSWORD=drill-password psql -h 127.0.0.1 -U dermcareai -d dermcareai <<'SQL'
+          CREATE TABLE IF NOT EXISTS dr_drill_sentinel (
+            id INTEGER PRIMARY KEY,
+            marker TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+          INSERT INTO dr_drill_sentinel(id, marker) VALUES (1, 'DERMCAREAI-DR-OK')
+          ON CONFLICT (id) DO UPDATE SET marker = EXCLUDED.marker;
+          SQL
+      - name: Create backup
+        env:
+          BACKUP_DIR: ../dr-drill
+        run: ./scripts/backup_postgres.sh
+      - name: Destroy sentinel
+        run: |
+          PGPASSWORD=drill-password psql -h 127.0.0.1 -U dermcareai -d dermcareai -c "DROP TABLE dr_drill_sentinel;"
+      - name: Restore backup
+        run: |
+          export BACKUP_FILE="$(find ../dr-drill -type f -name '*.dump' | head -1)"
+          ./scripts/restore_postgres.sh
+      - name: Verify restored sentinel
+        run: |
+          PGPASSWORD=drill-password psql -h 127.0.0.1 -U dermcareai -d dermcareai -tAc "SELECT marker FROM dr_drill_sentinel WHERE id=1" | grep -Fx 'DERMCAREAI-DR-OK'
+      - name: Publish drill evidence
+        run: |
+          mkdir -p ../dr-drill/evidence
+          {
+            echo "DermCareAI disaster recovery drill"
+            echo "UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Result: SUCCESS"
+            echo "Backup/restore sentinel: DERMCAREAI-DR-OK"
+          } > ../dr-drill/evidence/restore-drill.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dermcareai-disaster-recovery-drill
+          path: dr-drill/

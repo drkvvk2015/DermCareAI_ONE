@@ -82,7 +82,7 @@ const ProfileScreen = ({ navigation }: { navigation: any }) => {
       if (!userId) return null;
 
       // First upload to Cloudinary
-      const cloudinaryUrl = await uploadImage(imageUri);
+      const cloudinaryUrl = await uploadImage(imageUri, userId, 'profile-avatar');
       
       // Add error checking for cloudinaryUrl
       if (!cloudinaryUrl || typeof cloudinaryUrl !== 'string') {

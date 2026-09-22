@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTheme } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../config/firebase';
 import { RootStackParamList } from './types';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -21,6 +23,8 @@ import EditAppointmentScreen from '../screens/main/EditAppointmentScreen';
 import ScreeningReportScreen from '../screens/main/ScreeningReportScreen';
 import BillingScreen from '../screens/main/BillingScreen';
 import PharmacyScreen from '../screens/main/PharmacyScreen';
+import NewEncounterScreen from '../screens/main/NewEncounterScreen';
+import EncounterScreen from '../screens/main/EncounterScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -41,21 +45,39 @@ const MainTabs = () => {
   );
 };
 
-const AppNavigator = () => (
-  <NavigationContainer>
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen name="AddPatient" component={AddPatientScreen} />
-      <Stack.Screen name="EditPatient" component={EditPatientScreen} />
-      <Stack.Screen name="PatientDetails" component={PatientDetailsScreen} />
-      <Stack.Screen name="NewAppointment" component={NewAppointmentScreen} />
-      <Stack.Screen name="AppointmentDetails" component={AppointmentDetailsScreen} />
-      <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
-      <Stack.Screen name="ScreeningReport" component={ScreeningReportScreen} />
-    </Stack.Navigator>
-  </NavigationContainer>
-);
+const AppNavigator = () => {
+  const [user, setUser] = useState(auth.currentUser);
+  const [initializing, setInitializing] = useState(true);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, current => { setUser(current); setInitializing(false); });
+    return unsubscribe;
+  }, []);
+  if (initializing) return null;
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {user ? (
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="AddPatient" component={AddPatientScreen} />
+            <Stack.Screen name="EditPatient" component={EditPatientScreen} />
+            <Stack.Screen name="PatientDetails" component={PatientDetailsScreen} />
+            <Stack.Screen name="NewEncounter" component={NewEncounterScreen} />
+            <Stack.Screen name="Encounter" component={EncounterScreen} />
+            <Stack.Screen name="NewAppointment" component={NewAppointmentScreen} />
+            <Stack.Screen name="AppointmentDetails" component={AppointmentDetailsScreen} />
+            <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
+            <Stack.Screen name="ScreeningReport" component={ScreeningReportScreen} />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
 
 export default AppNavigator;

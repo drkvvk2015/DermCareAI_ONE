@@ -6,12 +6,11 @@ import { auth, db } from '../../config/firebase';
 import { createUserWithEmailAndPassword, AuthError } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { RootStackParamList } from '../../navigation/types';
-import { clinicApi } from '../../services/clinicApi';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 interface RegisterScreenProps { navigation: RegisterScreenNavigationProp; }
 interface FormData { email: string; password: string; confirmPassword: string; fullName: string; licenseNumber: string; specialization: string; phoneNumber: string; }
-interface DoctorData { fullName: string; email: string; licenseNumber: string; specialization: string; phoneNumber: string; createdAt: string; }
+interface DoctorData { fullName: string; email: string; licenseNumber: string; specialization: string; phoneNumber: string; createdAt: string; status: 'pending'; }
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
@@ -24,13 +23,12 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
       if (!formData.email || !formData.password || !formData.fullName || !formData.licenseNumber || !formData.specialization || !formData.phoneNumber) throw new Error('Please fill in all fields');
       if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match');
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      const doctorData: DoctorData = { fullName: formData.fullName, email: formData.email, licenseNumber: formData.licenseNumber, specialization: formData.specialization, phoneNumber: formData.phoneNumber, createdAt: new Date().toISOString() };
+      const doctorData: DoctorData = { fullName: formData.fullName, email: formData.email, licenseNumber: formData.licenseNumber, specialization: formData.specialization, phoneNumber: formData.phoneNumber, createdAt: new Date().toISOString(), status: 'pending' };
       await setDoc(doc(db, 'doctors', userCredential.user.uid), doctorData);
-      await clinicApi.audit({ action: 'doctor_registered', resource_type: 'doctor', resource_id: userCredential.user.uid, metadata: { specialization: formData.specialization } }).catch(() => undefined);
-      await clinicApi.sendRegistrationNotification({ patient_name: formData.fullName, phone: formData.phoneNumber, appointment_text: 'Your DermCareAI clinic account has been registered successfully.', channels: ['whatsapp', 'sms'] }).catch(() => undefined);
+      await auth.signOut();
       setFormData({ email: '', password: '', confirmPassword: '', fullName: '', licenseNumber: '', specialization: '', phoneNumber: '' });
-      alert('Registration successful! A confirmation notification was requested.');
-      navigation.replace('MainTabs');
+      alert('Registration submitted. A clinic administrator must verify and activate your account before clinical access is granted.');
+      navigation.replace('Login');
     } catch (err) {
       const error = err as Error | AuthError;
       setError(error.message);

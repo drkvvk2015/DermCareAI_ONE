@@ -23,6 +23,7 @@ import { NavigationProps, Patient, AppointmentStatus, Appointment } from '../../
 import { collection, query, where, getDocs, addDoc, orderBy, doc, getDoc, updateDoc} from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { format } from 'date-fns';
+import { getClinicScope } from '../../services/tenant';
 
 const NewAppointmentScreen: React.FC<NavigationProps<'NewAppointment'>> = ({
   navigation,
@@ -84,6 +85,7 @@ const NewAppointmentScreen: React.FC<NavigationProps<'NewAppointment'>> = ({
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
+      const { organizationId, clinicId } = await getClinicScope();
 
       const appointmentDate = new Date(selectedDate);
       const [hours, minutes] = selectedTime.split(':');
@@ -94,6 +96,8 @@ const NewAppointmentScreen: React.FC<NavigationProps<'NewAppointment'>> = ({
       const appointmentData: Omit<Appointment, 'id'> = {
         patientId: selectedPatient.id,
         patientName: selectedPatient.name,
+        organizationId,
+        clinicId,
         doctorId: userId,
         date: appointmentDate.toISOString(),
         time: selectedTime,

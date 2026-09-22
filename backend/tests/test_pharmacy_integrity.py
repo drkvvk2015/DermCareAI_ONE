@@ -1,14 +1,15 @@
 from fastapi import HTTPException
 
-from commerce import PHARMACY_STOCK, DispenseRequest, dispense
+from commerce import DispenseRequest, dispense
+from commerce_store import list_stock, reset_store, upsert_stock
 
 
 def setup_function() -> None:
-    PHARMACY_STOCK.clear()
+    reset_store()
 
 
 def test_missing_medicine_does_not_partially_deduct_stock() -> None:
-    PHARMACY_STOCK["m1"] = {"medicine_id": "m1", "name": "Medicine 1", "quantity": 5}
+    upsert_stock({"medicine_id": "m1", "name": "Medicine 1", "quantity": 5})
     request = DispenseRequest(
         patient_id="p1",
         items=[
@@ -17,16 +18,16 @@ def test_missing_medicine_does_not_partially_deduct_stock() -> None:
         ],
     )
     try:
-        dispense(request)
+        dispense(request, {"uid": "u1", "roles": {"pharmacist"}})
     except HTTPException as exc:
         assert exc.status_code == 404
     else:
         raise AssertionError("Expected missing medicine failure")
-    assert PHARMACY_STOCK["m1"]["quantity"] == 5
+    assert list_stock()[0]["quantity"] == 5
 
 
 def test_insufficient_aggregated_stock_does_not_mutate_inventory() -> None:
-    PHARMACY_STOCK["m1"] = {"medicine_id": "m1", "name": "Medicine 1", "quantity": 2}
+    upsert_stock({"medicine_id": "m1", "name": "Medicine 1", "quantity": 2})
     request = DispenseRequest(
         patient_id="p1",
         items=[
@@ -35,9 +36,9 @@ def test_insufficient_aggregated_stock_does_not_mutate_inventory() -> None:
         ],
     )
     try:
-        dispense(request)
+        dispense(request, {"uid": "u1", "roles": {"pharmacist"}})
     except HTTPException as exc:
         assert exc.status_code == 409
     else:
         raise AssertionError("Expected insufficient stock failure")
-    assert PHARMACY_STOCK["m1"]["quantity"] == 2
+    assert list_stock()[0]["quantity"] == 2

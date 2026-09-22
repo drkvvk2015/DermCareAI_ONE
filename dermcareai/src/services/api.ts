@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
 
@@ -45,10 +46,13 @@ export const api = {
     } as any);
 
     try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Authentication required. Please sign in again.');
+      const token = await user.getIdToken();
       const response = await request('/predict', {
         method: 'POST',
         body: formData,
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
       });
 
       const body = await response.text();
@@ -83,7 +87,10 @@ export const api = {
   },
 
   async selfHeal(): Promise<any> {
-    const response = await request('/self-heal', { method: 'POST' });
+    const user = auth.currentUser;
+    if (!user) throw new Error('Authentication required. Please sign in again.');
+    const token = await user.getIdToken();
+    const response = await request('/self-heal', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`Self-heal failed: ${response.status}`);
     return response.json();
   },

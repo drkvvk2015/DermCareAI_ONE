@@ -4,6 +4,8 @@ import type { AIGovernanceCard } from '../types/platform';
 
 export type Patient = {
   id: string;
+  organizationId?: string;
+  clinicId?: string;
   name: string;
   age: number;
   gender: string;
@@ -18,6 +20,8 @@ export type Patient = {
 
 export interface ScreeningReport {
   id: string;
+  organizationId?: string;
+  clinicId?: string;
   patientId: string;
   patientName: string;
   date: string;
@@ -32,7 +36,7 @@ export interface ScreeningReport {
 }
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no-show';
-export type Appointment = { id: string; patientId: string; patientName: string; doctorId: string; date: string; time: string; type: string; status: AppointmentStatus; notes?: string; diagnosis?: string; prescription?: string; createdAt: string; updatedAt: string };
+export type Appointment = { id: string; organizationId?: string; clinicId?: string; patientId: string; patientName: string; doctorId: string; date: string; time: string; type: string; status: AppointmentStatus; notes?: string; diagnosis?: string; prescription?: string; createdAt: string; updatedAt: string };
 
 export type RootStackParamList = {
   Login: undefined;
@@ -41,10 +45,12 @@ export type RootStackParamList = {
   AddPatient: undefined;
   EditPatient: { patient: Patient };
   PatientDetails: { patient: Patient };
+  NewEncounter: { patient: Patient };
+  Encounter: { encounterId: string; patient: Patient };
   NewAppointment: undefined | { patient?: Patient };
   AppointmentDetails: { appointment: Appointment };
   EditAppointment: { appointment: Appointment };
-  Screening: undefined | { patient?: Patient };
+  Screening: undefined | { patient?: Patient; encounterId?: string };
   ScreeningReport: { report: ScreeningReport };
   Billing: undefined;
   Pharmacy: undefined;

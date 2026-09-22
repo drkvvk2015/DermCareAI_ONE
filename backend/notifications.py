@@ -54,7 +54,7 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
     url = os.getenv("SOCIAL_NOTIFICATION_WEBHOOK_URL")
     if not url:
         return {"channel": "social_webhook", "status": "not_configured"}
-    payload = {"event": "patient_registration", "patient_name": req.patient_name, "appointment_text": req.appointment_text}
+    payload = {"event": "patient_registration", "event_version": "v1"}
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(url, json=payload)
     if r.status_code >= 400:

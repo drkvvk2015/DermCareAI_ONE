@@ -3,17 +3,21 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
+from contextlib import contextmanager
+from sqlalchemy import Engine
+
+from storage import compat_connection, create_store_engine, require_postgres_in_production
 from pydantic import BaseModel, Field
 
-from auth import get_current_user
+from auth import require_roles
 
 router = APIRouter(prefix="/audit", tags=["audit"])
-DB_PATH = os.getenv("AUDIT_DB_PATH", "audit.db")
+ENGINE: Engine = create_store_engine("AUDIT_DATABASE_URL", "AUDIT_DB_PATH", "audit.db")
+require_postgres_in_production(ENGINE, "Audit store")
 
 
 class AuditEvent(BaseModel):
@@ -24,10 +28,14 @@ class AuditEvent(BaseModel):
     correlation_id: str | None = None
 
 
+@contextmanager
 def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, actor_id TEXT NOT NULL, actor_role TEXT NOT NULL, action TEXT NOT NULL, resource_type TEXT NOT NULL, resource_id TEXT NOT NULL, metadata_json TEXT NOT NULL, correlation_id TEXT, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL)")
-    return conn
+    with compat_connection(ENGINE) as conn:
+        id_type = "BIGSERIAL PRIMARY KEY" if ENGINE.url.get_backend_name() == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS audit_events (id {id_type}, timestamp TEXT NOT NULL, actor_id TEXT NOT NULL, actor_role TEXT NOT NULL, action TEXT NOT NULL, resource_type TEXT NOT NULL, resource_id TEXT NOT NULL, metadata_json TEXT NOT NULL, correlation_id TEXT, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL)"
+        )
+        yield conn
 
 
 def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
@@ -37,7 +45,7 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
     actor_role = roles[0] if roles else "staff"
     with db() as conn:
         previous = conn.execute("SELECT event_hash FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
-        previous_hash = previous[0] if previous else "GENESIS"
+        previous_hash = previous["event_hash"] if previous else "GENESIS"
         canonical = {
             "timestamp": timestamp,
             "actor_id": actor_id,
@@ -46,18 +54,46 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
             "previous_hash": previous_hash,
         }
         digest = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-        cursor = conn.execute("INSERT INTO audit_events(timestamp,actor_id,actor_role,action,resource_type,resource_id,metadata_json,correlation_id,previous_hash,event_hash) VALUES(?,?,?,?,?,?,?,?,?,?)", (timestamp, actor_id, actor_role, event.action, event.resource_type, event.resource_id, json.dumps(event.metadata, sort_keys=True), event.correlation_id, previous_hash, digest))
-        event_id = cursor.lastrowid
+        result = conn.execute(
+            """
+            INSERT INTO audit_events(
+              timestamp,actor_id,actor_role,action,resource_type,resource_id,
+              metadata_json,correlation_id,previous_hash,event_hash
+            ) VALUES(?,?,?,?,?,?,?,?,?,?)
+            RETURNING id
+            """,
+            (
+                timestamp, actor_id, actor_role, event.action, event.resource_type,
+                event.resource_id, json.dumps(event.metadata, sort_keys=True),
+                event.correlation_id, previous_hash, digest,
+            ),
+        )
+        event_id = result.fetchone()["id"]
     return {"id": f"AUD-{event_id:09d}", **canonical, "event_hash": digest}
 
 
 @router.post("/events")
-def create_audit_event(event: AuditEvent, user: dict[str, Any] = Depends(get_current_user)):
+def create_audit_event(event: AuditEvent, user: dict[str, Any] = Depends(require_roles("admin", "auditor"))):
     return record_event(event, user)
 
 
 @router.get("/events")
-def list_audit_events(limit: int = 100, user: dict[str, Any] = Depends(get_current_user)):
+def list_audit_events(limit: int = 100, user: dict[str, Any] = Depends(require_roles("admin", "auditor"))):
     with db() as conn:
         rows = conn.execute("SELECT id,timestamp,actor_id,actor_role,action,resource_type,resource_id,metadata_json,correlation_id,previous_hash,event_hash FROM audit_events ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)).fetchall()
-    return [{"id": f"AUD-{row[0]:09d}", "timestamp": row[1], "actor_id": row[2], "actor_role": row[3], "action": row[4], "resource_type": row[5], "resource_id": row[6], "metadata": json.loads(row[7]), "correlation_id": row[8], "previous_hash": row[9], "event_hash": row[10]} for row in rows]
+    return [
+        {
+            "id": f"AUD-{row['id']:09d}",
+            "timestamp": row["timestamp"],
+            "actor_id": row["actor_id"],
+            "actor_role": row["actor_role"],
+            "action": row["action"],
+            "resource_type": row["resource_type"],
+            "resource_id": row["resource_id"],
+            "metadata": json.loads(row["metadata_json"]),
+            "correlation_id": row["correlation_id"],
+            "previous_hash": row["previous_hash"],
+            "event_hash": row["event_hash"],
+        }
+        for row in rows
+    ]

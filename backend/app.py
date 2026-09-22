@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageStat
 from pydantic import BaseModel, Field
@@ -19,6 +19,11 @@ from MelanomaClassifier import MobileNetPredictor
 from SkinLesionClassifier import SkinLesionClassifier
 from ai_governance import build_governance_card
 from audit import router as audit_router
+from auth import require_roles
+from clinical import router as clinical_router
+from ai_registry import router as ai_registry_router
+from admin import router as admin_router
+from media import router as media_router
 from commerce import router as commerce_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
 from model_registry import verify_models
@@ -26,11 +31,13 @@ from notifications import router as notifications_router
 from observability import record_prediction, record_request, snapshot as observability_snapshot
 from platform_contracts import AIGovernanceCard, PlatformInfo, ReadinessComponent, ReadinessResponse, utc_now
 from request_context import get_request_id, new_request_id, reset_request_id, set_request_id
+from rate_limit import client_key, enforce_rate_limit
 from resilience import file_sha256
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-APP_VERSION = os.getenv("APP_VERSION", "4.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "5.1.0")
+APP_ENV = os.getenv("APP_ENV", "development")
 MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.70"))
 MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
@@ -51,9 +58,11 @@ class PredictionResponse(BaseModel):
 
 
 app = FastAPI(title="DermCareAI Clinic Platform API", version=APP_VERSION)
-configured_origins = os.getenv("CORS_ORIGINS", "*")
+configured_origins = os.getenv("CORS_ORIGINS", "http://localhost:8081")
+if APP_ENV == "production" and configured_origins.strip() in {"", "*"}:
+    raise RuntimeError("Production CORS_ORIGINS must explicitly list approved origins")
 origins = [item.strip() for item in configured_origins.split(",") if item.strip()]
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False if origins == ["*"] else True, allow_methods=["GET", "POST", "PUT", "PATCH"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False, allow_methods=["GET", "POST", "PUT", "PATCH"], allow_headers=["*"])
 
 
 @app.middleware("http")
@@ -75,6 +84,10 @@ async def request_context_middleware(request: Request, call_next):
 app.include_router(commerce_router)
 app.include_router(notifications_router)
 app.include_router(audit_router)
+app.include_router(media_router)
+app.include_router(clinical_router)
+app.include_router(ai_registry_router)
+app.include_router(admin_router)
 
 
 class ModelService:
@@ -296,6 +309,14 @@ def platform_info() -> PlatformInfo:
             "hash-chained-audit",
             "request-correlation",
             "privacy-safe-observability",
+            "encounter-first-clinical-record",
+            "multi-clinic-tenant-scope",
+            "consent-and-retention-metadata",
+            "longitudinal-lesion-tracking",
+            "model-validation-and-approval-ledger",
+            "clinical-signoff",
+            "follow-up-management",
+            "clinician-reviewed-ai-assessments",
         ],
         generated_at=utc_now(),
     )
@@ -343,7 +364,7 @@ def platform_readiness() -> ReadinessResponse:
 
 
 @app.get("/api/v1/observability/metrics")
-def platform_metrics() -> Dict[str, Any]:
+def platform_metrics(_: dict[str, Any] = Depends(require_roles("admin", "auditor"))) -> Dict[str, Any]:
     return {"version": APP_VERSION, "metrics": observability_snapshot()}
 
 
@@ -376,18 +397,22 @@ def health_check() -> Dict[str, Any]:
 
 
 @app.post("/self-heal")
-def self_heal() -> Dict[str, Any]:
+def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
+    user_key = client_key(request, user["uid"])
+    enforce_rate_limit(f"self-heal:{user_key}", limit=3, window_seconds=300)
     recovered = model_service.recover()
     return {"recovered": recovered, "status": model_service.status()}
 
 
 @app.get("/models")
-def model_status() -> Dict[str, Any]:
+def model_status(_: dict[str, Any] = Depends(require_roles("admin", "auditor"))) -> Dict[str, Any]:
     return {"version": APP_VERSION, **model_service.status()}
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def predict(request: Request, file: UploadFile = File(...), user: dict[str, Any] = Depends(require_roles("doctor", "admin"))) -> Dict[str, Any]:
+    user_key = client_key(request, user["uid"])
+    enforce_rate_limit(f"predict:{user_key}", limit=30, window_seconds=60)
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     contents = await file.read()

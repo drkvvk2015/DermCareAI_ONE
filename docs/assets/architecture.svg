@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820">
+<rect width="1400" height="820" fill="#f7f9fc"/>
+<text x="70" y="70" font-family="Arial" font-size="34" font-weight="700" fill="#172033">DermCareAI — Production Architecture</text>
+<text x="70" y="105" font-family="Arial" font-size="18" fill="#596579">Tenant-scoped clinical platform with PostgreSQL persistence and governed AI decision support</text>
+<g font-family="Arial" font-size="18" fill="#172033">
+<rect x="70" y="160" width="260" height="120" rx="18" fill="#e8f0ff" stroke="#5b7bb2" stroke-width="2"/>
+<text x="200" y="208" text-anchor="middle" font-weight="700">Expo / React Native</text><text x="200" y="238" text-anchor="middle">Patient 360 • Encounter UI</text><text x="200" y="264" text-anchor="middle">Screening • Billing • Pharmacy</text>
+<rect x="390" y="140" width="300" height="160" rx="18" fill="#e9f7ef" stroke="#4b8f69" stroke-width="2"/>
+<text x="540" y="188" text-anchor="middle" font-weight="700">FastAPI Clinical API</text><text x="540" y="218" text-anchor="middle">Firebase auth • RBAC • tenant scope</text><text x="540" y="246" text-anchor="middle">Encounter • Lesion • Consent</text><text x="540" y="272" text-anchor="middle">Follow-up • AI review • Sign-off</text>
+<rect x="750" y="140" width="290" height="160" rx="18" fill="#fff3df" stroke="#b7863b" stroke-width="2"/>
+<text x="895" y="188" text-anchor="middle" font-weight="700">AI Governance</text><text x="895" y="218" text-anchor="middle">Model registry</text><text x="895" y="246" text-anchor="middle">Evaluation • provenance</text><text x="895" y="274" text-anchor="middle">Abstention • clinician review</text>
+<rect x="1090" y="160" width="240" height="120" rx="18" fill="#f0eaff" stroke="#7d63aa" stroke-width="2"/>
+<text x="1210" y="208" text-anchor="middle" font-weight="700">Object Storage</text><text x="1210" y="238" text-anchor="middle">Clinical media</text><text x="1210" y="264" text-anchor="middle">Signed upload URLs</text>
+<path d="M330 220H390" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/><path d="M690 220H750" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/><path d="M1040 220H1090" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/>
+<rect x="190" y="390" width="1020" height="210" rx="24" fill="#ffffff" stroke="#9aa7b8" stroke-width="2"/>
+<text x="700" y="432" text-anchor="middle" font-size="24" font-weight="700">Shared SQLAlchemy Storage Layer</text>
+<rect x="230" y="462" width="210" height="98" rx="14" fill="#edf4ff"/><text x="335" y="505" text-anchor="middle" font-weight="700">Clinical</text><text x="335" y="532" text-anchor="middle">encounters/lesions</text>
+<rect x="470" y="462" width="210" height="98" rx="14" fill="#edf4ff"/><text x="575" y="505" text-anchor="middle" font-weight="700">Commerce</text><text x="575" y="532" text-anchor="middle">billing/pharmacy</text>
+<rect x="710" y="462" width="210" height="98" rx="14" fill="#edf4ff"/><text x="815" y="505" text-anchor="middle" font-weight="700">Audit</text><text x="815" y="532" text-anchor="middle">hash-chained events</text>
+<rect x="950" y="462" width="210" height="98" rx="14" fill="#edf4ff"/><text x="1055" y="505" text-anchor="middle" font-weight="700">AI Ledger</text><text x="1055" y="532" text-anchor="middle">models/evaluations</text>
+<path d="M540 300V390" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/><path d="M895 300V390" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/>
+<rect x="390" y="660" width="620" height="100" rx="18" fill="#eaf7f3" stroke="#4b8f69" stroke-width="2"/>
+<text x="700" y="705" text-anchor="middle" font-weight="700">Managed PostgreSQL — production</text><text x="700" y="735" text-anchor="middle">SQLite is development-only fallback</text>
+<path d="M700 600V660" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/>
+</g>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#506070"/></marker></defs>
+</svg>

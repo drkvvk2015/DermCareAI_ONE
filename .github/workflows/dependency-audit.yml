@@ -1,0 +1,50 @@
+name: DermCareAI Dependency Audit
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install Python audit tool
+        run: python -m pip install --upgrade pip pip-audit
+      - name: Generate npm audit report
+        working-directory: dermcareai
+        run: npm audit --json > ../npm-audit.json || true
+      - name: Generate Python audit report
+        working-directory: backend
+        run: pip-audit -r requirements.txt --format json > ../pip-audit.json || true
+      - name: Generate dependency status summary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          out = []
+          for path in (Path("npm-audit.json"), Path("pip-audit.json")):
+              if path.exists():
+                  out.append(f"Generated {path}")
+          Path("dependency-audit-summary.txt").write_text("\n".join(out) + "\n")
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dermcareai-dependency-audit
+          path: |
+            npm-audit.json
+            pip-audit.json
+            dependency-audit-summary.txt

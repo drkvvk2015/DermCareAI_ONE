@@ -1,0 +1,113 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn()
+        && request.auth.token.roles is list
+        && role in request.auth.token.roles;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function activeDoctor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/doctors/$(request.auth.uid))
+        && get(/databases/$(database)/documents/doctors/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function tenantMatches(data) {
+      return signedIn()
+        && data.keys().hasAll(['organizationId', 'clinicId'])
+        && request.auth.token.organization_id != null
+        && request.auth.token.clinic_id != null
+        && data.organizationId == request.auth.token.organization_id
+        && data.clinicId == request.auth.token.clinic_id;
+    }
+
+    function legacyOwner(data) {
+      return signedIn()
+        && data.doctorId == request.auth.uid
+        && !data.keys().hasAll(['organizationId', 'clinicId']);
+    }
+
+    function ownsClinicalRecord(data) {
+      return activeDoctor() && (tenantMatches(data) || legacyOwner(data));
+    }
+
+    match /doctors/{uid} {
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow read: if isAdmin() || uid == request.auth.uid;
+      allow update: if isAdmin()
+        || (
+          uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['fullName', 'phoneNumber', 'specialization'])
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAdmin() || ownsClinicalRecord(resource.data);
+      allow create: if isAdmin()
+        || (
+          activeDoctor()
+          && tenantMatches(request.resource.data)
+          && request.resource.data.doctorId == request.auth.uid
+        );
+      allow update: if isAdmin()
+        || (
+          ownsClinicalRecord(resource.data)
+          && tenantMatches(request.resource.data)
+          && request.resource.data.doctorId == resource.data.doctorId
+        );
+      allow delete: if false;
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAdmin() || ownsClinicalRecord(resource.data);
+      allow create: if isAdmin()
+        || (
+          activeDoctor()
+          && tenantMatches(request.resource.data)
+          && request.resource.data.doctorId == request.auth.uid
+        );
+      allow update: if isAdmin()
+        || (
+          ownsClinicalRecord(resource.data)
+          && tenantMatches(request.resource.data)
+          && request.resource.data.doctorId == resource.data.doctorId
+        );
+      allow delete: if false;
+    }
+
+    match /screeningReports/{reportId} {
+      allow read: if isAdmin() || ownsClinicalRecord(resource.data);
+      allow create: if isAdmin()
+        || (
+          activeDoctor()
+          && tenantMatches(request.resource.data)
+          && request.resource.data.doctorId == request.auth.uid
+        );
+      allow update: if isAdmin()
+        || (
+          ownsClinicalRecord(resource.data)
+          && tenantMatches(request.resource.data)
+          && request.resource.data.doctorId == resource.data.doctorId
+        );
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

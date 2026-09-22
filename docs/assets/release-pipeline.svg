@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
+<rect width="1400" height="760" fill="#fbfcfe"/>
+<text x="70" y="70" font-family="Arial" font-size="34" font-weight="700" fill="#172033">DermCareAI — Production Release Pipeline</text>
+<text x="70" y="105" font-family="Arial" font-size="18" fill="#596579">Every release candidate is expected to pass software, infrastructure, clinical and AI evidence gates.</text>
+<g font-family="Arial" font-size="18">
+<rect x="70" y="175" width="210" height="100" rx="18" fill="#e8f0ff" stroke="#5b7bb2" stroke-width="2"/><text x="175" y="217" text-anchor="middle" font-weight="700">Commit / PR</text><text x="175" y="246" text-anchor="middle">Reviewed change</text>
+<rect x="330" y="175" width="210" height="100" rx="18" fill="#e9f7ef" stroke="#4b8f69" stroke-width="2"/><text x="435" y="217" text-anchor="middle" font-weight="700">CI Gates</text><text x="435" y="246" text-anchor="middle">Backend • mobile • CodeQL</text>
+<rect x="590" y="175" width="210" height="100" rx="18" fill="#fff3df" stroke="#b7863b" stroke-width="2"/><text x="695" y="217" text-anchor="middle" font-weight="700">PostgreSQL</text><text x="695" y="246" text-anchor="middle">Real integration tests</text>
+<rect x="850" y="175" width="210" height="100" rx="18" fill="#f0eaff" stroke="#7d63aa" stroke-width="2"/><text x="955" y="217" text-anchor="middle" font-weight="700">Staging</text><text x="955" y="246" text-anchor="middle">Smoke + acceptance</text>
+<rect x="1110" y="175" width="210" height="100" rx="18" fill="#eaf7f3" stroke="#4b8f69" stroke-width="2"/><text x="1215" y="217" text-anchor="middle" font-weight="700">Clinical RC</text><text x="1215" y="246" text-anchor="middle">Evidence + sign-off</text>
+<path d="M280 225H330M540 225H590M800 225H850M1060 225H1110" stroke="#506070" stroke-width="4" marker-end="url(#arrow)"/>
+<rect x="160" y="375" width="300" height="125" rx="18" fill="#ffffff" stroke="#9aa7b8" stroke-width="2"/><text x="310" y="420" text-anchor="middle" font-weight="700">Security evidence</text><text x="310" y="450" text-anchor="middle">Audit inventory</text><text x="310" y="477" text-anchor="middle">SBOM • dependency report</text>
+<rect x="550" y="375" width="300" height="125" rx="18" fill="#ffffff" stroke="#9aa7b8" stroke-width="2"/><text x="700" y="420" text-anchor="middle" font-weight="700">DR evidence</text><text x="700" y="450" text-anchor="middle">Backup</text><text x="700" y="477" text-anchor="middle">Restore drill • RPO/RTO</text>
+<rect x="940" y="375" width="300" height="125" rx="18" fill="#ffffff" stroke="#9aa7b8" stroke-width="2"/><text x="1090" y="420" text-anchor="middle" font-weight="700">AI evidence</text><text x="1090" y="450" text-anchor="middle">Locked test set</text><text x="1090" y="477" text-anchor="middle">External validation • calibration</text>
+<text x="700" y="610" text-anchor="middle" font-family="Arial" font-size="19" fill="#596579">Release automation can build artifacts; production clinical acceptance still requires documented human evidence and deployment-specific approvals.</text>
+</g>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#506070"/></marker></defs>
+</svg>
