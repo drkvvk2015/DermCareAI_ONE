@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from io import BytesIO
+
 from PIL import Image, ImageStat
+
 
 @dataclass(frozen=True)
 class ImageQualityResult:
