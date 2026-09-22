@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Engine
 
 from storage import compat_connection, create_store_engine, require_postgres_in_production
+from dermatology.media_integrity import validate_media_metadata
 from typing import Any, Iterator
 
 ENGINE: Engine = create_store_engine("CLINICAL_DATABASE_URL", "CLINICAL_DB_PATH", "clinical.db")
@@ -399,6 +400,14 @@ def create_media(**payload: Any) -> dict[str, Any]:
         purpose=payload["consent_purpose"],
     ):
         raise PermissionError("Active consent is required before persisting clinical media metadata")
+
+    validate_media_metadata(
+        sha256=payload["sha256"],
+        mime_type=payload["mime_type"],
+        byte_size=int(payload["byte_size"]),
+        captured_at=payload["captured_at"],
+        retention_until=payload.get("retention_until"),
+    )
 
     media_id = f"IMG-{uuid.uuid4().hex[:12].upper()}"
     now = _now()
