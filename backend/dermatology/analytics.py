@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 from collections import Counter
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 def diagnosis_counts(values: Iterable[str]) -> dict[str, int]:
     counts = Counter(value.strip() for value in values if value and value.strip())
