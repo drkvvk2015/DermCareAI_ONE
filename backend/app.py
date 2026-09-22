@@ -11,12 +11,14 @@ from typing import Any, Dict
 import numpy as np
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image, ImageStat
+from PIL import Image
 from pydantic import BaseModel, Field
 
-from ImagePreprocessing import ImagePreprocessor
-from MelanomaClassifier import MobileNetPredictor
-from SkinLesionClassifier import SkinLesionClassifier
+from dermatology.analytics_api import router as dermatology_analytics_router
+from dermatology.decision_support_api import router as dermatology_scoring_router
+from dermatology.followup_api import router as dermatology_followup_router
+from dermatology.procedure_api import router as dermatology_procedure_router
+from dermatology.image_quality import assess_image_quality as assess_dermatology_image_quality
 from ai_governance import build_governance_card
 from audit import router as audit_router
 from auth import require_roles
@@ -88,13 +90,17 @@ app.include_router(media_router)
 app.include_router(clinical_router)
 app.include_router(ai_registry_router)
 app.include_router(admin_router)
+app.include_router(dermatology_analytics_router)
+app.include_router(dermatology_scoring_router)
+app.include_router(dermatology_followup_router)
+app.include_router(dermatology_procedure_router)
 
 
 class ModelService:
     def __init__(self) -> None:
-        self.preprocessor = ImagePreprocessor(target_size=(224, 224))
-        self.mobilenet: MobileNetPredictor | None = None
-        self.nasnet: SkinLesionClassifier | None = None
+        self.preprocessor: Any | None = None
+        self.mobilenet: Any | None = None
+        self.nasnet: Any | None = None
         self.embedded: Any | None = None
         self.mode = "unavailable"
         self.reload_count = 0
@@ -109,6 +115,12 @@ class ModelService:
         paths = self.model_paths
         try:
             if Path(paths["mobilenet"]).is_file() and Path(paths["nasnet"]).is_file():
+                # Load heavyweight ML dependencies only when real model weights exist.
+                from ImagePreprocessing import ImagePreprocessor
+                from MelanomaClassifier import MobileNetPredictor
+                from SkinLesionClassifier import SkinLesionClassifier
+
+                self.preprocessor = ImagePreprocessor(target_size=(224, 224))
                 self.mobilenet = MobileNetPredictor(paths["mobilenet"])
                 self.nasnet = SkinLesionClassifier(paths["nasnet"])
                 self.embedded = None
@@ -117,6 +129,7 @@ class ModelService:
                 return True
             raise FileNotFoundError("Local research model weights are not installed")
         except Exception as exc:
+            self.preprocessor = None
             self.mobilenet = None
             self.nasnet = None
             self.last_error = str(exc)
@@ -192,6 +205,8 @@ class ModelService:
             model_used = embedded_result["model_used"]
             model_provenance = "PREMAADC/vit-base-ham10000 research fallback"
         else:
+            if self.preprocessor is None or self.mobilenet is None:
+                raise RuntimeError("Local model dependencies are unavailable")
             image_array = np.array(image)
             processed_image = self.preprocessor.preprocess(image_array)
             if processed_image is None:
@@ -263,31 +278,17 @@ async def startup_event() -> None:
 
 
 def assess_image_quality(image: Image.Image) -> Dict[str, Any]:
-    width, height = image.size
-    gray = image.convert("L")
-    stat = ImageStat.Stat(gray)
-    mean = float(stat.mean[0])
-    variance = float(stat.var[0])
-    megapixels = (width * height) / 1_000_000
-    issues: list[str] = []
-    if width < 256 or height < 256:
-        issues.append("resolution_too_low")
-    if megapixels > 40:
-        issues.append("resolution_too_high")
-    if mean < 18:
-        issues.append("image_too_dark")
-    if mean > 242:
-        issues.append("image_too_bright")
-    if variance < 40:
-        issues.append("low_contrast_or_blur")
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG", quality=92)
+    quality = assess_dermatology_image_quality(buffered.getvalue())
     return {
-        "usable": not issues,
-        "reason": "Image passed the basic quality gate." if not issues else ", ".join(issues),
-        "width": width,
-        "height": height,
-        "mean_luminance": round(mean, 2),
-        "luminance_variance": round(variance, 2),
-        "issues": issues,
+        "usable": quality.usable,
+        "reason": quality.reason,
+        "width": quality.width,
+        "height": quality.height,
+        "mean_luminance": quality.mean_luminance,
+        "luminance_variance": quality.luminance_variance,
+        "issues": list(quality.issues),
     }
 
 
