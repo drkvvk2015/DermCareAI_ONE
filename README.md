@@ -4,9 +4,9 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 
 > ⚠️ **Clinical boundary:** AI output is decision support, not a diagnosis. The current embedded HAM10000 model is a research fallback and is **not clinically validated for routine patient care**. Clinical deployment requires intended-use review, independent validation and applicable regulatory/privacy approvals.
 
-> ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are implemented on PR #42. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
+> ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are merged into `main`. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
 >
-> **Release candidate:** `00020e6ea0ea92ab587918fccab6588edb66a349`. Automated PR gates are green and squash auto-merge is enabled. PR #42 remains separate from `main` until GitHub branch-protection requirements and the remaining deployment/review gates are satisfied.
+> **Dermatology Completion:** v5.1 development is now organized as parallel domain workstreams merged through `develop`; `main` remains the stable production baseline.
 
 ## Visual overview
 
