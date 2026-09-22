@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]' Pillow numpy
+        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]' python-multipart Pillow opencv-python-headless numpy
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run regression tests
