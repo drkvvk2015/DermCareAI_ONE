@@ -6,18 +6,31 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import Engine
-from storage import compat_connection, create_store_engine, require_postgres_in_production
 
-ENGINE: Engine = create_store_engine("CLINICAL_DATABASE_URL", "CLINICAL_DB_PATH", "clinical.db")
+from storage import (
+    compat_connection,
+    create_store_engine,
+    require_postgres_in_production,
+)
+
+
+ENGINE: Engine = create_store_engine(
+    "CLINICAL_DATABASE_URL",
+    "CLINICAL_DB_PATH",
+    "clinical.db",
+)
 require_postgres_in_production(ENGINE, "Dermatology procedure store")
+
 
 @contextmanager
 def _connect():
     with compat_connection(ENGINE) as conn:
         yield conn
 
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
 
 def init_store() -> None:
     with _connect() as conn:
@@ -43,6 +56,7 @@ def init_store() -> None:
             """
         )
 
+
 def create_procedure(**payload: Any) -> dict[str, Any]:
     init_store()
     procedure_id = f"PROC-{uuid.uuid4().hex[:12].upper()}"
@@ -57,16 +71,33 @@ def create_procedure(**payload: Any) -> dict[str, Any]:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                procedure_id, payload["organization_id"], payload["clinic_id"],
-                payload["patient_id"], payload["encounter_id"], payload["procedure_type"],
-                payload["body_site"], payload["indication"], payload["consent_id"],
-                payload["performed_by"], payload["performed_at"], payload.get("outcome"), now,
+                procedure_id,
+                payload["organization_id"],
+                payload["clinic_id"],
+                payload["patient_id"],
+                payload["encounter_id"],
+                payload["procedure_type"],
+                payload["body_site"],
+                payload["indication"],
+                payload["consent_id"],
+                payload["performed_by"],
+                payload["performed_at"],
+                payload.get("outcome"),
+                now,
             ),
         )
-        row = conn.execute("SELECT * FROM dermatology_procedures WHERE id = ?", (procedure_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM dermatology_procedures WHERE id = ?",
+            (procedure_id,),
+        ).fetchone()
     return dict(row)
 
-def list_procedures(*, clinic_id: str, patient_id: str) -> list[dict[str, Any]]:
+
+def list_procedures(
+    *,
+    clinic_id: str,
+    patient_id: str,
+) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         rows = conn.execute(
