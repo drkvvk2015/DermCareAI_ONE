@@ -104,6 +104,18 @@ export const patientClinicalApi = {
   },
 };
 
+export type DermatologyTemplate = {
+  condition: string;
+  required_sections: string[];
+  scoring_tools: string[];
+};
+
+export const dermatologyTemplateApi = {
+  list() {
+    return authorizedRequest<{ templates: DermatologyTemplate[] }>('/api/v1/clinical/templates');
+  },
+};
+
 export const encounterApi = {
   create(patientId: string, payload?: {
     complaints?: Record<string, unknown>;
@@ -111,6 +123,7 @@ export const encounterApi = {
     assessment?: Record<string, unknown>;
     plan?: Record<string, unknown>;
     appointmentId?: string;
+    template?: string;
   }) {
     return authorizedRequest<ClinicalEncounter>('/api/v1/clinical/encounters', {
       method: 'POST',
@@ -118,6 +131,7 @@ export const encounterApi = {
       body: JSON.stringify({
         patient_id: patientId,
         appointment_id: payload?.appointmentId,
+        template: payload?.template,
         complaints: payload?.complaints || {},
         examination: payload?.examination || {},
         assessment: payload?.assessment || {},
