@@ -107,6 +107,7 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
   };
 
   const saveLesion = async () => {
+    const signed = encounter?.status === 'signed';
     if (!encounter || !lesionCode.trim() || !lesionBodySite.trim() || signed) return;
     setLesionSaving(true);
     try {
@@ -127,6 +128,16 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
       setSnack(err instanceof Error ? err.message : 'Unable to save lesion');
     } finally {
       setLesionSaving(false);
+    }
+  };
+
+  const loadTimeline = async () => {
+    if (!encounter || !patient.id || !lesionCode.trim()) return;
+    try {
+      const timeline = await encounterApi.lesionTimeline(patient.id, lesionCode.trim());
+      setSnack(`Loaded ${timeline.length} longitudinal observation${timeline.length === 1 ? '' : 's'} for ${lesionCode.trim()}`);
+    } catch (err) {
+      setSnack(err instanceof Error ? err.message : 'Unable to load lesion timeline');
     }
   };
 
@@ -225,6 +236,7 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
             <TextInput mode="outlined" label="Evolution since last review" value={lesionEvolution} onChangeText={setLesionEvolution} disabled={signed} style={styles.input} multiline />
             <TextInput mode="outlined" label="Clinical impression" value={lesionImpression} onChangeText={setLesionImpression} disabled={signed} style={styles.input} />
             <Button mode="outlined" onPress={saveLesion} loading={lesionSaving} disabled={signed || !lesionBodySite.trim()} style={styles.button}>Save Lesion to Timeline</Button>
+            <Button mode="text" onPress={() => void loadTimeline()} disabled={signed || !lesionCode.trim()} style={styles.button}>Refresh Lesion History</Button>
             <Button mode="contained-tonal" icon="map-marker-radius" onPress={() => navigation.navigate('BodyMap', { encounterId: encounter.id, patient })} disabled={signed} style={styles.button}>Open Body Map</Button>
           </Card.Content>
         </Card>
