@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from dermatology.analytics_api import router as dermatology_analytics_router
 from dermatology.decision_support_api import router as dermatology_scoring_router
+from dermatology.vision_api import router as dermatology_vision_router
 from dermatology.followup_api import router as dermatology_followup_router
 from dermatology.procedure_api import router as dermatology_procedure_router
 from dermatology.image_quality import assess_image_quality as assess_dermatology_image_quality
@@ -92,6 +93,7 @@ app.include_router(ai_registry_router)
 app.include_router(admin_router)
 app.include_router(dermatology_analytics_router)
 app.include_router(dermatology_scoring_router)
+app.include_router(dermatology_vision_router)
 app.include_router(dermatology_followup_router)
 app.include_router(dermatology_procedure_router)
 
