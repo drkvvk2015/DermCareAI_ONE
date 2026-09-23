@@ -495,6 +495,26 @@ def create_media(**payload: Any) -> dict[str, Any]:
 
 
 
+def get_media(media_id: str, *, organization_id: str, clinic_id: str, patient_id: str | None = None, encounter_id: str | None = None) -> dict | None:
+    with _connect() as conn:
+        clauses = ["id = :id", "organization_id = :organization_id", "clinic_id = :clinic_id"]
+        params = {"id": media_id, "organization_id": organization_id, "clinic_id": clinic_id}
+        if patient_id is not None: clauses.append("patient_id = :patient_id"); params["patient_id"] = patient_id
+        if encounter_id is not None: clauses.append("encounter_id = :encounter_id"); params["encounter_id"] = encounter_id
+        row = execute(conn, "SELECT * FROM clinical_media WHERE " + " AND ".join(clauses), params).mappings().first()
+        return dict(row) if row else None
+
+
+def get_lesion(lesion_id: str, *, organization_id: str, clinic_id: str, patient_id: str | None = None, encounter_id: str | None = None) -> dict | None:
+    with _connect() as conn:
+        clauses = ["id = :id", "organization_id = :organization_id", "clinic_id = :clinic_id"]
+        params = {"id": lesion_id, "organization_id": organization_id, "clinic_id": clinic_id}
+        if patient_id is not None: clauses.append("patient_id = :patient_id"); params["patient_id"] = patient_id
+        if encounter_id is not None: clauses.append("encounter_id = :encounter_id"); params["encounter_id"] = encounter_id
+        row = execute(conn, "SELECT * FROM lesions WHERE " + " AND ".join(clauses), params).mappings().first()
+        return dict(row) if row else None
+
+
 def list_media(
     *,
     clinic_id: str,
