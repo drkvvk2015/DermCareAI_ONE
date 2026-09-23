@@ -20,14 +20,14 @@ def _looks_like_placeholder(value: str) -> bool:
     return any(token in lowered for token in ("change-me", "changeme", "example.com", "placeholder", "staging-only"))
 
 
-def _check_database_url(value: str) -> CheckResult:
+def _check_database_url(value: str, name: str = "DATABASE_URL") -> CheckResult:
     if not value:
-        return CheckResult("DATABASE_URL", "FAIL", "DATABASE_URL is required in production.")
+        return CheckResult(name, "FAIL", f"{name} is required in production.")
     if not value.startswith(("postgresql://", "postgresql+psycopg://", "postgres://")):
-        return CheckResult("DATABASE_URL", "FAIL", "Production persistence must use PostgreSQL.")
+        return CheckResult(name, "FAIL", "Production persistence must use PostgreSQL.")
     if _looks_like_placeholder(value):
-        return CheckResult("DATABASE_URL", "FAIL", "DATABASE_URL contains a placeholder value.")
-    return CheckResult("DATABASE_URL", "PASS", "PostgreSQL connection string is configured.")
+        return CheckResult(name, "FAIL", f"{name} contains a placeholder value.")
+    return CheckResult(name, "PASS", "PostgreSQL connection string is configured.")
 
 
 def _check_cors(value: str) -> CheckResult:
@@ -65,7 +65,12 @@ def evaluate_environment(env: Mapping[str, str] | None = None) -> list[CheckResu
         )
     )
 
+    # Each persistent store has its own production connection setting. Keep the legacy
+    # DATABASE_URL check for deployments that still expose the shared alias, while
+    # requiring the actual clinical and commerce store URLs when they are configured.
     results.append(_check_database_url(values.get("DATABASE_URL", "")))
+    results.append(_check_database_url(values.get("CLINICAL_DATABASE_URL", values.get("DATABASE_URL", "")), "CLINICAL_DATABASE_URL"))
+    results.append(_check_database_url(values.get("COMMERCE_DATABASE_URL", values.get("DATABASE_URL", "")), "COMMERCE_DATABASE_URL"))
     results.append(_check_cors(values.get("CORS_ORIGINS", "")))
 
     firebase_configured = bool(
