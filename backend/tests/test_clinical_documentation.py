@@ -1,4 +1,4 @@
-from clinical_documentation import can_finalize_encounter, validate_encounter
+from dermatology.clinical_documentation import can_finalize_encounter, validate_encounter
 
 
 def test_complete_encounter_can_finalize() -> None:
