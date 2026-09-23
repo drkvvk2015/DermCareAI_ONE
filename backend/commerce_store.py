@@ -212,7 +212,12 @@ def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id
                 if take <= 0:
                     continue
                 new_quantity = float(row["quantity"]) - take
-                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, updated_at = :updated_at WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"quantity": new_quantity, "updated_at": _now(), "batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id})
+                updated_at = _now()
+                payload = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id}).mappings().first()
+                payload_json = json.loads(payload["payload_json"]) if payload else {}
+                payload_json["quantity"] = new_quantity
+                payload_json["updated_at"] = updated_at
+                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, payload_json = :payload_json, updated_at = :updated_at WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"quantity": new_quantity, "payload_json": json.dumps(payload_json, sort_keys=True, default=str), "updated_at": updated_at, "batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id})
                 allocations.append((str(row["batch_id"]), take))
                 remaining -= take
                 if remaining <= 0:
