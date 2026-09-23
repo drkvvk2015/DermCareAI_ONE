@@ -262,6 +262,22 @@ export const encounterApi = {
       `/api/v1/clinical/encounters/${encodeURIComponent(encounterId)}/ai-reviews`,
     );
   },
+
+  listMedia(patientId: string, encounterId?: string, lesionId?: string) {
+    const params = new URLSearchParams();
+    if (encounterId) params.set('encounter_id', encounterId);
+    if (lesionId) params.set('lesion_id', lesionId);
+    const query = params.toString();
+    return authorizedRequest<Array<Record<string, unknown>>>(
+      `/api/v1/clinical/patients/${encodeURIComponent(patientId)}/media${query ? `?${query}` : ''}`,
+    );
+  },
+
+  lesionTimeline(patientId: string, lesionCode: string) {
+    return authorizedRequest<Array<Record<string, unknown>>>(
+      `/api/v1/clinical/patients/${encodeURIComponent(patientId)}/lesions/${encodeURIComponent(lesionCode)}/timeline`,
+    );
+  },
   saveLesion(payload: {
     patientId: string;
     encounterId: string;
