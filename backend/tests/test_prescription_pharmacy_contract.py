@@ -23,7 +23,7 @@ def test_active_prescription_can_be_dispensed_only_for_same_patient_and_tenant(m
         items=[{"medicine_id": "med-1", "quantity": 2}],
         prescribed_by="doctor-1",
     )
-    commerce_store.upsert_batch({"batch_id": "b-1", "medicine_id": "med-1", "expiry": "2099-01-01", "quantity": 5, "blocked": False})
+    commerce_store.upsert_batch({"batch_id": "b-1", "medicine_id": "med-1", "expiry": "2099-01-01", "quantity": 5, "blocked": False}, organization_id="org-1", clinic_id="clinic-1")
 
     result = dispense_prescription(
         prescription_id=rx["id"],
