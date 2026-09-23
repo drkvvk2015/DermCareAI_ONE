@@ -5,7 +5,7 @@ import os
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from sqlalchemy import Engine
+from sqlalchemy import Engine, inspect
 
 from storage import compat_connection, create_store_engine, require_postgres_in_production
 from dermatology.media_integrity import validate_media_metadata
@@ -172,6 +172,8 @@ def init_store() -> None:
                 clinic_id TEXT NOT NULL,
                 encounter_id TEXT NOT NULL,
                 request_id TEXT NOT NULL,
+                media_id TEXT,
+                lesion_id TEXT,
                 model_name TEXT NOT NULL,
                 model_provenance TEXT,
                 predicted_label TEXT NOT NULL,
@@ -185,7 +187,19 @@ def init_store() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_ai_reviews_encounter
               ON encounter_ai_reviews(clinic_id, encounter_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_ai_reviews_media
+              ON encounter_ai_reviews(clinic_id, media_id, created_at DESC);
             """
+        )
+        # Compatibility migration for existing installations created before AI
+        # assessments gained explicit media/lesion provenance.
+        columns = {column["name"] for column in inspect(ENGINE).get_columns("encounter_ai_reviews")}
+        if "media_id" not in columns:
+            conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN media_id TEXT")
+        if "lesion_id" not in columns:
+            conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN lesion_id TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(clinic_id, media_id, created_at DESC)"
         )
 
 
@@ -576,7 +590,8 @@ def list_followups(*, clinic_id: str, patient_id: str | None = None) -> list[dic
 
 def record_ai_review(
     *, organization_id: str, clinic_id: str, encounter_id: str,
-    request_id: str, model_name: str, model_provenance: str | None,
+    request_id: str, media_id: str | None, lesion_id: str | None,
+    model_name: str, model_provenance: str | None,
     predicted_label: str, confidence: float, accepted: bool,
 ) -> dict[str, Any]:
     review_id = f"AIR-{uuid.uuid4().hex[:12].upper()}"
@@ -585,14 +600,14 @@ def record_ai_review(
         conn.execute(
             """
             INSERT INTO encounter_ai_reviews
-            (id, organization_id, clinic_id, encounter_id, request_id, model_name,
+            (id, organization_id, clinic_id, encounter_id, request_id, media_id, lesion_id, model_name,
              model_provenance, predicted_label, confidence, accepted, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 review_id, organization_id, clinic_id, encounter_id, request_id,
-                model_name, model_provenance, predicted_label, float(confidence),
-                int(accepted), now,
+                media_id, lesion_id, model_name, model_provenance, predicted_label,
+                float(confidence), int(accepted), now,
             ),
         )
         row = conn.execute(

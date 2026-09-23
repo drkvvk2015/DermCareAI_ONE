@@ -14,6 +14,8 @@ from clinical_store import (
     create_encounter,
     create_media,
     get_encounter,
+    get_media,
+    get_lesion,
     list_lesion_timeline,
     upsert_lesion,
     update_encounter,
@@ -141,6 +143,8 @@ class FollowupCreate(BaseModel):
 
 
 class AIReviewCreate(BaseModel):
+    media_id: str | None = Field(default=None, min_length=1, max_length=120)
+    lesion_id: str | None = Field(default=None, min_length=1, max_length=120)
     request_id: str = Field(min_length=1, max_length=120)
     model_name: str = Field(min_length=1, max_length=120)
     model_provenance: str | None = Field(default=None, max_length=500)
@@ -356,7 +360,7 @@ def post_followup(
             action="followup_planned",
             resource_type="followup",
             resource_id=result["id"],
-            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id},
+            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id, "media_id": media_id, "lesion_id": lesion_id},
         ),
         user,
     )
@@ -382,11 +386,27 @@ def post_ai_review(
     encounter = get_encounter(encounter_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
+    payload = req.model_dump()
+    media_id = payload.get("media_id")
+    lesion_id = payload.get("lesion_id")
+    if media_id or lesion_id:
+        media = get_media(clinic_id=clinic_id, patient_id=encounter["patient_id"], media_id=media_id) if media_id else None
+        lesion = get_lesion(clinic_id=clinic_id, patient_id=encounter["patient_id"], lesion_id=lesion_id) if lesion_id else None
+        if media_id and (not media or media.get("encounter_id") != encounter_id):
+            raise HTTPException(status_code=404, detail="Linked clinical media not found for encounter")
+        if lesion_id and (not lesion or lesion.get("encounter_id") != encounter_id):
+            raise HTTPException(status_code=409, detail="Linked lesion is not part of encounter")
+        if media and media.get("lesion_id") and lesion_id and media["lesion_id"] != lesion_id:
+            raise HTTPException(status_code=409, detail="Media and lesion linkage conflict")
+        if media and media.get("organization_id") != organization_id:
+            raise HTTPException(status_code=403, detail="Linked clinical media belongs to another organization")
+        if lesion and lesion.get("organization_id") != organization_id:
+            raise HTTPException(status_code=403, detail="Linked lesion belongs to another organization")
     result = record_ai_review(
         organization_id=organization_id,
         clinic_id=clinic_id,
         encounter_id=encounter_id,
-        **req.model_dump(),
+        **payload,
     )
     record_event(
         AuditEvent(
