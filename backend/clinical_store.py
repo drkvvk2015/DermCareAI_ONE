@@ -495,24 +495,47 @@ def create_media(**payload: Any) -> dict[str, Any]:
 
 
 
+def _tenant_lookup(
+    conn: Any,
+    table: str,
+    record_id: str,
+    *,
+    organization_id: str,
+    clinic_id: str,
+    patient_id: str | None = None,
+    encounter_id: str | None = None,
+) -> dict[str, Any] | None:
+    clauses = ["id = ?", "organization_id = ?", "clinic_id = ?"]
+    params: list[Any] = [record_id, organization_id, clinic_id]
+    if patient_id is not None:
+        clauses.append("patient_id = ?")
+        params.append(patient_id)
+    if encounter_id is not None:
+        clauses.append("encounter_id = ?")
+        params.append(encounter_id)
+    row = conn.execute(
+        f"SELECT * FROM {table} WHERE {' AND '.join(clauses)}",
+        params,
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_media(media_id: str, *, organization_id: str, clinic_id: str, patient_id: str | None = None, encounter_id: str | None = None) -> dict | None:
     with _connect() as conn:
-        clauses = ["id = :id", "organization_id = :organization_id", "clinic_id = :clinic_id"]
-        params = {"id": media_id, "organization_id": organization_id, "clinic_id": clinic_id}
-        if patient_id is not None: clauses.append("patient_id = :patient_id"); params["patient_id"] = patient_id
-        if encounter_id is not None: clauses.append("encounter_id = :encounter_id"); params["encounter_id"] = encounter_id
-        row = execute(conn, "SELECT * FROM clinical_media WHERE " + " AND ".join(clauses), params).mappings().first()
-        return dict(row) if row else None
+        return _tenant_lookup(
+            conn, "clinical_media", media_id,
+            organization_id=organization_id, clinic_id=clinic_id,
+            patient_id=patient_id, encounter_id=encounter_id,
+        )
 
 
 def get_lesion(lesion_id: str, *, organization_id: str, clinic_id: str, patient_id: str | None = None, encounter_id: str | None = None) -> dict | None:
     with _connect() as conn:
-        clauses = ["id = :id", "organization_id = :organization_id", "clinic_id = :clinic_id"]
-        params = {"id": lesion_id, "organization_id": organization_id, "clinic_id": clinic_id}
-        if patient_id is not None: clauses.append("patient_id = :patient_id"); params["patient_id"] = patient_id
-        if encounter_id is not None: clauses.append("encounter_id = :encounter_id"); params["encounter_id"] = encounter_id
-        row = execute(conn, "SELECT * FROM lesions WHERE " + " AND ".join(clauses), params).mappings().first()
-        return dict(row) if row else None
+        return _tenant_lookup(
+            conn, "lesions", lesion_id,
+            organization_id=organization_id, clinic_id=clinic_id,
+            patient_id=patient_id, encounter_id=encounter_id,
+        )
 
 
 def list_media(
