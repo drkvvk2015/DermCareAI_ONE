@@ -47,3 +47,35 @@ def validate_encounter(fields: dict[str, str | None]) -> tuple[CompletenessIssue
 
 def can_finalize_encounter(fields: dict[str, str | None]) -> bool:
     return not any(issue.field in REQUIRED_FIELDS for issue in validate_encounter(fields))
+
+
+DERMATOLOGY_RECOMMENDED_FIELDS = (
+    "onset_and_course",
+    "site_and_distribution_detail",
+    "primary_lesion",
+    "secondary_changes",
+    "color",
+    "surface",
+    "border",
+    "configuration",
+    "palpation",
+    "symptoms",
+    "exposure_history",
+    "drug_history",
+    "atopy_history",
+    "family_history",
+    "systemic_symptoms",
+)
+
+
+def recommended_field_issues(fields: dict[str, str | None]) -> tuple[CompletenessIssue, ...]:
+    """Return non-blocking prompts for richer dermatology documentation."""
+    return tuple(
+        CompletenessIssue(
+            field=field,
+            message=f"Consider documenting {field.replace('_', ' ')} when clinically relevant.",
+            severity="info",
+        )
+        for field in DERMATOLOGY_RECOMMENDED_FIELDS
+        if fields.get(field) is None or not str(fields.get(field)).strip()
+    )
