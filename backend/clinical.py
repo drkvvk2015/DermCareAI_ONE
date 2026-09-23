@@ -14,6 +14,8 @@ from clinical_store import (
     create_encounter,
     create_media,
     list_media,
+    get_media,
+    get_lesion,
     get_encounter,
     get_media,
     get_lesion,
@@ -407,8 +409,8 @@ def post_ai_review(
     media_id = payload.get("media_id")
     lesion_id = payload.get("lesion_id")
     if media_id or lesion_id:
-        media = get_media(clinic_id=clinic_id, patient_id=encounter["patient_id"], media_id=media_id) if media_id else None
-        lesion = get_lesion(clinic_id=clinic_id, patient_id=encounter["patient_id"], lesion_id=lesion_id) if lesion_id else None
+        media = get_media(media_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if media_id else None
+        lesion = get_lesion(lesion_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if lesion_id else None
         if media_id and (not media or media.get("encounter_id") != encounter_id):
             raise HTTPException(status_code=404, detail="Linked clinical media not found for encounter")
         if lesion_id and (not lesion or lesion.get("encounter_id") != encounter_id):
