@@ -56,6 +56,7 @@ def create_prescription(
     items: list[dict[str, Any]],
     prescribed_by: str,
 ) -> dict[str, Any]:
+    init_store()
     if not items:
         raise ValueError("At least one medication item is required")
     prescription_id = f"RX-{uuid.uuid4().hex[:12].upper()}"
@@ -150,6 +151,7 @@ def cancel_prescription(
     organization_id: str,
     clinic_id: str,
 ) -> dict[str, Any]:
+    init_store()
     now = _now()
     with transaction(ENGINE) as conn:
         row = execute(
