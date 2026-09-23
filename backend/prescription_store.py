@@ -36,6 +36,10 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
+        try:
+            execute(conn, "ALTER TABLE prescriptions ADD COLUMN dispense_status TEXT NOT NULL DEFAULT 'not_dispensed'")
+        except Exception:
+            pass
         execute(conn, """
             CREATE INDEX IF NOT EXISTS idx_prescriptions_patient
             ON prescriptions(clinic_id, patient_id, created_at DESC)

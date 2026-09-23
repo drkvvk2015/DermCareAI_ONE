@@ -13,6 +13,7 @@ from prescription_store import (
     create_prescription,
     get_prescription,
     list_prescriptions,
+    mark_prescription_dispensed,
 )
 
 router = APIRouter(prefix="/api/v1/prescriptions", tags=["prescriptions"])
@@ -124,3 +125,36 @@ def cancel(
         user,
     )
     return result
+
+
+@router.post("/{prescription_id}/dispense")
+def dispense(
+    prescription_id: str,
+    user: dict[str, Any] = Depends(require_roles("admin", "pharmacist")),
+):
+    organization_id, clinic_id = _tenant(user)
+    prescription = get_prescription(prescription_id, organization_id=organization_id, clinic_id=clinic_id)
+    if prescription is None:
+        raise HTTPException(status_code=404, detail="Prescription not found")
+    try:
+        from prescription_pharmacy import dispense_prescription
+        from datetime import datetime, timezone
+        allocation = dispense_prescription(
+            prescription_id=prescription_id,
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            patient_id=prescription["patient_id"],
+            on=datetime.now(timezone.utc).isoformat(),
+        )
+        result = mark_prescription_dispensed(
+            prescription_id,
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+        )
+    except (KeyError, PermissionError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record_event(AuditEvent(action="prescription_dispensed", resource_type="prescription", resource_id=prescription_id,
+                            metadata={"patient_id": prescription["patient_id"], "allocation_count": len(allocation["allocations"])}), user)
+    return {"prescription": result, "dispensing": allocation}
