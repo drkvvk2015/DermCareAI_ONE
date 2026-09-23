@@ -173,7 +173,7 @@ const PatientDetailsScreen: React.FC<NavigationProps<'PatientDetails'>> = ({
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPatientData(), fetchScreenings()]);
+    await Promise.all([fetchPatientData(), fetchScreenings(), fetchClinicalSummary()]);
     setRefreshing(false);
   };
 
