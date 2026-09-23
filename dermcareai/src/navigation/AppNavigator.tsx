@@ -26,6 +26,7 @@ import PharmacyScreen from '../screens/main/PharmacyScreen';
 import NewEncounterScreen from '../screens/main/NewEncounterScreen';
 import EncounterScreen from '../screens/main/EncounterScreen';
 import BodyMapScreen from '../screens/main/BodyMapScreen';
+import PrescriptionScreen from '../screens/main/PrescriptionScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -66,6 +67,7 @@ const AppNavigator = () => {
             <Stack.Screen name="NewEncounter" component={NewEncounterScreen} />
             <Stack.Screen name="Encounter" component={EncounterScreen} />
             <Stack.Screen name="BodyMap" component={BodyMapScreen} />
+            <Stack.Screen name="Prescription" component={PrescriptionScreen} />
             <Stack.Screen name="NewAppointment" component={NewAppointmentScreen} />
             <Stack.Screen name="AppointmentDetails" component={AppointmentDetailsScreen} />
             <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
