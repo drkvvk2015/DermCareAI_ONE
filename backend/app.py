@@ -28,6 +28,7 @@ from ai_registry import router as ai_registry_router
 from admin import router as admin_router
 from media import router as media_router
 from commerce import router as commerce_router
+from prescriptions import router as prescriptions_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
 from model_registry import verify_models
 from notifications import router as notifications_router
@@ -85,6 +86,7 @@ async def request_context_middleware(request: Request, call_next):
 
 
 app.include_router(commerce_router)
+app.include_router(prescriptions_router)
 app.include_router(notifications_router)
 app.include_router(audit_router)
 app.include_router(media_router)
