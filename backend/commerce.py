@@ -21,6 +21,15 @@ from commerce_store import record_payment_event, save_invoice, upsert_stock, upd
 router = APIRouter(prefix="/commerce", tags=["commerce"])
 
 
+def _tenant(user: dict[str, Any]) -> tuple[str, str]:
+    claims = user.get("claims", {})
+    organization_id = claims.get("organization_id") or claims.get("organizationId")
+    clinic_id = claims.get("clinic_id") or claims.get("clinicId")
+    if not organization_id or not clinic_id:
+        raise HTTPException(status_code=403, detail="Commerce tenant context is missing")
+    return str(organization_id), str(clinic_id)
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -76,9 +85,10 @@ class PharmacyBatchRequest(BaseModel):
 
 @router.post("/pharmacy/batches")
 def add_pharmacy_batch(req: PharmacyBatchRequest, user: dict[str, Any] = Depends(require_roles("admin", "pharmacist"))):
+    organization_id, clinic_id = _tenant(user)
     payload = req.model_dump()
     try:
-        saved = store_upsert_batch(payload)
+        saved = store_upsert_batch(payload, organization_id=organization_id, clinic_id=clinic_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     record_event(
@@ -98,16 +108,18 @@ def get_pharmacy_batches(
     medicine_id: str | None = None,
     _: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor")),
 ):
-    return store_list_batches(medicine_id)
+    organization_id, clinic_id = _tenant(_)
+    return store_list_batches(medicine_id, organization_id=organization_id, clinic_id=clinic_id)
 
 
 @router.post("/pharmacy/dispense-fefo")
 def dispense_fefo(req: DispenseRequest, user: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
+    organization_id, clinic_id = _tenant(user)
     required: Dict[str, float] = {}
     for item in req.items:
         required[item.medicine_id] = required.get(item.medicine_id, 0.0) + float(item.quantity)
     try:
-        allocations = atomic_fefo_dispense(required, on=now_iso()[:10])
+        allocations = atomic_fefo_dispense(required, on=now_iso()[:10], organization_id=organization_id, clinic_id=clinic_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=f"Insufficient FEFO batch stock for {exc.args[0]}") from exc
     record_event(
