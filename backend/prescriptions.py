@@ -130,7 +130,6 @@ def cancel(
 @router.post("/{prescription_id}/dispense")
 def dispense(
     prescription_id: str,
-    partial: bool = False,
     user: dict[str, Any] = Depends(require_roles("admin", "pharmacist")),
 ):
     organization_id, clinic_id = _tenant(user)
@@ -151,12 +150,11 @@ def dispense(
             prescription_id,
             organization_id=organization_id,
             clinic_id=clinic_id,
-            partial=partial,
         )
     except (KeyError, PermissionError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     record_event(AuditEvent(action="prescription_dispensed", resource_type="prescription", resource_id=prescription_id,
-                            metadata={"patient_id": prescription["patient_id"], "partial": partial, "allocation_count": len(allocation["allocations"])}), user)
+                            metadata={"patient_id": prescription["patient_id"], "allocation_count": len(allocation["allocations"])}), user)
     return {"prescription": result, "dispensing": allocation}
