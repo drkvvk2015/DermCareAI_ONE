@@ -495,6 +495,36 @@ def create_media(**payload: Any) -> dict[str, Any]:
 
 
 
+def list_media(
+    *,
+    clinic_id: str,
+    patient_id: str,
+    encounter_id: str | None = None,
+    lesion_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return tenant-scoped clinical media metadata for longitudinal review."""
+    init_store()
+    clauses = ["clinic_id = ?", "patient_id = ?"]
+    params: list[Any] = [clinic_id, patient_id]
+    if encounter_id:
+        clauses.append("encounter_id = ?")
+        params.append(encounter_id)
+    if lesion_id:
+        clauses.append("lesion_id = ?")
+        params.append(lesion_id)
+    with _connect() as conn:
+        rows = conn.execute(
+            f"""SELECT id, organization_id, clinic_id, patient_id, encounter_id,
+                       lesion_id, consent_id, object_url, kind, sha256, mime_type,
+                       byte_size, captured_at, captured_by, retention_until, created_at
+                FROM clinical_media
+                WHERE {' AND '.join(clauses)}
+                ORDER BY captured_at ASC, id ASC""",
+            params,
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def create_signoff(
     *, organization_id: str, clinic_id: str, encounter_id: str,
     signed_by: str, attestation: str,

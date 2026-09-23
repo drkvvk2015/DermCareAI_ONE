@@ -13,6 +13,7 @@ from clinical_store import (
     create_consent,
     create_encounter,
     create_media,
+    list_media,
     get_encounter,
     get_media,
     get_lesion,
@@ -72,10 +73,10 @@ class EncounterCreate(BaseModel):
     patient_id: str = Field(min_length=1, max_length=120)
     template: str | None = Field(default=None, min_length=1, max_length=80)
     appointment_id: str | None = None
-    complaints: Dict[str, Any] = {}
-    examination: Dict[str, Any] = {}
-    assessment: Dict[str, Any] = {}
-    plan: Dict[str, Any] = {}
+    complaints: Dict[str, Any] = Field(default_factory=dict)
+    examination: Dict[str, Any] = Field(default_factory=dict)
+    assessment: Dict[str, Any] = Field(default_factory=dict)
+    plan: Dict[str, Any] = Field(default_factory=dict)
 
 
 class EncounterPatch(BaseModel):
@@ -94,13 +95,13 @@ class LesionUpsert(BaseModel):
     lesion_code: str = Field(min_length=1, max_length=80)
     body_site: str = Field(min_length=1, max_length=120)
     laterality: str | None = None
-    morphology: Dict[str, Any] = {}
+    morphology: Dict[str, Any] = Field(default_factory=dict)
     size_mm: float | None = Field(default=None, ge=0)
     duration_days: int | None = Field(default=None, ge=0)
     evolution: str | None = None
-    symptoms: Dict[str, Any] = {}
+    symptoms: Dict[str, Any] = Field(default_factory=dict)
     clinical_impression: str | None = None
-    differential: List[str] = []
+    differential: List[str] = Field(default_factory=list)
     confirmed_diagnosis: str | None = None
 
 
@@ -250,6 +251,22 @@ def post_media(req: ClinicalMediaCreate, user: dict[str, Any] = Depends(require_
         return result
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/patients/{patient_id}/media")
+def patient_media(
+    patient_id: str,
+    encounter_id: str | None = None,
+    lesion_id: str | None = None,
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
+):
+    _, clinic_id = _tenant(user)
+    return list_media(
+        clinic_id=clinic_id,
+        patient_id=patient_id,
+        encounter_id=encounter_id,
+        lesion_id=lesion_id,
+    )
 
 
 @router.get("/patients/{patient_id}/summary")
