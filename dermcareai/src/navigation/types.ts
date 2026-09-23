@@ -55,6 +55,7 @@ export type RootStackParamList = {
   ScreeningReport: { report: ScreeningReport };
   Billing: undefined;
   Pharmacy: undefined;
+  Prescription: { patient: Patient; encounterId: string };
 };
 
 export type NavigationProps<T extends keyof RootStackParamList> = {
