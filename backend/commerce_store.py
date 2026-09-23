@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, inspect
 
 from storage import create_store_engine, execute, require_postgres_in_production, transaction
 
@@ -49,12 +49,11 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
-        execute(conn, """
-            ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT
-        """) if False else None
-        execute(conn, """
-            ALTER TABLE pharmacy_batches ADD COLUMN clinic_id TEXT
-        """) if False else None
+        columns = {column["name"] for column in inspect(ENGINE).get_columns("pharmacy_batches")}
+        if "organization_id" not in columns:
+            execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT")
+        if "clinic_id" not in columns:
+            execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN clinic_id TEXT")
         execute(conn, """
             CREATE INDEX IF NOT EXISTS idx_pharmacy_batches_tenant_fefo
             ON pharmacy_batches(organization_id, clinic_id, medicine_id, expiry, batch_id)
@@ -177,7 +176,7 @@ def list_batches(medicine_id: str | None = None, *, organization_id: str, clinic
     init_store()
     with ENGINE.connect() as conn:
         if medicine_id:
-            rows = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE organization_id = :organization_id AND clinic_id = :clinic_id AND medicine_id = :medicine_id ORDER BY expiry, batch_id", {"medicine_id": medicine_id}).mappings().all()
+            rows = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE organization_id = :organization_id AND clinic_id = :clinic_id AND medicine_id = :medicine_id ORDER BY expiry, batch_id", {"organization_id": organization_id, "clinic_id": clinic_id, "medicine_id": medicine_id}).mappings().all()
         else:
             rows = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE organization_id = :organization_id AND clinic_id = :clinic_id ORDER BY medicine_id, expiry, batch_id", {"organization_id": organization_id, "clinic_id": clinic_id}).mappings().all()
     return [json.loads(row["payload_json"]) for row in rows]
@@ -206,7 +205,7 @@ def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id
                 if take <= 0:
                     continue
                 new_quantity = float(row["quantity"]) - take
-                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, updated_at = :updated_at WHERE batch_id = :batch_id", {"quantity": new_quantity, "updated_at": _now(), "batch_id": row["batch_id"]})
+                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, updated_at = :updated_at WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"quantity": new_quantity, "updated_at": _now(), "batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id})
                 allocations.append((str(row["batch_id"]), take))
                 remaining -= take
                 if remaining <= 0:
