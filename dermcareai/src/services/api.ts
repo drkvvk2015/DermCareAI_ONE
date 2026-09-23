@@ -96,6 +96,70 @@ export const api = {
     return response.json();
   },
 
+
+  async clinicalRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Authentication required. Please sign in again.');
+    const token = await user.getIdToken();
+    const response = await request(`/api/v1/clinical${path}`, {
+      ...init,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init.headers || {}) },
+    });
+    const body = await response.text();
+    let parsed: any;
+    try { parsed = body ? JSON.parse(body) : undefined; } catch { parsed = undefined; }
+    if (!response.ok) {
+      const detail = parsed?.detail ?? body ?? `Clinical API request failed: ${response.status}`;
+      const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+      throw new ClinicalApiError(message, response.status, message, response.headers.get('X-Request-ID') ?? undefined);
+    }
+    return parsed as T;
+  },
+
+  async createEncounter(input: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>('/encounters', { method: 'POST', body: JSON.stringify(input) });
+  },
+  async getEncounter(encounterId: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/encounters/${encodeURIComponent(encounterId)}`);
+  },
+  async updateEncounter(encounterId: string, expectedVersion: number, patch: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>(`/encounters/${encodeURIComponent(encounterId)}`, { method: 'PATCH', body: JSON.stringify({ expected_version: expectedVersion, ...patch }) });
+  },
+  async upsertLesion(input: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>('/lesions', { method: 'POST', body: JSON.stringify(input) });
+  },
+  async recordConsent(input: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>('/consents', { method: 'POST', body: JSON.stringify(input) });
+  },
+  async recordClinicalMedia(input: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>('/media', { method: 'POST', body: JSON.stringify(input) });
+  },
+  async patientMedia(patientId: string, encounterId?: string, lesionId?: string) {
+    const params = new URLSearchParams();
+    if (encounterId) params.set('encounter_id', encounterId);
+    if (lesionId) params.set('lesion_id', lesionId);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.clinicalRequest<Record<string, unknown>[]>(`/patients/${encodeURIComponent(patientId)}/media${query}`);
+  },
+  async lesionTimeline(patientId: string, lesionCode: string) {
+    return this.clinicalRequest<Record<string, unknown>[]>(`/patients/${encodeURIComponent(patientId)}/lesions/${encodeURIComponent(lesionCode)}/timeline`);
+  },
+  async attachAIReview(encounterId: string, input: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>(`/encounters/${encodeURIComponent(encounterId)}/ai-reviews`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  async reviewAI(encounterId: string, reviewId: string, clinicianDecision: 'accepted' | 'overridden' | 'rejected', overrideLabel?: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/encounters/${encodeURIComponent(encounterId)}/ai-reviews/${encodeURIComponent(reviewId)}`, { method: 'PATCH', body: JSON.stringify({ clinician_decision: clinicianDecision, clinician_override_label: overrideLabel }) });
+  },
+  async signEncounter(encounterId: string, attestation?: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/encounters/${encodeURIComponent(encounterId)}/sign`, { method: 'POST', body: JSON.stringify({ attestation }) });
+  },
+  async createFollowup(encounterId: string, dueAt: string, instructions: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/encounters/${encodeURIComponent(encounterId)}/followups`, { method: 'POST', body: JSON.stringify({ due_at: dueAt, instructions }) });
+  },
+  async patientSummary(patientId: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/patients/${encodeURIComponent(patientId)}/summary`);
+  },
+
   getRecommendations(condition: string): string[] {
     // These are clinician-facing reference prompts, not autonomous treatment orders.
     const recommendationsMap: { [key: string]: string[] } = {
