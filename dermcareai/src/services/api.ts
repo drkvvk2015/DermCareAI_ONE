@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
+import { ClinicalApiError } from '../types/clinicalApi';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -64,7 +65,7 @@ export const api = {
         } catch {
           // Keep raw response text.
         }
-        throw new Error(`AI service error (${response.status}): ${message}`);
+        throw new ClinicalApiError(message, response.status, message, response.headers.get('X-Request-ID') ?? undefined);
       }
 
       const data = JSON.parse(body) as PredictionResponse;
