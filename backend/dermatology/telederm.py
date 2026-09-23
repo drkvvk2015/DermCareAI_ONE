@@ -65,10 +65,10 @@ class TeledermSession:
         return self._transition(status, self.consent_record_id)
 
     def _transition(self, status: TeledermStatus, consent_record_id: str | None) -> "TeledermSession":
-        if status not in _ALLOWED[self.status]:
-            raise ValueError(f"Invalid telederm transition: {self.status} -> {status}")
         if status in {TeledermStatus.SCHEDULED, TeledermStatus.ACTIVE, TeledermStatus.COMPLETED} and not consent_record_id:
             raise ValueError("Documented consent is required before clinical teledermatology")
+        if status not in _ALLOWED[self.status]:
+            raise ValueError(f"Invalid telederm transition: {self.status} -> {status}")
         return TeledermSession(
             session_id=self.session_id,
             patient_id=self.patient_id,
