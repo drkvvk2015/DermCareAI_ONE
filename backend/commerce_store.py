@@ -37,6 +37,21 @@ def init_store() -> None:
             )
         """)
         execute(conn, """
+            CREATE TABLE IF NOT EXISTS pharmacy_batches (
+                batch_id TEXT PRIMARY KEY,
+                medicine_id TEXT NOT NULL,
+                expiry TEXT NOT NULL,
+                quantity DOUBLE PRECISION NOT NULL,
+                blocked BOOLEAN NOT NULL DEFAULT FALSE,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        execute(conn, """
+            CREATE INDEX IF NOT EXISTS idx_pharmacy_batches_fefo
+            ON pharmacy_batches(medicine_id, expiry, batch_id)
+        """)
+        execute(conn, """
             CREATE TABLE IF NOT EXISTS payment_events (
                 event_id TEXT PRIMARY KEY,
                 received_at TEXT NOT NULL,
@@ -111,6 +126,85 @@ def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
             },
         )
     return payload
+
+
+def upsert_batch(batch: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist a pharmacy batch for deterministic FEFO allocation."""
+    init_store()
+    payload = dict(batch)
+    batch_id = str(payload.get("batch_id", "")).strip()
+    medicine_id = str(payload.get("medicine_id", "")).strip()
+    expiry = str(payload.get("expiry", "")).strip()
+    quantity = float(payload.get("quantity", 0))
+    blocked = bool(payload.get("blocked", False))
+    if not batch_id or not medicine_id or not expiry:
+        raise ValueError("batch_id, medicine_id and expiry are required")
+    if quantity < 0:
+        raise ValueError("batch quantity cannot be negative")
+    payload.update({"batch_id": batch_id, "medicine_id": medicine_id, "expiry": expiry, "quantity": quantity, "blocked": blocked})
+    now = _now()
+    payload["updated_at"] = now
+    with transaction(ENGINE) as conn:
+        execute(conn, """
+            INSERT INTO pharmacy_batches(batch_id, medicine_id, expiry, quantity, blocked, payload_json, updated_at)
+            VALUES (:batch_id, :medicine_id, :expiry, :quantity, :blocked, :payload_json, :updated_at)
+            ON CONFLICT(batch_id) DO UPDATE SET
+              medicine_id = EXCLUDED.medicine_id,
+              expiry = EXCLUDED.expiry,
+              quantity = EXCLUDED.quantity,
+              blocked = EXCLUDED.blocked,
+              payload_json = EXCLUDED.payload_json,
+              updated_at = EXCLUDED.updated_at
+        """, {
+            "batch_id": batch_id, "medicine_id": medicine_id, "expiry": expiry,
+            "quantity": quantity, "blocked": blocked,
+            "payload_json": json.dumps(payload, sort_keys=True), "updated_at": now,
+        })
+    return payload
+
+
+def list_batches(medicine_id: str | None = None) -> list[Dict[str, Any]]:
+    init_store()
+    with ENGINE.connect() as conn:
+        if medicine_id:
+            rows = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE medicine_id = :medicine_id ORDER BY expiry, batch_id", {"medicine_id": medicine_id}).mappings().all()
+        else:
+            rows = execute(conn, "SELECT payload_json FROM pharmacy_batches ORDER BY medicine_id, expiry, batch_id").mappings().all()
+    return [json.loads(row["payload_json"]) for row in rows]
+
+
+def atomic_fefo_dispense(required: Dict[str, float], *, on: str) -> Dict[str, list[tuple[str, float]]]:
+    """Allocate and decrement non-expired, unblocked batches inside one transaction."""
+    init_store()
+    with transaction(ENGINE) as conn:
+        result: Dict[str, list[tuple[str, float]]] = {}
+        for medicine_id, requested in required.items():
+            requested = float(requested)
+            if requested <= 0:
+                raise ValueError(medicine_id)
+            rows = execute(conn, """
+                SELECT batch_id, expiry, quantity, blocked
+                FROM pharmacy_batches
+                WHERE medicine_id = :medicine_id AND quantity > 0
+                  AND blocked = FALSE AND expiry >= :on
+                ORDER BY expiry, batch_id
+            """, {"medicine_id": medicine_id, "on": on}).mappings().all()
+            remaining = requested
+            allocations: list[tuple[str, float]] = []
+            for row in rows:
+                take = min(remaining, float(row["quantity"]))
+                if take <= 0:
+                    continue
+                new_quantity = float(row["quantity"]) - take
+                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, updated_at = :updated_at WHERE batch_id = :batch_id", {"quantity": new_quantity, "updated_at": _now(), "batch_id": row["batch_id"]})
+                allocations.append((str(row["batch_id"]), take))
+                remaining -= take
+                if remaining <= 0:
+                    break
+            if remaining > 0:
+                raise ValueError(medicine_id)
+            result[medicine_id] = allocations
+        return result
 
 
 def list_stock() -> list[Dict[str, Any]]:
