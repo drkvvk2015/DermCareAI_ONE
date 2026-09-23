@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from sqlalchemy import Engine
 
 from storage import compat_connection, create_store_engine, require_postgres_in_production
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from auth import require_roles
 
@@ -21,11 +21,12 @@ require_postgres_in_production(ENGINE, "Audit store")
 
 
 class AuditEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     action: str = Field(min_length=1, max_length=200)
     resource_type: str = Field(min_length=1, max_length=100)
     resource_id: str = Field(min_length=1, max_length=200)
-    metadata: Dict[str, Any] = {}
-    correlation_id: str | None = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    correlation_id: str | None = Field(default=None, max_length=200)
 
 
 @contextmanager
