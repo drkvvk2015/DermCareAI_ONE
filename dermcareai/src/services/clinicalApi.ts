@@ -54,6 +54,40 @@ export const clinicalApi = {
       }),
     });
   },
+
+  recordMedia(payload: {
+    patientId: string;
+    encounterId?: string;
+    lesionId?: string;
+    consentId?: string;
+    consentPurpose?: string;
+    objectUrl: string;
+    kind: 'original' | 'processed' | 'dermoscopy' | 'histopathology' | 'other';
+    sha256: string;
+    mimeType: string;
+    byteSize: number;
+    capturedAt: string;
+    retentionUntil?: string;
+  }) {
+    return authorizedRequest<Record<string, unknown>>('/api/v1/clinical/media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patient_id: payload.patientId,
+        encounter_id: payload.encounterId,
+        lesion_id: payload.lesionId,
+        consent_id: payload.consentId,
+        consent_purpose: payload.consentPurpose || 'clinical-image',
+        object_url: payload.objectUrl,
+        kind: payload.kind,
+        sha256: payload.sha256,
+        mime_type: payload.mimeType,
+        byte_size: payload.byteSize,
+        captured_at: payload.capturedAt,
+        retention_until: payload.retentionUntil,
+      }),
+    });
+  },
 };
 
 
