@@ -164,10 +164,12 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
       if (image && sourceBase64) {
         const sha256 = CryptoJS.SHA256(CryptoJS.enc.Base64.parse(sourceBase64)).toString(CryptoJS.enc.Hex);
         const byteSize = Math.floor((sourceBase64.length * 3) / 4) - (sourceBase64.endsWith('==') ? 2 : sourceBase64.endsWith('=') ? 1 : 0);
+        if (!selectedPatient) throw new Error('Patient selection is required before attaching an image');
+        const durableImageUrl = await uploadImage(image, selectedPatient.id, 'clinical-original');
         const media = await clinicalApi.recordMedia({
-          patientId: selectedPatient?.id || '',
+          patientId: selectedPatient.id,
           encounterId,
-          objectUrl: image,
+          objectUrl: durableImageUrl,
           kind: 'original',
           sha256,
           mimeType: 'image/jpeg',
