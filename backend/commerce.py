@@ -174,10 +174,10 @@ def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
             }
             for item in req.items
         ],
-        "subtotal": subtotal,
-        "tax": tax,
+        "subtotal": money(subtotal),
+        "tax": money(tax),
         "discount": money(req.discount),
-        "total": total,
+        "total": money(total),
         "currency": req.currency.upper(),
         "status": "unpaid",
         "created_at": now_iso(),
