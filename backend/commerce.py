@@ -13,8 +13,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from auth import require_roles
+from audit import AuditEvent, record_event
 from billing_math import BillLine, invoice_total, money
-from commerce_store import atomic_dispense, get_invoice as store_get_invoice, list_stock as store_list_stock
+from commerce_store import atomic_dispense, atomic_fefo_dispense, get_invoice as store_get_invoice, list_stock as store_list_stock, list_batches as store_list_batches, upsert_batch as store_upsert_batch
 from commerce_store import record_payment_event, save_invoice, upsert_stock, update_invoice
 
 router = APIRouter(prefix="/commerce", tags=["commerce"])
@@ -62,6 +63,73 @@ class DispenseRequest(BaseModel):
     patient_id: str = Field(min_length=1)
     prescription_id: str | None = None
     items: List[DispenseItem] = Field(min_length=1)
+
+
+class PharmacyBatchRequest(BaseModel):
+    batch_id: str = Field(min_length=1, max_length=120)
+    medicine_id: str = Field(min_length=1, max_length=120)
+    expiry: str = Field(min_length=10, max_length=40)
+    quantity: float = Field(ge=0)
+    blocked: bool = False
+    supplier_id: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/pharmacy/batches")
+def add_pharmacy_batch(req: PharmacyBatchRequest, user: dict[str, Any] = Depends(require_roles("admin", "pharmacist"))):
+    payload = req.model_dump()
+    try:
+        saved = store_upsert_batch(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_event(
+        AuditEvent(
+            action="pharmacy_batch_upserted",
+            resource_type="pharmacy_batch",
+            resource_id=req.batch_id,
+            metadata={"medicine_id": req.medicine_id, "quantity": req.quantity, "blocked": req.blocked},
+        ),
+        user,
+    )
+    return saved
+
+
+@router.get("/pharmacy/batches")
+def get_pharmacy_batches(
+    medicine_id: str | None = None,
+    _: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor")),
+):
+    return store_list_batches(medicine_id)
+
+
+@router.post("/pharmacy/dispense-fefo")
+def dispense_fefo(req: DispenseRequest, user: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
+    required: Dict[str, float] = {}
+    for item in req.items:
+        required[item.medicine_id] = required.get(item.medicine_id, 0.0) + float(item.quantity)
+    try:
+        allocations = atomic_fefo_dispense(required, on=now_iso()[:10])
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=f"Insufficient FEFO batch stock for {exc.args[0]}") from exc
+    record_event(
+        AuditEvent(
+            action="pharmacy_fefo_dispensed",
+            resource_type="pharmacy_dispense",
+            resource_id=req.prescription_id or f"patient:{req.patient_id}",
+            metadata={
+                "patient_id": req.patient_id,
+                "prescription_id": req.prescription_id,
+                "requested": required,
+                "allocations": allocations,
+            },
+        ),
+        user,
+    )
+    return {
+        "patient_id": req.patient_id,
+        "prescription_id": req.prescription_id,
+        "allocations": allocations,
+        "dispensed_at": now_iso(),
+    }
 
 
 INVOICES: Dict[str, Dict[str, Any]] = {}
