@@ -22,12 +22,20 @@ def init_store() -> None:
             CREATE TABLE IF NOT EXISTS invoices (
                 id TEXT PRIMARY KEY,
                 patient_id TEXT NOT NULL,
+                organization_id TEXT,
+                clinic_id TEXT,
                 invoice_json TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
         """)
+        columns = {column["name"] for column in inspect(ENGINE).get_columns("invoices")}
+        if "organization_id" not in columns:
+            execute(conn, "ALTER TABLE invoices ADD COLUMN organization_id TEXT")
+        if "clinic_id" not in columns:
+            execute(conn, "ALTER TABLE invoices ADD COLUMN clinic_id TEXT")
+
         execute(conn, """
             CREATE TABLE IF NOT EXISTS pharmacy_stock (
                 medicine_id TEXT PRIMARY KEY,
@@ -67,23 +75,29 @@ def init_store() -> None:
         """)
 
 
-def save_invoice(invoice: Dict[str, Any]) -> None:
+def save_invoice(invoice: Dict[str, Any], *, organization_id: str | None = None, clinic_id: str | None = None) -> None:
     init_store()
+    organization_id = organization_id or invoice.get("organization_id")
+    clinic_id = clinic_id or invoice.get("clinic_id")
     now = _now()
     with transaction(ENGINE) as conn:
         execute(
             conn,
             """
-            INSERT INTO invoices(id, patient_id, invoice_json, status, created_at, updated_at)
-            VALUES (:id, :patient_id, :invoice_json, :status, :created_at, :updated_at)
+            INSERT INTO invoices(id, patient_id, organization_id, clinic_id, invoice_json, status, created_at, updated_at)
+            VALUES (:id, :patient_id, :organization_id, :clinic_id, :invoice_json, :status, :created_at, :updated_at)
             ON CONFLICT (id) DO UPDATE SET
               invoice_json = EXCLUDED.invoice_json,
               status = EXCLUDED.status,
+              organization_id = EXCLUDED.organization_id,
+              clinic_id = EXCLUDED.clinic_id,
               updated_at = EXCLUDED.updated_at
             """,
             {
                 "id": invoice["id"],
                 "patient_id": invoice["patient_id"],
+                "organization_id": organization_id,
+                "clinic_id": clinic_id,
                 "invoice_json": json.dumps(invoice, sort_keys=True),
                 "status": invoice["status"],
                 "created_at": invoice["created_at"],
@@ -92,19 +106,23 @@ def save_invoice(invoice: Dict[str, Any]) -> None:
         )
 
 
-def get_invoice(invoice_id: str) -> Dict[str, Any] | None:
+def get_invoice(invoice_id: str, *, organization_id: str | None = None, clinic_id: str | None = None) -> Dict[str, Any] | None:
     init_store()
     with ENGINE.connect() as conn:
-        row = execute(
-            conn,
-            "SELECT invoice_json FROM invoices WHERE id = :invoice_id",
-            {"invoice_id": invoice_id},
-        ).mappings().first()
+        where = "id = :invoice_id"
+        params: Dict[str, Any] = {"invoice_id": invoice_id}
+        if organization_id is not None:
+            where += " AND organization_id = :organization_id"
+            params["organization_id"] = organization_id
+        if clinic_id is not None:
+            where += " AND clinic_id = :clinic_id"
+            params["clinic_id"] = clinic_id
+        row = execute(conn, f"SELECT invoice_json FROM invoices WHERE {where}", params).mappings().first()
     return json.loads(row["invoice_json"]) if row else None
 
 
-def update_invoice(invoice: Dict[str, Any]) -> None:
-    save_invoice(invoice)
+def update_invoice(invoice: Dict[str, Any], *, organization_id: str | None = None, clinic_id: str | None = None) -> None:
+    save_invoice(invoice, organization_id=organization_id, clinic_id=clinic_id)
 
 
 def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
