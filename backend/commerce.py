@@ -89,6 +89,8 @@ def add_pharmacy_batch(req: PharmacyBatchRequest, user: dict[str, Any] = Depends
     payload = req.model_dump()
     try:
         saved = store_upsert_batch(payload, organization_id=organization_id, clinic_id=clinic_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     record_event(
