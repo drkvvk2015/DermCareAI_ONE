@@ -150,7 +150,7 @@ INVOICES: Dict[str, Dict[str, Any]] = {}
 PHARMACY_STOCK: Dict[str, Dict[str, Any]] = {}
 
 
-def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
+def compute_invoice(req: InvoiceRequest, *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
     lines = [
         BillLine(
             description=item.description,
@@ -165,6 +165,8 @@ def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
     invoice = {
         "id": invoice_id,
         "patient_id": req.patient_id,
+        "organization_id": organization_id,
+        "clinic_id": clinic_id,
         "items": [
             {
                 **item.model_dump(),
@@ -183,18 +185,23 @@ def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
         "created_at": now_iso(),
     }
     INVOICES[invoice_id] = invoice
-    save_invoice(invoice)
+    save_invoice(invoice, organization_id=organization_id, clinic_id=clinic_id)
     return invoice
 
 
 @router.post("/invoices")
-def create_invoice(req: InvoiceRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
-    return compute_invoice(req)
+def create_invoice(req: InvoiceRequest, user: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
+    organization_id, clinic_id = _tenant(user)
+    return compute_invoice(req, organization_id=organization_id, clinic_id=clinic_id)
 
 
 @router.get("/invoices/{invoice_id}")
-def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
-    invoice = INVOICES.get(invoice_id) or store_get_invoice(invoice_id)
+def get_invoice(invoice_id: str, user: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
+    organization_id, clinic_id = _tenant(user)
+    invoice = INVOICES.get(invoice_id)
+    if invoice and (invoice.get("organization_id") != organization_id or invoice.get("clinic_id") != clinic_id):
+        invoice = None
+    invoice = invoice or store_get_invoice(invoice_id, organization_id=organization_id, clinic_id=clinic_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     INVOICES[invoice_id] = invoice
@@ -202,8 +209,12 @@ def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admi
 
 
 @router.post("/payments/razorpay")
-async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
-    invoice = INVOICES.get(req.invoice_id) or store_get_invoice(req.invoice_id)
+async def create_razorpay_payment(req: PaymentRequest, user: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
+    organization_id, clinic_id = _tenant(user)
+    invoice = INVOICES.get(req.invoice_id)
+    if invoice and (invoice.get("organization_id") != organization_id or invoice.get("clinic_id") != clinic_id):
+        invoice = None
+    invoice = invoice or store_get_invoice(req.invoice_id, organization_id=organization_id, clinic_id=clinic_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice.get("status") != "unpaid":
@@ -237,7 +248,7 @@ async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depen
     data = response.json()
     invoice["razorpay_payment_link_id"] = data.get("id")
     INVOICES[invoice["id"]] = invoice
-    update_invoice(invoice)
+    update_invoice(invoice, organization_id=organization_id, clinic_id=clinic_id)
     return {"provider": "razorpay", "id": data.get("id"), "short_url": data.get("short_url"), "status": data.get("status"), "invoice_id": req.invoice_id, "amount_paise": amount_paise, "upi_supported": True, "note": "Use UPI Intent/QR through the hosted checkout; do not use deprecated UPI Collect flows."}
 
 
