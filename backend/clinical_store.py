@@ -193,7 +193,7 @@ def init_store() -> None:
         )
         # Compatibility migration for existing installations created before AI
         # assessments gained explicit media/lesion provenance.
-        columns = {column["name"] for column in inspect(ENGINE).get_columns("encounter_ai_reviews")}
+        columns = {column["name"] for column in inspect(conn).get_columns("encounter_ai_reviews")}
         if "media_id" not in columns:
             conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN media_id TEXT")
         if "lesion_id" not in columns:
