@@ -10,16 +10,18 @@ export interface ErrorResponse {
   detail: string;
 }
 
-export interface ClinicalApiError extends Error {
-  status: number;
-  detail: string;
-  requestId?: string;
+export class ClinicalApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number = 0,
+    public readonly detail: string = message,
+    public readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = "ClinicalApiError";
+  }
 }
 
 export function isClinicalApiError(error: unknown): error is ClinicalApiError {
-  return (
-    error instanceof Error &&
-    typeof (error as Partial<ClinicalApiError>).status === "number" &&
-    typeof (error as Partial<ClinicalApiError>).detail === "string"
-  );
+  return error instanceof ClinicalApiError;
 }
