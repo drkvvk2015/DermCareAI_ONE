@@ -138,8 +138,8 @@ def test_signoff_followup_and_ai_review_workflow() -> None:
         "/api/v1/clinical/encounters",
         json={
             "patient_id": "patient-2",
-            "complaints": {"chief_complaint": "new rash"},
-            "examination": {"dermatology": {"primary_morphology": "plaque"}},
+            "complaints": {"chief_complaint": "new rash", "duration": "7 days"},
+            "examination": {"distribution": "trunk", "dermatology": {"primary_morphology": "plaque"}},
             "assessment": {"provisional_diagnosis": "dermatitis"},
             "plan": {"management_plan": "topical treatment"},
         },

@@ -46,7 +46,7 @@ def is_postgres(engine: Engine) -> bool:
 
 
 def require_postgres_in_production(engine: Engine, store_name: str) -> None:
-    if os.getenv("APP_ENV", "development").lower() == "production" and is_sqlite(engine):
+    if (os.getenv("APP_ENV") or os.getenv("ENVIRONMENT", "development")).lower() == "production" and is_sqlite(engine):
         raise RuntimeError(
             f"{store_name} is configured with SQLite in production. "
             "Set DATABASE_URL or the store-specific database URL to managed PostgreSQL."

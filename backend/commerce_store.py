@@ -49,7 +49,7 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
-        columns = {column["name"] for column in inspect(ENGINE).get_columns("pharmacy_batches")}
+        columns = {column["name"] for column in inspect(conn).get_columns("pharmacy_batches")}
         if "organization_id" not in columns:
             execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT")
         if "clinic_id" not in columns:
@@ -84,7 +84,7 @@ def save_invoice(invoice: Dict[str, Any]) -> None:
             {
                 "id": invoice["id"],
                 "patient_id": invoice["patient_id"],
-                "invoice_json": json.dumps(invoice, sort_keys=True),
+                "invoice_json": json.dumps(invoice, sort_keys=True, default=str),
                 "status": invoice["status"],
                 "created_at": invoice["created_at"],
                 "updated_at": now,
@@ -127,7 +127,7 @@ def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
             """,
             {
                 "medicine_id": medicine_id,
-                "payload_json": json.dumps(payload, sort_keys=True),
+                "payload_json": json.dumps(payload, sort_keys=True, default=str),
                 "quantity": quantity,
                 "updated_at": updated_at,
             },
@@ -135,7 +135,7 @@ def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
-def upsert_batch(batch: Dict[str, Any], *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
+def upsert_batch(batch: Dict[str, Any], *, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, Any]:
     """Persist a pharmacy batch for deterministic FEFO allocation."""
     init_store()
     payload = dict(batch)
@@ -174,12 +174,12 @@ def upsert_batch(batch: Dict[str, Any], *, organization_id: str, clinic_id: str)
         """, {
             "batch_id": batch_id, "medicine_id": medicine_id, "expiry": expiry,
             "quantity": quantity, "blocked": blocked, "organization_id": organization_id, "clinic_id": clinic_id,
-            "payload_json": json.dumps(payload, sort_keys=True), "updated_at": now,
+            "payload_json": json.dumps(payload, sort_keys=True, default=str), "updated_at": now,
         })
     return payload
 
 
-def list_batches(medicine_id: str | None = None, *, organization_id: str, clinic_id: str) -> list[Dict[str, Any]]:
+def list_batches(medicine_id: str | None = None, *, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> list[Dict[str, Any]]:
     init_store()
     with ENGINE.connect() as conn:
         if medicine_id:
@@ -189,7 +189,7 @@ def list_batches(medicine_id: str | None = None, *, organization_id: str, clinic
     return [json.loads(row["payload_json"]) for row in rows]
 
 
-def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id: str, clinic_id: str) -> Dict[str, list[tuple[str, float]]]:
+def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, list[tuple[str, float]]]:
     """Allocate and decrement non-expired, unblocked batches inside one transaction."""
     init_store()
     with transaction(ENGINE) as conn:
@@ -212,7 +212,12 @@ def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id
                 if take <= 0:
                     continue
                 new_quantity = float(row["quantity"]) - take
-                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, updated_at = :updated_at WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"quantity": new_quantity, "updated_at": _now(), "batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id})
+                updated_at = _now()
+                payload = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id}).mappings().first()
+                payload_json = json.loads(payload["payload_json"]) if payload else {}
+                payload_json["quantity"] = new_quantity
+                payload_json["updated_at"] = updated_at
+                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, payload_json = :payload_json, updated_at = :updated_at WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"quantity": new_quantity, "payload_json": json.dumps(payload_json, sort_keys=True, default=str), "updated_at": updated_at, "batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id})
                 allocations.append((str(row["batch_id"]), take))
                 remaining -= take
                 if remaining <= 0:
@@ -266,7 +271,7 @@ def atomic_dispense(required: Dict[str, float]) -> Dict[str, Dict[str, Any]]:
                 WHERE medicine_id = :medicine_id
                 """,
                 {
-                    "payload_json": json.dumps(payload, sort_keys=True),
+                    "payload_json": json.dumps(payload, sort_keys=True, default=str),
                     "quantity": new_qty,
                     "updated_at": now,
                     "medicine_id": medicine_id,
@@ -290,7 +295,7 @@ def record_payment_event(event_id: str, payload: Dict[str, Any]) -> bool:
                 {
                     "event_id": event_id,
                     "received_at": now,
-                    "payload_json": json.dumps(payload, sort_keys=True),
+                    "payload_json": json.dumps(payload, sort_keys=True, default=str),
                 },
             )
         return True
