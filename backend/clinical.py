@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_roles
 from audit import AuditEvent, record_event
+from dermatology.clinical_documentation import validate_encounter
 from dermatology.clinical_workflow import TEMPLATES, get_history_template
 from clinical_store import (
     create_consent,
@@ -40,6 +41,29 @@ def _tenant(user: dict[str, Any]) -> tuple[str, str]:
             detail="Clinical tenant context is missing. Activate the user with organization_id and clinic_id claims.",
         )
     return str(organization_id), str(clinic_id)
+
+
+def _documentation_fields(encounter: dict[str, Any]) -> dict[str, str | None]:
+    """Map the persisted encounter shape to the documentation completeness contract."""
+    complaints = encounter.get("complaints") or {}
+    examination = encounter.get("examination") or {}
+    assessment = encounter.get("assessment") or {}
+    plan = encounter.get("plan") or {}
+
+    def value(*candidates: Any) -> str | None:
+        for candidate in candidates:
+            if candidate is not None and str(candidate).strip():
+                return str(candidate)
+        return None
+
+    return {
+        "chief_complaint": value(complaints.get("chief_complaint"), complaints.get("complaint")),
+        "duration": value(complaints.get("duration"), complaints.get("duration_days")),
+        "distribution": value(examination.get("distribution"), complaints.get("distribution")),
+        "morphology": value(examination.get("morphology"), examination.get("lesion_morphology")),
+        "assessment": value(assessment.get("summary"), assessment.get("diagnosis"), assessment.get("clinical_impression")),
+        "plan": value(plan.get("summary"), plan.get("treatment"), plan.get("instructions")),
+    }
 
 
 class EncounterCreate(BaseModel):
@@ -103,7 +127,6 @@ class ClinicalMediaCreate(BaseModel):
     retention_until: str | None = None
 
 
-
 class EncounterSignoffCreate(BaseModel):
     attestation: str = Field(
         default="I reviewed the encounter documentation and clinical decision-making.",
@@ -161,7 +184,7 @@ def post_encounter(req: EncounterCreate, user: dict[str, Any] = Depends(require_
         assessment=req.assessment,
         plan=req.plan,
     )
-    record_event(AuditEvent(action='encounter_created', resource_type='encounter', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'clinic_id': clinic_id}), user)
+    record_event(AuditEvent(action="encounter_created", resource_type="encounter", resource_id=result["id"], metadata={"patient_id": req.patient_id, "clinic_id": clinic_id}), user)
     return result
 
 
@@ -191,7 +214,7 @@ def post_lesion(req: LesionUpsert, user: dict[str, Any] = Depends(require_roles(
     if not encounter or encounter["patient_id"] != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient")
     result = upsert_lesion(organization_id=organization_id, clinic_id=clinic_id, **req.model_dump())
-    record_event(AuditEvent(action='lesion_upserted', resource_type='lesion', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'lesion_code': req.lesion_code}), user)
+    record_event(AuditEvent(action="lesion_upserted", resource_type="lesion", resource_id=result["id"], metadata={"patient_id": req.patient_id, "lesion_code": req.lesion_code}), user)
     return result
 
 
@@ -204,8 +227,8 @@ def lesion_timeline(patient_id: str, lesion_code: str, user: dict[str, Any] = De
 @router.post("/consents")
 def post_consent(req: ConsentCreate, user: dict[str, Any] = Depends(require_roles("doctor", "admin", "receptionist"))):
     organization_id, clinic_id = _tenant(user)
-    result = create_consent(organization_id=organization_id, clinic_id=clinic_id, recorded_by=user['uid'], **req.model_dump())
-    record_event(AuditEvent(action='consent_recorded', resource_type='consent', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'purpose': req.purpose, 'status': req.status}), user)
+    result = create_consent(organization_id=organization_id, clinic_id=clinic_id, recorded_by=user["uid"], **req.model_dump())
+    record_event(AuditEvent(action="consent_recorded", resource_type="consent", resource_id=result["id"], metadata={"patient_id": req.patient_id, "purpose": req.purpose, "status": req.status}), user)
     return result
 
 
@@ -219,7 +242,7 @@ def post_media(req: ClinicalMediaCreate, user: dict[str, Any] = Depends(require_
             captured_by=user["uid"],
             **req.model_dump(),
         )
-        record_event(AuditEvent(action='clinical_media_recorded', resource_type='clinical_media', resource_id=result['id'], metadata={'patient_id': req.patient_id, 'kind': req.kind}), user)
+        record_event(AuditEvent(action="clinical_media_recorded", resource_type="clinical_media", resource_id=result["id"], metadata={"patient_id": req.patient_id, "kind": req.kind}), user)
         return result
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -249,7 +272,6 @@ def active_consent(
     }
 
 
-
 @router.post("/encounters/{encounter_id}/sign")
 def sign_encounter(
     encounter_id: str,
@@ -263,6 +285,18 @@ def sign_encounter(
     if encounter["status"] == "signed":
         existing = get_signoff(clinic_id=clinic_id, encounter_id=encounter_id)
         return existing or {"status": "signed"}
+
+    issues = validate_encounter(_documentation_fields(encounter))
+    if issues:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "documentation_incomplete",
+                "message": "Clinical sign-off requires the minimum dermatology documentation fields.",
+                "issues": [issue.__dict__ for issue in issues],
+            },
+        )
+
     if has_pending_ai_reviews(clinic_id=clinic_id, encounter_id=encounter_id):
         raise HTTPException(
             status_code=409,
