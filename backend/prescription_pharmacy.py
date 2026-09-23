@@ -35,5 +35,5 @@ def dispense_prescription(*, prescription_id: str, organization_id: str, clinic_
             raise ValueError("Prescription quantity must be positive")
         required[medicine_id] = required.get(medicine_id, 0.0) + quantity
 
-    allocations = atomic_fefo_dispense(required, on=on)
+    allocations = atomic_fefo_dispense(required, on=on, organization_id=organization_id, clinic_id=clinic_id)
     return {"prescription_id": prescription_id, "patient_id": patient_id, "allocations": allocations}
