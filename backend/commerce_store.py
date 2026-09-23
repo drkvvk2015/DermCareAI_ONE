@@ -135,7 +135,7 @@ def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
-def upsert_batch(batch: Dict[str, Any], *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
+def upsert_batch(batch: Dict[str, Any], *, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, Any]:
     """Persist a pharmacy batch for deterministic FEFO allocation."""
     init_store()
     payload = dict(batch)
@@ -179,7 +179,7 @@ def upsert_batch(batch: Dict[str, Any], *, organization_id: str, clinic_id: str)
     return payload
 
 
-def list_batches(medicine_id: str | None = None, *, organization_id: str, clinic_id: str) -> list[Dict[str, Any]]:
+def list_batches(medicine_id: str | None = None, *, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> list[Dict[str, Any]]:
     init_store()
     with ENGINE.connect() as conn:
         if medicine_id:
@@ -189,7 +189,7 @@ def list_batches(medicine_id: str | None = None, *, organization_id: str, clinic
     return [json.loads(row["payload_json"]) for row in rows]
 
 
-def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id: str, clinic_id: str) -> Dict[str, list[tuple[str, float]]]:
+def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, list[tuple[str, float]]]:
     """Allocate and decrement non-expired, unblocked batches inside one transaction."""
     init_store()
     with transaction(ENGINE) as conn:
