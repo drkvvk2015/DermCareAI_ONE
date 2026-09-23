@@ -40,6 +40,7 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
   const [aiReviews, setAIReviews] = useState<ClinicalAIReview[]>([]);
   const [aiOverrideLabel, setAIOverrideLabel] = useState('');
   const [aiReviewingId, setAIReviewingId] = useState<string | null>(null);
+  const [lesionHistory, setLesionHistory] = useState<Array<Record<string, unknown>>>([]);
 
   const readForm = (record: ClinicalEncounter) => {
     const complaints = record.complaints || {};
@@ -135,7 +136,8 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
     if (!encounter || !patient.id || !lesionCode.trim()) return;
     try {
       const timeline = await encounterApi.lesionTimeline(patient.id, lesionCode.trim());
-      setSnack(`Loaded ${timeline.length} longitudinal observation${timeline.length === 1 ? '' : 's'} for ${lesionCode.trim()}`);
+      setLesionHistory(timeline);
+      setSnack(`Loaded ${timeline.length} longitudinal observation${timeline.length === 1 ? '' : 's'}`);
     } catch (err) {
       setSnack(err instanceof Error ? err.message : 'Unable to load lesion timeline');
     }
@@ -237,6 +239,7 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
             <TextInput mode="outlined" label="Clinical impression" value={lesionImpression} onChangeText={setLesionImpression} disabled={signed} style={styles.input} />
             <Button mode="outlined" onPress={saveLesion} loading={lesionSaving} disabled={signed || !lesionBodySite.trim()} style={styles.button}>Save Lesion to Timeline</Button>
             <Button mode="text" onPress={() => void loadTimeline()} disabled={signed || !lesionCode.trim()} style={styles.button}>Refresh Lesion History</Button>
+            {lesionHistory.length > 0 ? <View style={styles.historyBox}><Text variant="titleSmall">Longitudinal history</Text>{lesionHistory.slice(-5).reverse().map((item, index) => <Text key={String(item.id ?? index)} style={styles.historyItem}>{String(item.observed_at ?? 'Observation')} • {String(item.size_mm ?? '—')} mm • {String(item.evolution ?? 'No evolution recorded')}</Text>)}</View> : null}
             <Button mode="contained-tonal" icon="map-marker-radius" onPress={() => navigation.navigate('BodyMap', { encounterId: encounter.id, patient })} disabled={signed} style={styles.button}>Open Body Map</Button>
           </Card.Content>
         </Card>
