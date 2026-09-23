@@ -5,7 +5,7 @@ import os
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from sqlalchemy import Engine
+from sqlalchemy import Engine, inspect
 
 from storage import compat_connection, create_store_engine, require_postgres_in_production
 from dermatology.media_integrity import validate_media_metadata
@@ -193,7 +193,7 @@ def init_store() -> None:
         )
         # Compatibility migration for existing installations created before AI
         # assessments gained explicit media/lesion provenance.
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(encounter_ai_reviews)").fetchall()}
+        columns = {column["name"] for column in inspect(ENGINE).get_columns("encounter_ai_reviews")}
         if "media_id" not in columns:
             conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN media_id TEXT")
         if "lesion_id" not in columns:
