@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.ai_adapters.medgemma import MedGemmaAdapter
+from ai_adapters.medgemma import MedGemmaAdapter
 
 
 def test_medgemma_is_disabled_by_default(monkeypatch):
