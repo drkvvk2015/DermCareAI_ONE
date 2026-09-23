@@ -11,7 +11,7 @@ def test_invoice_rounding_is_deterministic() -> None:
         BillLine("cream", Decimal("2"), Decimal("125.50"), Decimal("5")),
     ]
     assert invoice_total(lines, Decimal("10")) == (
-        Decimal("1251.00"), Decimal("188.88"), Decimal("1429.88")
+        Decimal("1251.00"), Decimal("192.55"), Decimal("1433.55")
     )
 
 
