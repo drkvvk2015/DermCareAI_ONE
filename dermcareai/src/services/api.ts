@@ -65,10 +65,12 @@ export const api = {
         } catch {
           // Keep raw response text.
         }
-        const apiError = new ClinicalApiError(message);
-        apiError.name = 'ClinicalApiError';
-        Object.assign(apiError, { status: response.status, detail: message, requestId: response.headers.get('X-Request-ID') ?? undefined });
-        throw apiError;
+        throw new ClinicalApiError(
+          message,
+          response.status,
+          message,
+          response.headers.get('X-Request-ID') ?? undefined,
+        );
       }
 
       const data = JSON.parse(body) as PredictionResponse;
