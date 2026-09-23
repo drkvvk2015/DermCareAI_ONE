@@ -2,8 +2,7 @@
 
 DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 360, encounter documentation, longitudinal lesion tracking, AI-assisted image review, billing, pharmacy, notifications, auditability and production operations**.
 
-> ⚠️ **Clinical boundary:** AI output is decision support, not a diagnosis. The current embedded HAM10000 model is a research fallback and is **not clinically validated for routine patient care**. Clinical deployment requires intended-use review, independent validation and applicable regulatory/privacy approvals.
-
+> ⚠️ **Clinical boundary:** AI output is decision support, not a diagnosis. Research models are disabled by default and are not clinically validated for routine patient care. Clinical deployment requires intended-use review, independent validation and applicable regulatory/privacy approvals.\n>\n> 📚 **Documentation principle:** this README is the operator/developer map; detailed release evidence belongs in `docs/`. GitHub renders repository-local SVGs and Mermaid diagrams directly, so the visuals below are kept versioned with the codebase.\n
 > ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are merged into `main`. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
 >
 > **Dermatology Completion:** v5.1 Wave 1 + Wave 2 are integrated into `main` through the validated `develop` release path. `main` is the stable engineering baseline; clinical validation and regulatory/privacy approval remain separate gates.
@@ -71,6 +70,230 @@ Clinical Encounter
      Audit + Governance Trace
 ```
 
+
+## Quick start guide
+
+### 1. Choose the deployment mode
+
+| Mode | Database | AI | Intended use |
+|---|---|---|---|
+| Development | SQLite fallback | Disabled by default | Local engineering |
+| Staging | PostgreSQL | Governed/opt-in | Integration and acceptance |
+| Production | PostgreSQL | Only separately validated/approved models | Controlled clinical deployment |
+
+**Never use SQLite as the production persistence boundary.**
+
+### 2. Start the backend
+
+```bash
+cd backend
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+pytest -q tests
+python -m compileall -q .
+```
+
+### 3. Start the mobile/web client
+
+```bash
+cd dermcareai
+npm ci
+npx tsc --noEmit
+npx expo export --platform web
+```
+
+### 4. Start PostgreSQL staging
+
+```bash
+docker compose -f docker-compose.staging.yml up --build
+docker compose -f docker-compose.staging.yml exec backend python scripts/migrate_postgres.py
+```
+
+### 5. Validate before release
+
+Run the same classes of checks used by CI:
+
+```bash
+cd backend
+pytest -q tests
+python -m compileall -q .
+cd ../dermcareai
+npx tsc --noEmit
+npx expo export --platform web
+```
+
+Then require the repository's PostgreSQL, staging, security, CodeQL, dependency, production-preflight and clinical E2E workflows to pass for the **exact commit being merged**.
+
+## Clinical user workflow
+
+The primary dermatology workflow is:
+
+```mermaid
+flowchart LR
+    A[Patient 360] --> B[Clinical Encounter]
+    B --> C[History]
+    C --> D[Dermatology Examination]
+    D --> E[Lesion / Media]
+    E --> F[Assessment + Plan]
+    F --> G{AI review needed?}
+    G -->|No| H[Follow-up]
+    G -->|Yes| I[Consent + Safety Gate]
+    I --> J[Preliminary AI output]
+    J --> K[Clinician Accept / Reject / Override]
+    K --> H
+    H --> L[Sign-off + Audit]
+```
+
+**Operational rule:** AI output is preliminary assistive information. It cannot silently become a signed diagnosis or prescription.
+
+## Prescription → pharmacy workflow
+
+```mermaid
+sequenceDiagram
+    participant D as Doctor
+    participant C as Clinical API
+    participant P as Prescription Store
+    participant F as Pharmacy
+    participant A as Audit
+
+    D->>C: Create signed prescription
+    C->>P: Tenant-scoped prescription
+    D->>C: Pharmacy dispensing request
+    C->>P: Validate active prescription
+    C->>F: FEFO allocation
+    F-->>C: Allocation result
+    C->>P: Persist dispense state
+    C->>A: Record dispensing event
+    C-->>D: Prescription + dispensing result
+```
+
+**Production hardening requirement:** dispensing and prescription-state changes must remain idempotent/reconcilable so stock cannot be silently consumed without a durable dispensing state.
+
+## AI governance workflow
+
+```mermaid
+flowchart TD
+    A[Clinical image + context] --> B{Consent?}
+    B -->|No| X[ABSTAIN]
+    B -->|Yes| C{Model registered?}
+    C -->|No| X
+    C -->|Yes| D{Model enabled?}
+    D -->|No| X
+    D -->|Yes| E{Data quality / OOD checks}
+    E -->|Unsafe / OOD| X
+    E -->|Acceptable| F[Model inference]
+    F --> G{Confidence / calibration policy}
+    G -->|Below threshold| X
+    G -->|Acceptable| H[Preliminary assistive output]
+    H --> I[Clinician verification]
+    I --> J[Audit + provenance]
+```
+
+The governance model deliberately separates **model registration**, **evaluation evidence**, **deployment approval**, and **clinical use**.
+
+## Architecture at a glance
+
+```mermaid
+flowchart TB
+    UI[React Native / Web Client] --> API[Authenticated FastAPI API]
+    API --> CL[Clinical Domain]
+    API --> PH[Pharmacy / Commerce]
+    API --> AU[Audit + Observability]
+    API --> AI[AI Governance Gateway]
+    CL --> PG[(PostgreSQL)]
+    PH --> PG
+    AU --> PG
+    AI --> REG[Model Registry / Evaluation]
+    AI --> OBJ[Clinical Media / Object Storage]
+    AI --> PG
+```
+
+### Tenant boundary
+
+Every clinical, prescription and media operation should resolve **organization + clinic tenant context** from authenticated claims before accessing durable data. Cross-tenant object access is treated as an authorization failure, not a filtering convenience.
+
+## AI model policy
+
+Current policy:
+
+1. Research/open-weight does **not** mean clinically validated.
+2. Models remain disabled unless explicitly configured.
+3. Model artifacts require immutable provenance/versioning.
+4. Image/context provenance must be retained for review.
+5. OOD/low-confidence cases must abstain rather than force an answer.
+6. AI output requires clinician verification.
+7. AI cannot sign a diagnosis or prescribe treatment.
+8. Clinical validation is an independent release gate.
+
+### MedGemma integration
+
+The MedGemma adapter is an **opt-in research/assistive integration foundation**. It must not be treated as regulatory clearance or clinical validation. Do not commit model weights to the repository.
+
+## Environment configuration
+
+At minimum, review these production controls before deployment:
+
+```text
+APP_ENV=production
+DATABASE_URL=postgresql+...
+CORS_ORIGINS=https://...
+FIREBASE_* / authentication configuration
+APP_VERSION=<immutable release version>
+ENABLE_EMBEDDED_DERM_MODEL=false
+ENABLE_MEDGEMMA=false
+MIN_CONFIDENCE=<validated policy value>
+MAX_IMAGE_BYTES=<validated limit>
+```
+
+Secrets belong in the deployment secret manager/CI secret store, not in Git.
+
+## Troubleshooting guide
+
+### CI fails after a repair
+
+Do not merge an older green commit. Inspect the **current PR head SHA**, reproduce the failing test, patch that branch, and wait for the required checks to rerun.
+
+### PostgreSQL failures
+
+Confirm:
+
+```bash
+echo "$DATABASE_URL"
+docker compose -f docker-compose.staging.yml ps
+docker compose -f docker-compose.staging.yml logs backend
+```
+
+Production must not silently fall back to SQLite.
+
+### AI output is unavailable
+
+Check the model's registration/approval state, explicit enable flag, model loading status, consent, image validity, OOD result and confidence policy. A safe abstention is an expected outcome.
+
+### Mobile build/export fails
+
+Run:
+
+```bash
+cd dermcareai
+npm ci
+npx tsc --noEmit
+npx expo export --platform web
+```
+
+Fix TypeScript/build errors before changing clinical logic.
+
+## Documentation map
+
+| Document | Purpose |
+|---|---|
+| `docs/WAVE4_CLINICAL_WORKFLOW.md` | Clinical encounter workflow |
+| `docs/WAVE5_RELEASE_EVIDENCE_STATUS.md` | Release evidence status |
+| `docs/ai-validation/` | AI validation/evidence package |
+| `docs/assets/` | Versioned architecture/workflow visuals |
+| `.github/workflows/` | Automated engineering gates |
+
+For GitHub rendering, repository-local image paths are preferred because they continue to work when the repository is cloned or viewed from another branch. Mermaid diagrams are also rendered natively by GitHub. 
+
 ## What is implemented
 
 ### Clinical workflow
@@ -120,6 +343,8 @@ Clinical Encounter
 - Formal AI validation manifest template
 
 ## Release state
+
+> **Live release rule:** the table below describes engineering capabilities, not clinical approval. The current swarm PRs must be green and merged before their changes are represented as part of the stable `main` baseline.
 
 | Gate | State |
 |---|---|
