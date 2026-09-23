@@ -191,6 +191,16 @@ def init_store() -> None:
               ON encounter_ai_reviews(clinic_id, media_id, created_at DESC);
             """
         )
+        # Compatibility migration for existing installations created before AI
+        # assessments gained explicit media/lesion provenance.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(encounter_ai_reviews)").fetchall()}
+        if "media_id" not in columns:
+            conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN media_id TEXT")
+        if "lesion_id" not in columns:
+            conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN lesion_id TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(clinic_id, media_id, created_at DESC)"
+        )
 
 
 @contextmanager
