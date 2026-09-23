@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_roles
 from audit import AuditEvent, record_event
-from dermatology.clinical_documentation import validate_encounter
+from dermatology.clinical_documentation import validate_encounter, recommended_field_issues, DERMATOLOGY_RECOMMENDED_FIELDS
 from dermatology.clinical_workflow import TEMPLATES, get_history_template
 from clinical_store import (
     create_consent,
@@ -169,6 +169,7 @@ def clinical_templates(user: dict[str, Any] = Depends(require_roles("doctor", "a
                 "condition": template.condition,
                 "required_sections": template.required_sections,
                 "scoring_tools": template.scoring_tools,
+                "recommended_documentation_fields": list(DERMATOLOGY_RECOMMENDED_FIELDS),
             }
             for template in TEMPLATES.values()
         ]
