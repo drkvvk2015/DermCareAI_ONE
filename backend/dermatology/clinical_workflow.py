@@ -39,3 +39,19 @@ def build_soap_note(*, subjective: str, objective: str, assessment: str, plan: s
     if any(not value for value in sections.values()):
         raise ValueError("All SOAP sections must contain non-empty content")
     return sections
+
+
+LONGITUDINAL_FIELDS: Final[tuple[str, ...]] = (
+    "lesion_code", "body_site", "laterality", "morphology", "size_mm",
+    "duration_days", "evolution", "symptoms", "comparison_note", "photo_reference",
+)
+
+
+def longitudinal_completeness(record: dict[str, object]) -> tuple[str, ...]:
+    """Return non-blocking prompts for longitudinal lesion documentation."""
+    missing: list[str] = []
+    for field in LONGITUDINAL_FIELDS:
+        value = record.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            missing.append(field)
+    return tuple(missing)
