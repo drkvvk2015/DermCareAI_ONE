@@ -51,7 +51,7 @@ def _tenant(user: dict[str, Any]) -> tuple[str, str]:
 def _documentation_fields(encounter: dict[str, Any]) -> dict[str, str | None]:
     """Map the persisted encounter shape to the documentation completeness contract."""
     complaints = encounter.get("complaints") or {}
-    examination = encounter.get("examination") or {}
+    examination = encounter.get("examination") or {}\n    dermatology = examination.get("dermatology") or {}
     assessment = encounter.get("assessment") or {}
     plan = encounter.get("plan") or {}
 
@@ -63,11 +63,11 @@ def _documentation_fields(encounter: dict[str, Any]) -> dict[str, str | None]:
 
     return {
         "chief_complaint": value(complaints.get("chief_complaint"), complaints.get("complaint")),
-        "duration": value(complaints.get("duration"), complaints.get("duration_days")),
+        "duration": value(complaints.get("duration"), complaints.get("duration_days"), complaints.get("duration_text")),
         "distribution": value(examination.get("distribution"), complaints.get("distribution")),
-        "morphology": value(examination.get("morphology"), examination.get("lesion_morphology")),
-        "assessment": value(assessment.get("summary"), assessment.get("diagnosis"), assessment.get("clinical_impression")),
-        "plan": value(plan.get("summary"), plan.get("treatment"), plan.get("instructions")),
+        "morphology": value(examination.get("morphology"), examination.get("lesion_morphology"), dermatology.get("primary_morphology"), dermatology.get("morphology")),
+        "assessment": value(assessment.get("summary"), assessment.get("diagnosis"), assessment.get("clinical_impression"), assessment.get("provisional_diagnosis")),
+        "plan": value(plan.get("summary"), plan.get("treatment"), plan.get("instructions"), plan.get("management_plan")),
     }
 
 
@@ -409,8 +409,8 @@ def post_ai_review(
     media_id = payload.get("media_id")
     lesion_id = payload.get("lesion_id")
     if media_id or lesion_id:
-        media = get_media(media_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if media_id else None
-        lesion = get_lesion(lesion_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if lesion_id else None
+        media = get_media(media_id=media_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if media_id else None
+        lesion = get_lesion(lesion_id=lesion_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if lesion_id else None
         if media_id and (not media or media.get("encounter_id") != encounter_id):
             raise HTTPException(status_code=404, detail="Linked clinical media not found for encounter")
         if lesion_id and (not lesion or lesion.get("encounter_id") != encounter_id):
