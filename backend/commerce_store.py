@@ -84,7 +84,7 @@ def save_invoice(invoice: Dict[str, Any]) -> None:
             {
                 "id": invoice["id"],
                 "patient_id": invoice["patient_id"],
-                "invoice_json": json.dumps(invoice, sort_keys=True),
+                "invoice_json": json.dumps(invoice, sort_keys=True, default=str),
                 "status": invoice["status"],
                 "created_at": invoice["created_at"],
                 "updated_at": now,
@@ -127,7 +127,7 @@ def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
             """,
             {
                 "medicine_id": medicine_id,
-                "payload_json": json.dumps(payload, sort_keys=True),
+                "payload_json": json.dumps(payload, sort_keys=True, default=str),
                 "quantity": quantity,
                 "updated_at": updated_at,
             },
@@ -174,7 +174,7 @@ def upsert_batch(batch: Dict[str, Any], *, organization_id: str, clinic_id: str)
         """, {
             "batch_id": batch_id, "medicine_id": medicine_id, "expiry": expiry,
             "quantity": quantity, "blocked": blocked, "organization_id": organization_id, "clinic_id": clinic_id,
-            "payload_json": json.dumps(payload, sort_keys=True), "updated_at": now,
+            "payload_json": json.dumps(payload, sort_keys=True, default=str), "updated_at": now,
         })
     return payload
 
@@ -266,7 +266,7 @@ def atomic_dispense(required: Dict[str, float]) -> Dict[str, Dict[str, Any]]:
                 WHERE medicine_id = :medicine_id
                 """,
                 {
-                    "payload_json": json.dumps(payload, sort_keys=True),
+                    "payload_json": json.dumps(payload, sort_keys=True, default=str),
                     "quantity": new_qty,
                     "updated_at": now,
                     "medicine_id": medicine_id,
@@ -290,7 +290,7 @@ def record_payment_event(event_id: str, payload: Dict[str, Any]) -> bool:
                 {
                     "event_id": event_id,
                     "received_at": now,
-                    "payload_json": json.dumps(payload, sort_keys=True),
+                    "payload_json": json.dumps(payload, sort_keys=True, default=str),
                 },
             )
         return True
