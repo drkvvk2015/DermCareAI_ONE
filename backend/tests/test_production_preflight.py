@@ -7,6 +7,8 @@ def base_env() -> dict[str, str]:
         "APP_VERSION": "5.1.0",
         "FIREBASE_AUTH_REQUIRED": "true",
         "DATABASE_URL": "postgresql+psycopg://app:strong-secret@db.example/dermcareai",
+        "CLINICAL_DATABASE_URL": "postgresql+psycopg://app:strong-secret@clinical-db.example/dermcareai",
+        "COMMERCE_DATABASE_URL": "postgresql+psycopg://app:strong-secret@commerce-db.example/dermcareai",
         "CORS_ORIGINS": "https://clinic.example.com,https://admin.example.com",
         "GOOGLE_CLOUD_PROJECT": "dermcareai-prod",
         "ENABLE_EMBEDDED_DERM_MODEL": "false",
@@ -24,6 +26,8 @@ def test_production_baseline_passes_required_checks() -> None:
     assert result["APP_ENV"] == "PASS"
     assert result["FIREBASE_AUTH_REQUIRED"] == "PASS"
     assert result["DATABASE_URL"] == "PASS"
+    assert result["CLINICAL_DATABASE_URL"] == "PASS"
+    assert result["COMMERCE_DATABASE_URL"] == "PASS"
     assert result["CORS_ORIGINS"] == "PASS"
     assert result["Firebase credentials"] == "PASS"
     assert result["ENABLE_EMBEDDED_DERM_MODEL"] == "PASS"
