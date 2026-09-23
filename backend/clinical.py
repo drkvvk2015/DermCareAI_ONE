@@ -17,8 +17,6 @@ from clinical_store import (
     get_media,
     get_lesion,
     get_encounter,
-    get_media,
-    get_lesion,
     list_lesion_timeline,
     upsert_lesion,
     update_encounter,
@@ -51,7 +49,8 @@ def _tenant(user: dict[str, Any]) -> tuple[str, str]:
 def _documentation_fields(encounter: dict[str, Any]) -> dict[str, str | None]:
     """Map the persisted encounter shape to the documentation completeness contract."""
     complaints = encounter.get("complaints") or {}
-    examination = encounter.get("examination") or {}\n    dermatology = examination.get("dermatology") or {}
+    examination = encounter.get("examination") or {}
+    dermatology = examination.get("dermatology") or {}
     assessment = encounter.get("assessment") or {}
     plan = encounter.get("plan") or {}
 
