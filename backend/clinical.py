@@ -141,6 +141,8 @@ class FollowupCreate(BaseModel):
 
 
 class AIReviewCreate(BaseModel):
+    media_id: str | None = Field(default=None, min_length=1, max_length=120)
+    lesion_id: str | None = Field(default=None, min_length=1, max_length=120)
     request_id: str = Field(min_length=1, max_length=120)
     model_name: str = Field(min_length=1, max_length=120)
     model_provenance: str | None = Field(default=None, max_length=500)
@@ -382,11 +384,28 @@ def post_ai_review(
     encounter = get_encounter(encounter_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
+    payload = req.model_dump()
+    media_id = payload.get("media_id")
+    lesion_id = payload.get("lesion_id")
+    if media_id or lesion_id:
+        from clinical_store import list_media, list_lesion_timeline
+        if media_id:
+            media = [item for item in list_media(clinic_id=clinic_id, patient_id=encounter["patient_id"]) if item["id"] == media_id]
+            if not media or media[0].get("encounter_id") != encounter_id:
+                raise HTTPException(status_code=404, detail="Linked clinical media not found for encounter")
+            if media[0].get("lesion_id") and lesion_id and media[0]["lesion_id"] != lesion_id:
+                raise HTTPException(status_code=409, detail="Media and lesion linkage conflict")
+        if lesion_id:
+            timeline = list_lesion_timeline(clinic_id=clinic_id, patient_id=encounter["patient_id"], lesion_code=lesion_id)
+            if not timeline:
+                raise HTTPException(status_code=404, detail="Linked lesion not found for patient")
+            if not any(item.get("encounter_id") == encounter_id for item in timeline):
+                raise HTTPException(status_code=409, detail="Linked lesion is not part of encounter")
     result = record_ai_review(
         organization_id=organization_id,
         clinic_id=clinic_id,
         encounter_id=encounter_id,
-        **req.model_dump(),
+        **payload,
     )
     record_event(
         AuditEvent(
