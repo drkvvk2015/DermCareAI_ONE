@@ -1,0 +1,44 @@
+name: DermCareAI Guardrailed Auto-Repair Proposal
+
+on:
+  workflow_run:
+    workflows: ["DermCareAI Pull Request Gates"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  propose-repair:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Download failed workflow logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir -p repair-evidence
+          gh run download "$RUN_ID" --dir repair-evidence || true
+          find repair-evidence -type f -maxdepth 5 -print0 | xargs -0 cat > repair-evidence/combined.log || true
+          if [ ! -s repair-evidence/combined.log ]; then printf 'workflow_run=%s\nconclusion=failure\n' "$RUN_ID" > repair-evidence/combined.log; fi
+      - name: Generate conservative repair proposal
+        env:
+          PYTHONPATH: backend
+        run: python -m backend.auto_repair_cli --log repair-evidence/combined.log --output repair-evidence/repair-proposal.json
+      - name: Publish repair evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardrailed-auto-repair-proposal-${{ github.event.workflow_run.id }}
+          path: repair-evidence/
+      - name: Explain human-review boundary
+        run: |
+          echo 'No source files, protected clinical paths, branches, or deployments are modified by this workflow.'
+          echo 'A human-reviewed repair PR is required before any correction is merged.'
