@@ -5,6 +5,7 @@ import hmac
 import os
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Dict, List
 
 import httpx
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from auth import require_roles
+from billing_math import BillLine, invoice_total, money
 from commerce_store import atomic_dispense, get_invoice as store_get_invoice, list_stock as store_list_stock
 from commerce_store import record_payment_event, save_invoice, upsert_stock, update_invoice
 
@@ -31,15 +33,15 @@ def verify_razorpay_signature(raw_body: bytes, secret: str, signature: str | Non
 
 class InvoiceItem(BaseModel):
     description: str = Field(min_length=1, max_length=300)
-    quantity: float = Field(gt=0)
-    unit_price: float = Field(ge=0)
-    tax_percent: float = Field(ge=0, le=100, default=0)
+    quantity: Decimal = Field(gt=0)
+    unit_price: Decimal = Field(ge=0)
+    tax_percent: Decimal = Field(ge=0, le=100, default=Decimal("0"))
 
 
 class InvoiceRequest(BaseModel):
     patient_id: str = Field(min_length=1)
     items: List[InvoiceItem] = Field(min_length=1)
-    discount: float = Field(ge=0, default=0)
+    discount: Decimal = Field(ge=0, default=Decimal("0"))
     currency: str = Field(default="INR", min_length=3, max_length=3)
 
 
@@ -67,18 +69,33 @@ PHARMACY_STOCK: Dict[str, Dict[str, Any]] = {}
 
 
 def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
-    subtotal = sum(item.quantity * item.unit_price for item in req.items)
-    taxable = sum(item.quantity * item.unit_price * (item.tax_percent / 100) for item in req.items)
-    total = max(0.0, subtotal + taxable - req.discount)
+    lines = [
+        BillLine(
+            description=item.description,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            tax_percent=item.tax_percent,
+        )
+        for item in req.items
+    ]
+    subtotal, tax, total = invoice_total(lines, req.discount)
     invoice_id = f"INV-{uuid.uuid4().hex[:10].upper()}"
     invoice = {
         "id": invoice_id,
         "patient_id": req.patient_id,
-        "items": [item.model_dump() for item in req.items],
-        "subtotal": round(subtotal, 2),
-        "tax": round(taxable, 2),
-        "discount": round(req.discount, 2),
-        "total": round(total, 2),
+        "items": [
+            {
+                **item.model_dump(),
+                "quantity": money(item.quantity),
+                "unit_price": money(item.unit_price),
+                "tax_percent": money(item.tax_percent),
+            }
+            for item in req.items
+        ],
+        "subtotal": subtotal,
+        "tax": tax,
+        "discount": money(req.discount),
+        "total": total,
         "currency": req.currency.upper(),
         "status": "unpaid",
         "created_at": now_iso(),
@@ -112,7 +129,7 @@ async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depen
     if str(invoice.get("currency", "INR")).upper() != "INR":
         raise HTTPException(status_code=400, detail="Razorpay payment links require an INR invoice")
 
-    amount_paise = int(round(float(invoice["total"]) * 100))
+    amount_paise = int(money(invoice["total"]) * 100)
     if amount_paise <= 0:
         raise HTTPException(status_code=400, detail="Invoice total must be greater than zero")
 
@@ -164,7 +181,7 @@ async def payment_webhook(request: Request, x_razorpay_signature: str | None = H
         record_payment_event(event_id, payload)
         return {"received": True, "ignored": True, "reason": "invoice_not_found"}
 
-    expected_amount = int(round(float(invoice["total"]) * 100))
+    expected_amount = int(money(invoice["total"]) * 100)
     provider_amount = int(entity.get("amount") or 0)
     if provider_amount != expected_amount:
         raise HTTPException(status_code=409, detail="Payment amount does not match invoice total")
