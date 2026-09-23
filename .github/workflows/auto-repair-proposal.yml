@@ -26,8 +26,7 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           mkdir -p repair-evidence
-          gh run download "$RUN_ID" --dir repair-evidence || true
-          find repair-evidence -type f -maxdepth 5 -print0 | xargs -0 cat > repair-evidence/combined.log || true
+          gh run view "$RUN_ID" --log > repair-evidence/combined.log || true
           if [ ! -s repair-evidence/combined.log ]; then printf 'workflow_run=%s\nconclusion=failure\n' "$RUN_ID" > repair-evidence/combined.log; fi
       - name: Generate conservative repair proposal
         env:
