@@ -1,5 +1,6 @@
 import { API_URL } from '@env';
 import { auth } from '../config/firebase';
+import { ClinicalApiError } from '../types/clinicalApi';
 
 async function authorizedRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const user = auth.currentUser;
@@ -14,7 +15,12 @@ async function authorizedRequest<T>(path: string, init?: RequestInit): Promise<T
     },
   });
   const body = await response.text();
-  if (!response.ok) throw new Error(body || `Clinical API error: ${response.status}`);
+  if (!response.ok) {
+    let detail: unknown = body;
+    try { detail = body ? JSON.parse(body).detail ?? body : body; } catch { /* preserve raw body */ }
+    const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    throw new ClinicalApiError(message, response.status, message, response.headers.get('X-Request-ID') ?? undefined);
+  }
   return body ? (JSON.parse(body) as T) : (undefined as T);
 }
 
@@ -85,6 +91,8 @@ export type ClinicalPatientSummary = {
 };
 
 export type ClinicalAIReview = {
+  media_id?: string | null;
+  lesion_id?: string | null;
   id: string;
   request_id: string;
   model_name: string;
@@ -211,6 +219,42 @@ export const encounterApi = {
         }),
       },
     );
+  },
+
+
+
+  recordMedia(payload: {
+    patientId: string;
+    encounterId?: string;
+    lesionId?: string;
+    consentId?: string;
+    consentPurpose?: string;
+    objectUrl: string;
+    kind: 'original' | 'processed' | 'dermoscopy' | 'histopathology' | 'other';
+    sha256: string;
+    mimeType: string;
+    byteSize: number;
+    capturedAt: string;
+    retentionUntil?: string;
+  }) {
+    return authorizedRequest<Record<string, unknown>>('/api/v1/clinical/media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patient_id: payload.patientId,
+        encounter_id: payload.encounterId,
+        lesion_id: payload.lesionId,
+        consent_id: payload.consentId,
+        consent_purpose: payload.consentPurpose || 'clinical-image',
+        object_url: payload.objectUrl,
+        kind: payload.kind,
+        sha256: payload.sha256,
+        mime_type: payload.mimeType,
+        byte_size: payload.byteSize,
+        captured_at: payload.capturedAt,
+        retention_until: payload.retentionUntil,
+      }),
+    });
   },
 
   listAIReviews(encounterId: string) {

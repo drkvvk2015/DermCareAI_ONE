@@ -10,6 +10,7 @@ import { NavigationProps, Patient, ScreeningReport } from '../../navigation/type
 import { ABSTAIN_LABEL, api, PredictionResponse } from '../../services/api';
 import { uploadDataUri, uploadImage } from '../../services/cloudinary';
 import { getClinicScope } from '../../services/tenant';
+import CryptoJS from 'crypto-js';
 import { clinicalApi, encounterApi } from '../../services/clinicalApi';
 
 const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, route }) => {
@@ -25,6 +26,7 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
   const [consentActive, setConsentActive] = useState(false);
   const [consentLoading, setConsentLoading] = useState(false);
   const [aiAttaching, setAIAttaching] = useState(false);
+  const [sourceBase64, setSourceBase64] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchPatients();
@@ -116,6 +118,7 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1,
       allowsEditing: true,
+      base64: true,
     };
     const picker = mode === 'camera'
       ? await ImagePicker.launchCameraAsync(options)
@@ -124,6 +127,7 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
     if (!picker.canceled && picker.assets[0]?.uri) {
       const uri = picker.assets[0].uri;
       setImage(uri);
+      setSourceBase64(picker.assets[0]?.base64 || null);
       await analyze(uri);
     }
   };
@@ -156,8 +160,27 @@ const ScreeningScreen: React.FC<NavigationProps<'Screening'>> = ({ navigation, r
     if (!encounterId || !result) return;
     setAIAttaching(true);
     try {
+      let mediaId: string | undefined;
+      if (image && sourceBase64) {
+        const sha256 = CryptoJS.SHA256(CryptoJS.enc.Base64.parse(sourceBase64)).toString(CryptoJS.enc.Hex);
+        const byteSize = Math.floor((sourceBase64.length * 3) / 4) - (sourceBase64.endsWith('==') ? 2 : sourceBase64.endsWith('=') ? 1 : 0);
+        if (!selectedPatient) throw new Error('Patient selection is required before attaching an image');
+        const durableImageUrl = await uploadImage(image, selectedPatient.id, 'clinical-original');
+        const media = await clinicalApi.recordMedia({
+          patientId: selectedPatient.id,
+          encounterId,
+          objectUrl: durableImageUrl,
+          kind: 'original',
+          sha256,
+          mimeType: 'image/jpeg',
+          byteSize: Math.max(1, byteSize),
+          capturedAt: new Date().toISOString(),
+        });
+        mediaId = String(media.id);
+      }
       await encounterApi.addAIReview(encounterId, {
         request_id: result.request_id,
+        media_id: mediaId,
         model_name: result.model_used,
         model_provenance: result.governance.model_provenance,
         predicted_label: result.class_name,
