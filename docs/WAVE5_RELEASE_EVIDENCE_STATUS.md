@@ -1,6 +1,6 @@
 # Wave 5 — Release Evidence Status
 
-Updated: 2026-09-22
+Updated: 2026-09-23
 
 This document separates automated software evidence from clinical, regulatory and deployment evidence that requires real-world data, environments or accountable human review.
 
@@ -12,6 +12,7 @@ This document separates automated software evidence from clinical, regulatory an
 | PostgreSQL integration | PASS | PostgreSQL staging gate |
 | Clinical API workflow | PASS | Clinical E2E tests |
 | Dermatology Wave 2 API integration | PASS | Integrated router registration + regression tests |
+| AI media/lesion tenant provenance | HARDENED | Tenant-scoped resource lookup + cross-tenant rejection tests |
 | Clinical media integrity / retention | PASS | Deterministic metadata validation + regression tests |
 | Encounter sign-off safety | PASS | Pending-AI review gate |
 | Tenant isolation | PASS | Clinical E2E tests |
@@ -25,6 +26,7 @@ This document separates automated software evidence from clinical, regulatory an
 | Regulatory classification | PENDING FORMAL ASSESSMENT | Depends on intended use, claims and deployment |
 | Production cloud deployment | READY FOR ENVIRONMENT SETUP | Requires organization secrets, infrastructure and accountable release approval |
 | Privacy operational program | PARTIAL | Technical controls exist; organizational policies and rights workflows still require implementation |
+| Guardrailed CI auto-repair proposals | ENABLED | Failure classification + repair evidence; human-reviewed merge required |
 
 ## Clinical / AI release evidence that must not be fabricated
 
