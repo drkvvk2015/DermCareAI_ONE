@@ -159,6 +159,18 @@ export const api = {
   async patientSummary(patientId: string) {
     return this.clinicalRequest<Record<string, unknown>>(`/patients/${encodeURIComponent(patientId)}/summary`);
   },
+  async createPrescription(input: Record<string, unknown>) {
+    return this.clinicalRequest<Record<string, unknown>>('/prescriptions', { method: 'POST', body: JSON.stringify(input) });
+  },
+  async patientPrescriptions(patientId: string) {
+    return this.clinicalRequest<Record<string, unknown>[]>(`/prescriptions/patient/${encodeURIComponent(patientId)}`);
+  },
+  async getPrescription(prescriptionId: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/prescriptions/${encodeURIComponent(prescriptionId)}`);
+  },
+  async cancelPrescription(prescriptionId: string) {
+    return this.clinicalRequest<Record<string, unknown>>(`/prescriptions/${encodeURIComponent(prescriptionId)}/cancel`, { method: 'POST' });
+  },
 
   getRecommendations(condition: string): string[] {
     // These are clinician-facing reference prompts, not autonomous treatment orders.
