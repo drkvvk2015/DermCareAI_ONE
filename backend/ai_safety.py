@@ -50,8 +50,9 @@ def evaluate_ai_request(
 
 
 def sanitize_model_output(text: str) -> str:
-    """Keep model text assistive; strip common diagnostic/prescribing directives."""
-    cleaned = " ".join(str(text).split()).strip()
+    """Normalize model text while preserving the assistive-only safety boundary."""
+    normalized = str(text).replace("\\n", " ").replace("\\r", " ")
+    cleaned = " ".join(normalized.split()).strip()
     if not cleaned:
         return "No preliminary model output was produced."
     return cleaned[:12000]
