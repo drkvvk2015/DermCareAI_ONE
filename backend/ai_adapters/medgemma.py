@@ -56,13 +56,13 @@ class MedGemmaAdapter:
             self._error = "disabled_by_configuration"
             return False
         try:
-            from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+            from transformers import AutoModelForImageTextToText, AutoProcessor
 
             kwargs: dict[str, Any] = {}
             if self.config.revision:
                 kwargs["revision"] = self.config.revision
             self._processor = AutoProcessor.from_pretrained(self.config.model_id, **kwargs)
-            self._model = Gemma3ForConditionalGeneration.from_pretrained(self.config.model_id, **kwargs)
+            self._model = AutoModelForImageTextToText.from_pretrained(self.config.model_id, **kwargs)
             self._error = None
             return True
         except Exception as exc:
@@ -97,11 +97,12 @@ class MedGemmaAdapter:
             return_dict=True,
             return_tensors="pt",
         )
+        inputs = inputs.to(self._model.device)
         outputs = self._model.generate(
             **inputs,
             max_new_tokens=self.config.max_new_tokens,
             do_sample=self.config.temperature > 0,
-            temperature=self.config.temperature if self.config.temperature > 0 else None,
+            **({"temperature": self.config.temperature} if self.config.temperature > 0 else {}),
         )
         generated = outputs[0][inputs["input_ids"].shape[-1]:]
         text = self._processor.decode(generated, skip_special_tokens=True).strip()
