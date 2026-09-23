@@ -74,6 +74,30 @@ def init_store() -> None:
             CREATE INDEX IF NOT EXISTS idx_lesions_patient
               ON lesions(clinic_id, patient_id, created_at DESC);
 
+            CREATE TABLE IF NOT EXISTS lesion_observations (
+                id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
+                patient_id TEXT NOT NULL,
+                lesion_id TEXT NOT NULL,
+                encounter_id TEXT NOT NULL,
+                lesion_code TEXT NOT NULL,
+                body_site TEXT NOT NULL,
+                laterality TEXT,
+                morphology_json TEXT NOT NULL,
+                size_mm REAL,
+                duration_days INTEGER,
+                evolution TEXT,
+                symptoms_json TEXT NOT NULL,
+                clinical_impression TEXT,
+                differential_json TEXT NOT NULL,
+                confirmed_diagnosis TEXT,
+                observed_at TEXT NOT NULL,
+                observed_by TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesion_observations_timeline
+              ON lesion_observations(clinic_id, patient_id, lesion_code, observed_at ASC);
+
             CREATE TABLE IF NOT EXISTS consents (
                 id TEXT PRIMARY KEY,
                 organization_id TEXT NOT NULL,
@@ -328,6 +352,25 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
             "SELECT * FROM lesions WHERE clinic_id = ? AND patient_id = ? AND lesion_code = ?",
             (v["clinic_id"], v["patient_id"], v["lesion_code"]),
         ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO lesion_observations (
+              id, organization_id, clinic_id, patient_id, lesion_id, encounter_id,
+              lesion_code, body_site, laterality, morphology_json, size_mm,
+              duration_days, evolution, symptoms_json, clinical_impression,
+              differential_json, confirmed_diagnosis, observed_at, observed_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"OBS-{uuid.uuid4().hex[:12].upper()}",
+                v["organization_id"], v["clinic_id"], v["patient_id"], lesion_id,
+                v["encounter_id"], v["lesion_code"], v["body_site"], v["laterality"],
+                json.dumps(v["morphology"], sort_keys=True), v["size_mm"],
+                v["duration_days"], v["evolution"], json.dumps(v["symptoms"], sort_keys=True),
+                v["clinical_impression"], json.dumps(v["differential"], sort_keys=True),
+                v["confirmed_diagnosis"], now, str(payload.get("observed_by") or "system"),
+            ),
+        )
     return _decode(row)
 
 
@@ -336,14 +379,19 @@ def list_lesion_timeline(*, clinic_id: str, patient_id: str, lesion_code: str) -
     with _connect() as conn:
         rows = conn.execute(
             """
-            SELECT * FROM lesions
+            SELECT * FROM lesion_observations
             WHERE clinic_id = ? AND patient_id = ? AND lesion_code = ?
-            ORDER BY created_at ASC
+            ORDER BY observed_at ASC
             """,
             (clinic_id, patient_id, lesion_code),
         ).fetchall()
-    return [_decode(row) for row in rows]
-
+    result = []
+    for row in rows:
+        item = dict(row)
+        for field in ("morphology_json", "symptoms_json", "differential_json"):
+            item[field.removesuffix("_json")] = json.loads(item.pop(field))
+        result.append(item)
+    return result
 
 def create_consent(**payload: Any) -> dict[str, Any]:
     consent_id = f"CNS-{uuid.uuid4().hex[:12].upper()}"
