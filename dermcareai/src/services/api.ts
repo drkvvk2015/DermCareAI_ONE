@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
+import { ClinicalApiError } from '../types/clinicalApi';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -64,7 +65,10 @@ export const api = {
         } catch {
           // Keep raw response text.
         }
-        throw new Error(`AI service error (${response.status}): ${message}`);
+        const apiError = new ClinicalApiError(message);
+        apiError.name = 'ClinicalApiError';
+        Object.assign(apiError, { status: response.status, detail: message, requestId: response.headers.get('X-Request-ID') ?? undefined });
+        throw apiError;
       }
 
       const data = JSON.parse(body) as PredictionResponse;
@@ -80,13 +84,13 @@ export const api = {
     }
   },
 
-  async getHealth(): Promise<any> {
+  async getHealth(): Promise<Record<string, unknown>> {
     const response = await request('/health');
     if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
     return response.json();
   },
 
-  async selfHeal(): Promise<any> {
+  async selfHeal(): Promise<Record<string, unknown>> {
     const user = auth.currentUser;
     if (!user) throw new Error('Authentication required. Please sign in again.');
     const token = await user.getIdToken();
