@@ -152,6 +152,13 @@ def upsert_batch(batch: Dict[str, Any], *, organization_id: str, clinic_id: str)
     now = _now()
     payload["updated_at"] = now
     with transaction(ENGINE) as conn:
+        existing = execute(
+            conn,
+            "SELECT organization_id, clinic_id FROM pharmacy_batches WHERE batch_id = :batch_id",
+            {"batch_id": batch_id},
+        ).mappings().first()
+        if existing and (existing["organization_id"] != organization_id or existing["clinic_id"] != clinic_id):
+            raise PermissionError("Pharmacy batch belongs to another clinic tenant")
         execute(conn, """
             INSERT INTO pharmacy_batches(batch_id, medicine_id, expiry, quantity, blocked, organization_id, clinic_id, payload_json, updated_at)
             VALUES (:batch_id, :medicine_id, :expiry, :quantity, :blocked, :organization_id, :clinic_id, :payload_json, :updated_at)
