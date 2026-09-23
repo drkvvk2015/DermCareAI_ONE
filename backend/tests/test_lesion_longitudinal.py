@@ -1,8 +1,7 @@
 from clinical_store import list_lesion_timeline, upsert_lesion
 
 
-def test_lesion_timeline_preserves_observations(monkeypatch, tmp_path):
-    monkeypatch.setenv("CLINICAL_DB_PATH", str(tmp_path / "clinical.db"))
+def test_lesion_timeline_preserves_observations()
     first = upsert_lesion(
         organization_id="org-1", clinic_id="clinic-1", patient_id="p-1",
         encounter_id="enc-1", lesion_code="L1", body_site="left forearm",
