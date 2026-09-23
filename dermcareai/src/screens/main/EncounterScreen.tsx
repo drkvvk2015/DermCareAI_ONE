@@ -326,6 +326,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10, marginTop: 10 },
   half: { flex: 1 },
   aiBlock: { paddingVertical: 4 },
+  historyBox: { marginTop: 12, padding: 12, borderRadius: 8 },
+  historyItem: { marginTop: 8, opacity: 0.8 },
   actions: { paddingBottom: 32, gap: 10 },
   button: { marginTop: 4 },
 });

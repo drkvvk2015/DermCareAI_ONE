@@ -49,7 +49,7 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
-        columns = {column["name"] for column in inspect(ENGINE).get_columns("pharmacy_batches")}
+        columns = {column["name"] for column in inspect(conn).get_columns("pharmacy_batches")}
         if "organization_id" not in columns:
             execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT")
         if "clinic_id" not in columns:
