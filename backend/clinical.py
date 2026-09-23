@@ -377,7 +377,7 @@ def post_followup(
             action="followup_planned",
             resource_type="followup",
             resource_id=result["id"],
-            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id, "media_id": media_id, "lesion_id": lesion_id},
+            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id},
         ),
         user,
     )
@@ -430,7 +430,7 @@ def post_ai_review(
             action="ai_assessment_attached",
             resource_type="encounter_ai_review",
             resource_id=result["id"],
-            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id},
+            metadata={"patient_id": encounter["patient_id"], "encounter_id": encounter_id, "media_id": media_id, "lesion_id": lesion_id},
         ),
         user,
     )
