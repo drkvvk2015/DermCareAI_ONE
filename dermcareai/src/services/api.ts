@@ -3,7 +3,7 @@ import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
 import { ClinicalApiError } from '../types/clinicalApi';
-import { flushSyncQueue, enqueuePersistentSync, loadSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
+import { flushSyncQueue, enqueuePersistentSync, clearSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -116,6 +116,7 @@ export const api = {
     const user = auth.currentUser;
     if (!user) throw new Error('Authentication required. Please sign in again.');
     const token = await user.getIdToken();
+    const scope = user.uid;
     const method = (init.method || 'GET').toUpperCase();
     const fullPath = `/api/v1/clinical${path}`;
     const replayable = isReplayableMutation(method, fullPath);
@@ -148,7 +149,7 @@ export const api = {
       const isNetworkFailure = status === undefined;
       if (replayable && isNetworkFailure) {
         const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-        await enqueuePersistentSync({
+        await enqueuePersistentSync(scope, {
           id: idempotencyKey as string,
           method: method as SyncOperation['method'],
           path: fullPath,
@@ -164,10 +165,11 @@ export const api = {
 
   async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number }> {
     const user = auth.currentUser;
-    if (!user) return { sent: 0, conflicts: 0, remaining: (await import('./syncQueue')).loadSyncQueue().then(() => 0) as any };
+    if (!user) return { sent: 0, conflicts: 0, remaining: 0 };
 
+    const scope = user.uid;
     const token = await user.getIdToken();
-    return flushSyncQueue(async (operation): Promise<SyncSendResult> => {
+    return flushSyncQueue(scope, async (operation): Promise<SyncSendResult> => {
       try {
         const response = await request(operation.path, {
           method: operation.method,
@@ -311,3 +313,9 @@ export const api = {
     ];
   },
 };
+
+
+export async function clearCurrentUserClinicalSyncQueue(): Promise<void> {
+  const user = auth.currentUser;
+  if (user) await clearSyncQueue(user.uid);
+}
