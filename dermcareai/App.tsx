@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { Provider as PaperProvider } from 'react-native-paper';
+import { Provider as PaperProvider, Snackbar } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Snackbar } from 'react-native-paper';
 import { theme } from './src/theme';
 import AppNavigator from './src/navigation/AppNavigator';
 import { api } from './src/services/api';
@@ -22,7 +21,6 @@ export default function App() {
       }
     };
     void flush();
-    flush();
     const subscription = AppState.addEventListener('change', state => {
       if (state === 'active') flush();
     });
