@@ -3,6 +3,7 @@ import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
 import { ClinicalApiError } from '../types/clinicalApi';
+import { flushSyncQueue, enqueuePersistentSync, loadSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -32,6 +33,20 @@ export type PredictionResponse = {
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${API_URL}${path}`, init);
   return response;
+}
+
+const OFFLINE_REPLAYABLE = new Set<string>([
+  'PATCH /api/v1/clinical/encounters/',
+  'POST /api/v1/clinical/lesions',
+]);
+
+function isReplayableMutation(method: string, path: string): boolean {
+  const normalized = `${method.toUpperCase()} ${path}`;
+  return [...OFFLINE_REPLAYABLE].some(prefix => normalized.startsWith(prefix));
+}
+
+function makeIdempotencyKey(): string {
+  return `sync-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export const api = {
@@ -101,19 +116,82 @@ export const api = {
     const user = auth.currentUser;
     if (!user) throw new Error('Authentication required. Please sign in again.');
     const token = await user.getIdToken();
-    const response = await request(`/api/v1/clinical${path}`, {
-      ...init,
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init.headers || {}) },
-    });
-    const body = await response.text();
-    let parsed: any;
-    try { parsed = body ? JSON.parse(body) : undefined; } catch { parsed = undefined; }
-    if (!response.ok) {
-      const detail = parsed?.detail ?? body ?? `Clinical API request failed: ${response.status}`;
-      const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
-      throw new ClinicalApiError(message, response.status, message, response.headers.get('X-Request-ID') ?? undefined);
+    const method = (init.method || 'GET').toUpperCase();
+    const fullPath = `/api/v1/clinical${path}`;
+    const replayable = isReplayableMutation(method, fullPath);
+    const idempotencyKey = replayable
+      ? String((init.headers as Record<string, string> | undefined)?.['Idempotency-Key'] || makeIdempotencyKey())
+      : undefined;
+
+    try {
+      const response = await request(fullPath, {
+        ...init,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+          ...(init.headers || {}),
+        },
+      });
+      const body = await response.text();
+      let parsed: any;
+      try { parsed = body ? JSON.parse(body) : undefined; } catch { parsed = undefined; }
+      if (!response.ok) {
+        const detail = parsed?.detail ?? body ?? `Clinical API request failed: ${response.status}`;
+        const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+        throw new ClinicalApiError(message, response.status, message, response.headers.get('X-Request-ID') ?? undefined);
+      }
+      return parsed as T;
+    } catch (error) {
+      const status = error instanceof ClinicalApiError ? error.status : undefined;
+      const isNetworkFailure = status === undefined;
+      if (replayable && isNetworkFailure) {
+        const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+        await enqueuePersistentSync({
+          id: idempotencyKey as string,
+          method: method as SyncOperation['method'],
+          path: fullPath,
+          body,
+          createdAt: Date.now(),
+          idempotencyKey: idempotencyKey as string,
+        });
+        throw new Error('Network unavailable. The clinical change was saved to the encrypted offline queue and will retry when connectivity returns.');
+      }
+      throw error;
     }
-    return parsed as T;
+  },
+
+  async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number }> {
+    const user = auth.currentUser;
+    if (!user) return { sent: 0, conflicts: 0, remaining: (await import('./syncQueue')).loadSyncQueue().then(() => 0) as any };
+
+    const token = await user.getIdToken();
+    return flushSyncQueue(async (operation): Promise<SyncSendResult> => {
+      try {
+        const response = await request(operation.path, {
+          method: operation.method,
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'Idempotency-Key': operation.idempotencyKey,
+          },
+          body: operation.body === undefined ? undefined : JSON.stringify(operation.body),
+        });
+        const textBody = await response.text();
+        if (response.ok) return { status: 'sent' };
+        if (response.status === 409) {
+          return { status: 'conflict', message: textBody || 'Clinical concurrency conflict' };
+        }
+        if (response.status >= 500 || response.status === 408 || response.status === 429) {
+          return { status: 'retry', message: textBody || 'Transient server failure' };
+        }
+        return { status: 'conflict', message: textBody || `Permanent clinical sync failure: ${response.status}` };
+      } catch (error) {
+        return { status: 'retry', message: error instanceof Error ? error.message : 'Network failure' };
+      }
+    });
   },
 
   async createEncounter(input: Record<string, unknown>) {
