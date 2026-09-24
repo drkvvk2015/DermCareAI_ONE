@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import require_roles
 from audit import AuditEvent, record_event
 from dermatology.clinical_documentation import validate_encounter, recommended_field_issues, DERMATOLOGY_RECOMMENDED_FIELDS
 from dermatology.clinical_workflow import TEMPLATES, get_history_template
+from idempotency import IdempotencyConflict, IdempotencyInProgress, begin_operation, complete_operation
 from clinical_store import (
     create_consent,
     create_encounter,
@@ -206,22 +207,88 @@ def read_encounter(encounter_id: str, user: dict[str, Any] = Depends(require_rol
 
 
 @router.patch("/encounters/{encounter_id}")
-def patch_encounter(encounter_id: str, req: EncounterPatch, user: dict[str, Any] = Depends(require_roles("doctor", "admin"))):
-    _, clinic_id = _tenant(user)
+def patch_encounter(
+    encounter_id: str,
+    req: EncounterPatch,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+
+    organization_id, clinic_id = _tenant(user)
+    if idempotency_key:
+        try:
+            replay = begin_operation(
+                scope="clinical",
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                actor_id=str(user["uid"]),
+                operation_key=idempotency_key,
+                payload={"method": "PATCH", "path": f"/encounters/{encounter_id}", "body": req.model_dump()},
+            )
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except IdempotencyInProgress as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if replay is not None:
+            return replay
     patch = {key: value for key, value in req.model_dump().items() if key != "expected_version" and value is not None}
     try:
-        return update_encounter(encounter_id, clinic_id, req.expected_version, patch)
+        result = update_encounter(encounter_id, clinic_id, req.expected_version, patch)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if idempotency_key:
+        complete_operation(
+            scope="clinical",
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            actor_id=str(user["uid"]),
+            operation_key=idempotency_key,
+            response=result,
+        )
+    return result
 
 
 @router.post("/lesions")
-def post_lesion(req: LesionUpsert, user: dict[str, Any] = Depends(require_roles("doctor", "admin"))):
+def post_lesion(
+    req: LesionUpsert,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+
     organization_id, clinic_id = _tenant(user)
+    if idempotency_key:
+        try:
+            replay = begin_operation(
+                scope="clinical",
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                actor_id=str(user["uid"]),
+                operation_key=idempotency_key,
+                payload={"method": "POST", "path": "/lesions", "body": req.model_dump()},
+            )
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except IdempotencyInProgress as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if replay is not None:
+            return replay
     encounter = get_encounter(req.encounter_id, clinic_id)
     if not encounter or encounter["patient_id"] != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient")
     result = upsert_lesion(organization_id=organization_id, clinic_id=clinic_id, **req.model_dump())
+    if idempotency_key:
+        complete_operation(
+            scope="clinical",
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            actor_id=str(user["uid"]),
+            operation_key=idempotency_key,
+            response=result,
+        )
     record_event(AuditEvent(action="lesion_upserted", resource_type="lesion", resource_id=result["id"], metadata={"patient_id": req.patient_id, "lesion_code": req.lesion_code}), user)
     return result
 
