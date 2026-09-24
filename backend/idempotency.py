@@ -151,9 +151,10 @@ def begin_operation(
                 raise IdempotencyInProgress("The same idempotent operation is already processing")
             return None
 
-        execute(
-            conn,
-            """INSERT INTO idempotency_operations(
+        try:
+            execute(
+                conn,
+                """INSERT INTO idempotency_operations(
                  scope, organization_id, clinic_id, actor_id, operation_key,
                  request_hash, status, created_at, updated_at
                )
@@ -170,8 +171,13 @@ def begin_operation(
                 "request_hash": digest,
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
-            },
-        )
+                },
+            )
+        except Exception as exc:
+            message = str(exc).lower()
+            if "unique" in message or "duplicate" in message:
+                raise IdempotencyInProgress("The same idempotent operation is already processing") from exc
+            raise
     return None
 
 
