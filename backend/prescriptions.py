@@ -139,7 +139,7 @@ def dispense(
     # Durable ledger prevents retry paths from decrementing stock twice after allocation.
     try:
         from datetime import datetime, timezone
-        from prescription_dispense_ledger import begin_or_get, record_allocated, finalize
+        from prescription_dispense_ledger import begin_or_get, claim_pending, record_allocated, finalize
         from prescription_pharmacy import dispense_prescription
 
         ledger = begin_or_get(
@@ -170,6 +170,12 @@ def dispense(
                 "allocations": ledger["allocations"],
             }
         else:
+            if not claim_pending(
+                prescription_id=prescription_id,
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+            ):
+                raise ValueError("Prescription dispensing is already in progress; retry after the active request completes")
             allocation = dispense_prescription(
                 prescription_id=prescription_id,
                 organization_id=organization_id,
