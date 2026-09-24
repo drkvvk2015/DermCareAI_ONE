@@ -198,7 +198,10 @@ def create_invoice(req: InvoiceRequest, _: dict[str, Any] = Depends(require_role
 @router.get("/invoices/{invoice_id}")
 def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
     organization_id, clinic_id = _tenant(_)
-    invoice = INVOICES.get(invoice_id) or store_get_invoice(invoice_id, organization_id=organization_id, clinic_id=clinic_id)
+    cached = INVOICES.get(invoice_id)
+    if cached and (cached.get("organization_id") != organization_id or cached.get("clinic_id") != clinic_id):
+        cached = None
+    invoice = cached or store_get_invoice(invoice_id, organization_id=organization_id, clinic_id=clinic_id)
 
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -209,7 +212,10 @@ def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admi
 @router.post("/payments/razorpay")
 async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
     organization_id, clinic_id = _tenant(_)
-    invoice = store_get_invoice(req.invoice_id, organization_id=organization_id, clinic_id=clinic_id) or INVOICES.get(req.invoice_id)
+    cached = INVOICES.get(req.invoice_id)
+    if cached and (cached.get("organization_id") != organization_id or cached.get("clinic_id") != clinic_id):
+        cached = None
+    invoice = store_get_invoice(req.invoice_id, organization_id=organization_id, clinic_id=clinic_id) or cached
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice.get("status") != "unpaid":
