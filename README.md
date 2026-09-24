@@ -73,7 +73,24 @@ Clinical Encounter
 
 ## What is implemented
 
-### Clinical workflow
+#### Final dermatology hardening wave — 24 September 2026
+
+The final engineering swarm has now been integrated as three independently validated streams:
+
+| Stream | Evidence |
+|---|---|
+| Governed AI safety gateway | ✅ PR #159 merged; inference safety now consumes the shared AI safety gateway and model-registry integrity state |
+| Clinical consent boundary | ✅ PR #159 merged; patient-linked AI assessments require active clinical-image consent when linked to media |
+| Persistent mobile offline sync | ✅ PR #160 merged; replay-safe encounter updates and lesion upserts persist locally, retry with authenticated transport, and retain real 409 concurrency conflicts |
+| Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
+| Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
+| Full required CI matrix | ✅ All eight release workflows passed on PR #159, #160 and #161 heads before merge |
+| Open pull requests | ✅ 0 after stale dependency PR cleanup |
+
+**Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
+
+**Production boundary:** software engineering gates are now hardened, but independent AI clinical validation, intended-use/regulatory review, privacy governance, and deployment into a real production environment remain external evidence/operations gates.
+## Clinical workflow
 - Patient 360 clinical summary
 - Encounter-centered documentation
 - Structured dermatology history and examination
