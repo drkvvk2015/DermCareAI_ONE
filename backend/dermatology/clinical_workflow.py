@@ -39,3 +39,16 @@ def build_soap_note(*, subjective: str, objective: str, assessment: str, plan: s
     if any(not value for value in sections.values()):
         raise ValueError("All SOAP sections must contain non-empty content")
     return sections
+
+
+# Longitudinal lesion tracking is intentionally non-blocking: it supplements, but does not
+# replace, the required clinical documentation and clinician sign-off workflow.
+LONGITUDINAL_FIELDS: Final[tuple[str, ...]] = (
+    "lesion_code", "body_site", "laterality", "morphology", "size_mm",
+    "duration_days", "evolution", "symptoms", "comparison_note", "photo_reference",
+)
+
+
+def longitudinal_completeness(record: dict[str, object]) -> tuple[str, ...]:
+    """Return missing longitudinal fields without making them clinical sign-off blockers."""
+    return tuple(field for field in LONGITUDINAL_FIELDS if not record.get(field))
