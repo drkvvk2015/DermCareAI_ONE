@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Install test dependencies
         run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]' python-multipart Pillow opencv-python-headless numpy
       - name: Compile backend
@@ -54,3 +54,7 @@ jobs:
         run: npx tsc --noEmit
       - name: Expo web export smoke test
         run: npx expo export --platform web
+      - name: Validate Expo project
+        run: npx expo-doctor
+      - name: Validate native project generation
+        run: npx expo prebuild --no-install --non-interactive
