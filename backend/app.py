@@ -37,6 +37,7 @@ from platform_contracts import AIGovernanceCard, PlatformInfo, ReadinessComponen
 from request_context import get_request_id, new_request_id, reset_request_id, set_request_id
 from rate_limit import client_key, enforce_rate_limit
 from resilience import file_sha256
+from production_readiness import evaluate_readiness
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -341,6 +342,15 @@ def platform_readiness() -> ReadinessResponse:
         for item in registry.values()
     )
     auth_enabled = os.getenv("FIREBASE_AUTH_REQUIRED", "true").lower() == "true"
+    readiness_findings = evaluate_readiness(
+        app_env=APP_ENV,
+        database_url=os.getenv("CLINICAL_DATABASE_URL") or os.getenv("DATABASE_URL", ""),
+        commerce_database_url=os.getenv("COMMERCE_DATABASE_URL") or os.getenv("DATABASE_URL", ""),
+        cors_origins=configured_origins,
+        app_version=APP_VERSION,
+        firebase_auth_required=auth_enabled,
+    )
+    blocking_findings = [finding for finding in readiness_findings if finding.severity == "block"]
     components = {
         "model_service": ReadinessComponent(
             status="ok" if model_status["loaded"] else "degraded",
@@ -357,6 +367,12 @@ def platform_readiness() -> ReadinessResponse:
             detail="Firebase authentication enforced"
             if auth_enabled
             else "FIREBASE_AUTH_REQUIRED is disabled",
+        ),
+        "deployment_contract": ReadinessComponent(
+            status="ok" if not blocking_findings else "degraded",
+            detail="Production deployment contract passed"
+            if not blocking_findings
+            else "; ".join(f"{finding.code}: {finding.message}" for finding in blocking_findings),
         ),
     }
     overall = "ready" if all(component.status == "ok" for component in components.values()) else "degraded"
