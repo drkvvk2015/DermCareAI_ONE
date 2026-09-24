@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install storage test dependencies
         run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]'
