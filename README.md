@@ -105,8 +105,12 @@ The final engineering swarm has now been integrated as three independently valid
 | Persistent mobile offline sync | ✅ PR #160 merged; replay-safe encounter updates and lesion upserts persist locally, retry with authenticated transport, and retain real 409 concurrency conflicts |
 | Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
 | Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
-| Full required CI matrix | ✅ All eight release workflows passed on PR #159, #160 and #161 heads before merge |
-| Native Android smoke gate | 🟡 Added in final stabilization; CI validates Expo prebuild + Java 17 Gradle debug build |\n| Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |\n| Final stabilization PR | 🟡 PR #174 contains Android smoke gating, schema migration evidence and current UI preview documentation; CI reruns are currently failing before workflow steps execute |
+| Full required CI matrix | ✅ Historical integration evidence: required workflows passed on PR #159, #160 and #161 heads before merge |
+| Native Android smoke gate | 🟡 Added in final stabilization; current GitHub Actions runs are failing before any job steps execute, so no new executable evidence is available |
+| Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |
+| Copyright/contributor governance | ✅ COPYRIGHT.md, CONTRIBUTING.md, CODEOWNERS and NOTICE added |
+| Clinical/regulatory/deployment preparation | ✅ Evidence protocols, regulatory dossier and production runbook added |
+| Final stabilization PR | 🟡 PR #174 contains the release-preparation work; current CI blocker is pre-step GitHub Actions execution failure |
 
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
@@ -173,12 +177,26 @@ The final engineering swarm has now been integrated as three independently valid
 | Disaster-recovery drill | ✅ Implemented |
 | Dependency audit | ✅ Reporting enabled |
 | SBOM/provenance | ✅ Container workflow enabled |
-| Independent AI clinical validation | ⚠️ Evidence still required |
-| Prospective clinical validation | ⚠️ Evidence still required |
-| Regulatory classification/approval | ⚠️ Formal assessment required |
-| Production cloud deployment | ⚠️ Environment-specific setup required |
+| Independent AI clinical validation | 🟡 **Evidence package ready** — [validation protocol](docs/AI_CLINICAL_VALIDATION_PROTOCOL.md) + manifest; independent execution/sign-off still required |
+| Prospective clinical validation | 🟡 **Protocol ready** — [prospective evaluation protocol](docs/PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md); real-world execution still required |
+| Regulatory classification/approval | 🟡 **Assessment dossier ready** — [India regulatory/privacy assessment](docs/INDIA_REGULATORY_ASSESSMENT.md); formal accountable classification/approval still required |
+| Production cloud deployment | 🟢 **Deployment package ready** — [production runbook](docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md); environment activation requires organization infrastructure, secrets and approval |
 
 See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
+
+### Clinical, regulatory and deployment readiness packages
+
+The repository-side preparation for the four previously open release areas is now complete:
+
+| Area | Repository package | What remains outside code |
+|---|---|---|
+| Independent AI clinical validation | [AI validation protocol](docs/AI_CLINICAL_VALIDATION_PROTOCOL.md) + [release manifest template](docs/ai-validation/release-manifest.template.json) | Locked study data, independent analysis, actual results and accountable sign-off |
+| Prospective clinical evaluation | [Prospective protocol](docs/PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md) | Institutional/ethics governance where applicable, real prospective execution and safety review |
+| India regulatory/privacy | [Regulatory assessment dossier](docs/INDIA_REGULATORY_ASSESSMENT.md) | Formal classification, legal/regulatory review, institutional approvals and applicable registrations |
+| Production deployment | [Production deployment runbook](docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md) | Organization-owned cloud account, secrets, infrastructure activation and release approval |
+
+These gates are intentionally not marked as completed by software alone. No clinical result, regulatory clearance or live production environment is claimed unless the corresponding external evidence exists.
+
 
 ### Final mainline engineering checkpoint
 
@@ -188,7 +206,7 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
 | Required PR CI matrix | ✅ Green on the final integration wave |
-| Open release PRs | ✅ 0 |
+| Open release PRs | 🟡 PR #174 remains open pending executable CI evidence |
 | Clinical validation / regulatory approval | ⚠️ Separate evidence and governance gates remain |
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
@@ -303,7 +321,7 @@ The dependency audit workflow produces machine-readable npm and Python vulnerabi
 
 ## Clinical / regulatory boundary
 
-The platform does not claim regulatory approval or clinical validation.
+The platform does not claim regulatory approval or clinical validation. Repository-side evidence preparation is documented, but external clinical, regulatory and production-operations gates remain distinct.
 
 For India, the release review should assess the Medical Devices Rules, 2017; current CDSCO guidance applicable to Medical Device Software; Digital Personal Data Protection Act/Rules obligations; institutional privacy/consent/retention/incident controls; pharmacy requirements; payment-provider requirements; and professional/clinical governance.
 
