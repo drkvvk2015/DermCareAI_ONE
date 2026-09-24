@@ -156,7 +156,7 @@ export const api = {
           createdAt: Date.now(),
           idempotencyKey: idempotencyKey as string,
         });
-        throw new Error('Network unavailable. The clinical change was saved to the encrypted offline queue and will retry when connectivity returns.');
+        throw new Error('Network unavailable. The clinical change was saved to the persistent offline queue and will retry when connectivity returns.');
       }
       throw error;
     }
