@@ -29,6 +29,7 @@ from clinical_store import (
     list_ai_reviews,
     get_patient_clinical_summary,
     has_pending_ai_reviews,
+    has_active_consent,
 )
 
 router = APIRouter(prefix="/api/v1/clinical", tags=["clinical"])
@@ -413,6 +414,15 @@ def post_ai_review(
         lesion = get_lesion(lesion_id=lesion_id, organization_id=organization_id, clinic_id=clinic_id, patient_id=encounter["patient_id"], encounter_id=encounter_id) if lesion_id else None
         if media_id and (not media or media.get("encounter_id") != encounter_id):
             raise HTTPException(status_code=404, detail="Linked clinical media not found for encounter")
+        if media_id and not has_active_consent(
+            clinic_id=clinic_id,
+            patient_id=encounter["patient_id"],
+            purpose="clinical-image",
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Active clinical-image consent is required before attaching an AI assessment",
+            )
         if lesion_id and (not lesion or lesion.get("encounter_id") != encounter_id):
             raise HTTPException(status_code=409, detail="Linked lesion is not part of encounter")
         if media and media.get("lesion_id") and lesion_id and media["lesion_id"] != lesion_id:
