@@ -72,6 +72,56 @@ def begin_or_get(*, prescription_id: str, organization_id: str, clinic_id: str, 
     return _decode(row)
 
 
+def claim_pending(*, prescription_id: str, organization_id: str, clinic_id: str, lease_seconds: int = 900) -> bool:
+    """Claim a pending dispense so concurrent requests cannot allocate the same prescription twice.
+
+    A stale processing lease can be reclaimed after the bounded lease interval, allowing
+    recovery after a worker crash without silently treating an active request as complete.
+    """
+    init_store()
+    now = datetime.now(timezone.utc)
+    with transaction(ENGINE) as conn:
+        row = execute(
+            conn,
+            """SELECT status, updated_at FROM prescription_dispense_ledger
+               WHERE prescription_id = :prescription_id
+                 AND organization_id = :organization_id
+                 AND clinic_id = :clinic_id""",
+            {"prescription_id": prescription_id, "organization_id": organization_id, "clinic_id": clinic_id},
+        ).mappings().first()
+        if row is None:
+            raise KeyError(prescription_id)
+        if row["status"] == "allocated" or row["status"] == "completed":
+            return False
+        stale = False
+        if row["status"] == "processing":
+            try:
+                stale = (now - datetime.fromisoformat(str(row["updated_at"]))).total_seconds() >= lease_seconds
+            except ValueError:
+                stale = True
+        if row["status"] not in {"pending", "processing"} and not stale:
+            return False
+        if row["status"] == "processing" and not stale:
+            return False
+        updated = execute(
+            conn,
+            """UPDATE prescription_dispense_ledger
+               SET status = 'processing', updated_at = :updated_at
+               WHERE prescription_id = :prescription_id
+                 AND organization_id = :organization_id
+                 AND clinic_id = :clinic_id
+                 AND status = :expected_status""",
+            {
+                "prescription_id": prescription_id,
+                "organization_id": organization_id,
+                "clinic_id": clinic_id,
+                "expected_status": "processing" if stale else "pending",
+                "updated_at": now.isoformat(),
+            },
+        )
+        return bool(updated.rowcount)
+
+ 
 def record_allocated(*, prescription_id: str, organization_id: str, clinic_id: str, allocations: dict[str, Any]) -> dict[str, Any]:
     init_store()
     now = _now()
@@ -109,7 +159,7 @@ def finalize(*, prescription_id: str, organization_id: str, clinic_id: str) -> d
                WHERE prescription_id = :prescription_id
                  AND organization_id = :organization_id
                  AND clinic_id = :clinic_id
-                 AND status IN ('pending', 'allocated')""",
+                 AND status IN ('pending', 'processing', 'allocated')""",
             {"prescription_id": prescription_id, "organization_id": organization_id, "clinic_id": clinic_id, "updated_at": now},
         )
         row = execute(
