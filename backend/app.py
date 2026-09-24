@@ -35,7 +35,7 @@ from notifications import router as notifications_router
 from observability import record_prediction, record_request, snapshot as observability_snapshot
 from platform_contracts import AIGovernanceCard, PlatformInfo, ReadinessComponent, ReadinessResponse, utc_now
 from request_context import get_request_id, new_request_id, reset_request_id, set_request_id
-from rate_limit import client_key, enforce_rate_limit
+from rate_limit import client_key, enforce_rate_limit, redis_configured
 from resilience import file_sha256
 from production_readiness import evaluate_readiness
 
@@ -356,6 +356,7 @@ def platform_readiness() -> ReadinessResponse:
         cors_origins=configured_origins,
         app_version=APP_VERSION,
         firebase_auth_required=auth_enabled,
+        redis_configured=redis_configured(),
     )
     blocking_findings = [finding for finding in readiness_findings if finding.severity == "block"]
     components = {
