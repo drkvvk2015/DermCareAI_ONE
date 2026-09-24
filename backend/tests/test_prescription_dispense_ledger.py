@@ -1,4 +1,4 @@
-from prescription_dispense_ledger import begin_or_get, record_allocated, finalize
+from prescription_dispense_ledger import begin_or_get, claim_pending, record_allocated, finalize
 
 
 def test_dispense_ledger_is_idempotent_for_same_tenant():
