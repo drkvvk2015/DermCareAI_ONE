@@ -30,7 +30,7 @@ from media import router as media_router
 from commerce import router as commerce_router
 from prescriptions import router as prescriptions_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
-from model_registry import verify_models
+from model_registry import production_artifact_eligible, verify_models
 from notifications import router as notifications_router
 from observability import record_prediction, record_request, snapshot as observability_snapshot
 from platform_contracts import AIGovernanceCard, PlatformInfo, ReadinessComponent, ReadinessResponse, utc_now
@@ -46,7 +46,11 @@ APP_ENV = os.getenv("APP_ENV", "development")
 MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.70"))
 MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
-ENABLE_EMBEDDED_DERM_MODEL = os.getenv("ENABLE_EMBEDDED_DERM_MODEL", "true").lower() == "true"
+ENABLE_EMBEDDED_DERM_MODEL = os.getenv(
+    "ENABLE_EMBEDDED_DERM_MODEL",
+    "false" if APP_ENV == "production" else "true",
+).lower() == "true"
+AI_ENABLED_IN_PRODUCTION = os.getenv("AI_ENABLED_IN_PRODUCTION", "false").lower() == "true"
 
 
 class PredictionResponse(BaseModel):
@@ -118,6 +122,16 @@ class ModelService:
 
     def load(self) -> bool:
         paths = self.model_paths
+        if APP_ENV == "production":
+            if not AI_ENABLED_IN_PRODUCTION:
+                self.mode = "disabled-by-production-policy"
+                self.last_error = "Clinical AI is disabled until an approved production model is explicitly enabled"
+                return False
+            eligible, reason = production_artifact_eligible(model_dir=str(MODEL_DIR), app_env=APP_ENV)
+            if not eligible:
+                self.mode = "blocked-by-production-gate"
+                self.last_error = reason
+                return False
         try:
             if Path(paths["mobilenet"]).is_file() and Path(paths["nasnet"]).is_file():
                 # Load heavyweight ML dependencies only when real model weights exist.
@@ -349,6 +363,7 @@ def platform_readiness() -> ReadinessResponse:
         for item in registry.values()
     )
     auth_enabled = os.getenv("FIREBASE_AUTH_REQUIRED", "true").lower() == "true"
+    ai_eligible, ai_reason = production_artifact_eligible(model_dir=str(MODEL_DIR), app_env=APP_ENV)
     readiness_findings = evaluate_readiness(
         app_env=APP_ENV,
         database_url=os.getenv("CLINICAL_DATABASE_URL") or os.getenv("DATABASE_URL", ""),
@@ -360,7 +375,7 @@ def platform_readiness() -> ReadinessResponse:
     blocking_findings = [finding for finding in readiness_findings if finding.severity == "block"]
     components = {
         "model_service": ReadinessComponent(
-            status="ok" if model_status["loaded"] else "degraded",
+            status="ok" if model_status["loaded"] else ("not_configured" if APP_ENV == "production" and not AI_ENABLED_IN_PRODUCTION else "degraded"),
             detail=model_status["mode"],
         ),
         "model_registry": ReadinessComponent(
@@ -368,6 +383,10 @@ def platform_readiness() -> ReadinessResponse:
             detail="registry integrity checks passed"
             if registry_ok
             else "one or more materialized model hashes do not match",
+        ),
+        "ai_production_gate": ReadinessComponent(
+            status="ok" if ai_eligible else ("not_configured" if APP_ENV != "production" or not AI_ENABLED_IN_PRODUCTION else "degraded"),
+            detail=ai_reason,
         ),
         "clinic_auth": ReadinessComponent(
             status="ok" if auth_enabled else "not_configured",
@@ -382,7 +401,12 @@ def platform_readiness() -> ReadinessResponse:
             else "; ".join(f"{finding.code}: {finding.message}" for finding in blocking_findings),
         ),
     }
-    overall = "ready" if all(component.status == "ok" for component in components.values()) else "degraded"
+    blocking_names = {"model_registry", "clinic_auth", "deployment_contract"}
+    if AI_ENABLED_IN_PRODUCTION:
+        blocking_names.update({"model_service", "ai_production_gate"})
+    overall = "ready" if all(
+        components[name].status == "ok" for name in blocking_names
+    ) else "degraded"
     return ReadinessResponse(
         status=overall,
         version=APP_VERSION,
