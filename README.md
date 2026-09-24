@@ -8,7 +8,7 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 >
 > **Dermatology Completion:** v5.1 Wave 1 + Wave 2 are integrated into `main` through the validated `develop` release path. `main` is the stable engineering baseline; clinical validation and regulatory/privacy approval remain separate gates.
 >
-> **Current swarm hardening:** the latest mainline wave adds clinical audit/provenance regression coverage, React Native longitudinal-workflow API hardening, and pharmacy tenant-reassignment protection. CI remains the final technical evidence gate for each merge.
+> **Current swarm hardening:** the final mainline wave adds durable prescription-dispense idempotency, concurrent dispense ownership protection with bounded recovery, and explicit audit events for idempotent replay. CI remains the final technical evidence gate for each merge.
 
 ## Visual overview
 
@@ -141,6 +141,20 @@ Clinical Encounter
 | Production cloud deployment | ⚠️ Environment-specific setup required |
 
 See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
+
+### Final mainline engineering checkpoint
+
+| Change | Mainline evidence |
+|---|---|
+| Durable prescription dispense ledger integration | ✅ PR #155 merged |
+| Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
+| Idempotent replay audit trace | ✅ PR #157 merged |
+| Required PR CI matrix | ✅ Green on the final integration wave |
+| Open release PRs | ✅ 0 |
+| Clinical validation / regulatory approval | ⚠️ Separate evidence and governance gates remain |
+
+The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
+
 
 ## Clinical workflow
 
