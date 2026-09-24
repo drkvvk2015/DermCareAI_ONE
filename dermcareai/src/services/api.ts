@@ -3,7 +3,7 @@ import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
 import { ClinicalApiError } from '../types/clinicalApi';
-import { flushSyncQueue, enqueuePersistentSync, loadSyncQueue, clearSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
+import { flushSyncQueue, enqueuePersistentSync, clearSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
