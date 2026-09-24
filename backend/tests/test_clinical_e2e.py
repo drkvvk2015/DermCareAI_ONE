@@ -213,3 +213,42 @@ def test_signoff_followup_and_ai_review_workflow() -> None:
     assert summary.json()["patient_id"] == "patient-2"
     assert any(item["encounter_id"] == encounter_id for item in summary.json()["followups"])
     assert any(item["encounter_id"] == encounter_id for item in summary.json()["signoffs"])
+
+
+def test_tenant_boundary_blocks_cross_clinic_access_to_clinical_records():
+    client = TestClient(app)
+
+    _CURRENT["claims"] = {"organization_id": "org-1", "clinic_id": "clinic-tenant-a"}
+    encounter = client.post(
+        "/api/v1/clinical/encounters",
+        json={
+            "patient_id": "patient-tenant-a",
+            "complaints": {"chief_complaint": "tenant boundary test"},
+            "examination": {"distribution": "arm", "morphology": "papule"},
+            "assessment": {"summary": "test"},
+            "plan": {"summary": "follow-up"},
+        },
+    )
+    assert encounter.status_code == 200
+    encounter_id = encounter.json()["id"]
+
+    lesion = client.post(
+        "/api/v1/clinical/lesions",
+        json={
+            "patient_id": "patient-tenant-a",
+            "encounter_id": encounter_id,
+            "lesion_code": "TENANT-L1",
+            "body_site": "forearm",
+            "morphology": {"primary": "papule"},
+        },
+    )
+    assert lesion.status_code == 200
+
+    _CURRENT["claims"] = {"organization_id": "org-1", "clinic_id": "clinic-tenant-b"}
+    assert client.get(f"/api/v1/clinical/encounters/{encounter_id}").status_code == 404
+    assert client.get(
+        "/api/v1/clinical/patients/patient-tenant-a/lesions/TENANT-L1/timeline"
+    ).json() == []
+    assert client.get("/api/v1/clinical/patients/patient-tenant-a/summary").json()["encounters"] == []
+
+    _CURRENT["claims"] = {"organization_id": "org-1", "clinic_id": "clinic-tenant-a"}
