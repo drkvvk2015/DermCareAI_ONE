@@ -18,7 +18,7 @@ def test_missing_medicine_does_not_partially_deduct_stock() -> None:
         ],
     )
     try:
-        dispense(request, {"uid": "u1", "roles": {"pharmacist"}})
+        dispense(request, {"uid": "u1", "roles": {"pharmacist"}, "claims": {"organization_id": "default-org", "clinic_id": "default-clinic"}})
     except HTTPException as exc:
         assert exc.status_code == 404
     else:
