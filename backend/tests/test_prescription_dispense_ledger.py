@@ -32,3 +32,30 @@ def test_dispense_ledger_is_idempotent_for_same_tenant():
         clinic_id="clinic-a",
     )
     assert completed["status"] == "completed"
+
+
+def test_dispense_ledger_claim_serializes_concurrent_workers():
+    first = begin_or_get(
+        prescription_id="RX-LEDGER-CLAIM",
+        organization_id="org-a",
+        clinic_id="clinic-a",
+        patient_id="patient-1",
+    )
+    assert first["status"] == "pending"
+    assert claim_pending(
+        prescription_id="RX-LEDGER-CLAIM",
+        organization_id="org-a",
+        clinic_id="clinic-a",
+    ) is True
+    assert claim_pending(
+        prescription_id="RX-LEDGER-CLAIM",
+        organization_id="org-a",
+        clinic_id="clinic-a",
+    ) is False
+    allocated = record_allocated(
+        prescription_id="RX-LEDGER-CLAIM",
+        organization_id="org-a",
+        clinic_id="clinic-a",
+        allocations={"med-1": [["batch-1", 1.0]]},
+    )
+    assert allocated["status"] == "allocated"
