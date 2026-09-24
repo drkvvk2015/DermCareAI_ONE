@@ -238,3 +238,18 @@ def deploy_model(req: DeploymentCreate, user: dict[str, Any] = Depends(require_r
         "activated_at": now,
         "deployed_by": user["uid"],
     }
+
+
+def get_active_production_model() -> dict[str, Any] | None:
+    """Return the single active production model with its approval metadata."""
+    init_store()
+    with _connect() as conn:
+        row = conn.execute(
+            """SELECT mv.*, md.environment, md.status AS deployment_status
+               FROM model_deployments md
+               JOIN model_versions mv ON mv.id = md.model_version_id
+               WHERE md.environment = 'production' AND md.status = 'active'
+               ORDER BY md.activated_at DESC
+               LIMIT 1"""
+        ).fetchone()
+    return dict(row) if row else None
