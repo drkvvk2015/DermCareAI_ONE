@@ -375,7 +375,7 @@ def platform_readiness() -> ReadinessResponse:
     blocking_findings = [finding for finding in readiness_findings if finding.severity == "block"]
     components = {
         "model_service": ReadinessComponent(
-            status="ok" if model_status["loaded"] else "degraded",
+            status="ok" if model_status["loaded"] else ("not_configured" if APP_ENV == "production" and not AI_ENABLED_IN_PRODUCTION else "degraded"),
             detail=model_status["mode"],
         ),
         "model_registry": ReadinessComponent(
@@ -401,7 +401,12 @@ def platform_readiness() -> ReadinessResponse:
             else "; ".join(f"{finding.code}: {finding.message}" for finding in blocking_findings),
         ),
     }
-    overall = "ready" if all(component.status == "ok" for component in components.values()) else "degraded"
+    blocking_names = {"model_registry", "clinic_auth", "deployment_contract"}
+    if AI_ENABLED_IN_PRODUCTION:
+        blocking_names.update({"model_service", "ai_production_gate"})
+    overall = "ready" if all(
+        components[name].status == "ok" for name in blocking_names
+    ) else "degraded"
     return ReadinessResponse(
         status=overall,
         version=APP_VERSION,
