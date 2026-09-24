@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Install test dependencies
         run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]' python-multipart Pillow opencv-python-headless numpy
       - name: Compile backend
