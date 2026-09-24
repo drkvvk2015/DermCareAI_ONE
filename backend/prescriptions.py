@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from audit import AuditEvent, record_event
+from idempotency import IdempotencyConflict, IdempotencyInProgress, begin_operation, complete_operation
 from auth import require_roles
 from clinical_store import get_encounter
 from prescription_store import (
@@ -50,9 +51,27 @@ class PrescriptionCreate(BaseModel):
 @router.post("")
 def create(
     req: PrescriptionCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     user: dict[str, Any] = Depends(require_roles("admin", "doctor")),
 ):
     organization_id, clinic_id = _tenant(user)
+    actor_id = str(user["uid"])
+    if idempotency_key:
+        try:
+            replay = begin_operation(
+                scope="clinical",
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                actor_id=actor_id,
+                operation_key=idempotency_key,
+                payload={"method": "POST", "path": "/api/v1/prescriptions", "body": req.model_dump(mode="json")},
+            )
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except IdempotencyInProgress as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if replay is not None:
+            return replay
     encounter = get_encounter(req.encounter_id, clinic_id)
     if encounter is None or encounter.get("organization_id") != organization_id or encounter.get("patient_id") != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient and tenant")
@@ -75,6 +94,15 @@ def create(
         ),
         user,
     )
+    if idempotency_key:
+        complete_operation(
+            scope="clinical",
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            actor_id=actor_id,
+            operation_key=idempotency_key,
+            response=result,
+        )
     return result
 
 
