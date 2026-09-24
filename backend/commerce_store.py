@@ -156,7 +156,7 @@ def _stock_key(*, organization_id: str, clinic_id: str, medicine_id: str) -> str
     return f"{organization_id}:{clinic_id}:{medicine_id}"
 
 
-def upsert_stock(item: Dict[str, Any], *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
+def upsert_stock(item: Dict[str, Any], *, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, Any]:
     init_store()
     payload = dict(item)
     medicine_id = str(payload["medicine_id"])
@@ -202,7 +202,7 @@ def upsert_stock(item: Dict[str, Any], *, organization_id: str, clinic_id: str) 
     return payload
 
 
-def list_stock(*, organization_id: str, clinic_id: str) -> list[Dict[str, Any]]:
+def list_stock(*, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> list[Dict[str, Any]]:
     init_store()
     with ENGINE.connect() as conn:
         rows = execute(
@@ -217,7 +217,7 @@ def list_stock(*, organization_id: str, clinic_id: str) -> list[Dict[str, Any]]:
 
 
 def atomic_dispense(
-    required: Dict[str, float], *, organization_id: str, clinic_id: str
+    required: Dict[str, float], *, organization_id: str = "default-org", clinic_id: str = "default-clinic"
 ) -> Dict[str, Dict[str, Any]]:
     """Atomically decrement tenant-scoped stock with a conditional update."""
     init_store()
