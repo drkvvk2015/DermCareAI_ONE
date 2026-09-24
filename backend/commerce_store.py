@@ -21,6 +21,8 @@ def init_store() -> None:
         execute(conn, """
             CREATE TABLE IF NOT EXISTS invoices (
                 id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
                 patient_id TEXT NOT NULL,
                 invoice_json TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -31,6 +33,8 @@ def init_store() -> None:
         execute(conn, """
             CREATE TABLE IF NOT EXISTS pharmacy_stock (
                 medicine_id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
                 payload_json TEXT NOT NULL,
                 quantity DOUBLE PRECISION NOT NULL,
                 updated_at TEXT NOT NULL
@@ -49,6 +53,16 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
+        for table, columns_to_add in {
+            "invoices": ("organization_id TEXT", "clinic_id TEXT"),
+            "pharmacy_stock": ("organization_id TEXT", "clinic_id TEXT"),
+            "payment_events": ("organization_id TEXT", "clinic_id TEXT"),
+        }.items():
+            existing = {column["name"] for column in inspect(conn).get_columns(table)}
+            for definition in columns_to_add:
+                name = definition.split()[0]
+                if name not in existing:
+                    execute(conn, f"ALTER TABLE {table} ADD COLUMN {definition}")
         columns = {column["name"] for column in inspect(conn).get_columns("pharmacy_batches")}
         if "organization_id" not in columns:
             execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT")
@@ -61,28 +75,38 @@ def init_store() -> None:
         execute(conn, """
             CREATE TABLE IF NOT EXISTS payment_events (
                 event_id TEXT PRIMARY KEY,
+                organization_id TEXT,
+                clinic_id TEXT,
                 received_at TEXT NOT NULL,
                 payload_json TEXT NOT NULL
             )
         """)
 
 
-def save_invoice(invoice: Dict[str, Any]) -> None:
+def save_invoice(invoice: Dict[str, Any], *, organization_id: str | None = None, clinic_id: str | None = None) -> None:
     init_store()
+    organization_id = organization_id or str(invoice.get("organization_id") or "")
+    clinic_id = clinic_id or str(invoice.get("clinic_id") or "")
+    if not organization_id or not clinic_id:
+        raise ValueError("Invoice tenant context is required")
     now = _now()
     with transaction(ENGINE) as conn:
         execute(
             conn,
             """
-            INSERT INTO invoices(id, patient_id, invoice_json, status, created_at, updated_at)
-            VALUES (:id, :patient_id, :invoice_json, :status, :created_at, :updated_at)
+            INSERT INTO invoices(id, organization_id, clinic_id, patient_id, invoice_json, status, created_at, updated_at)
+            VALUES (:id, :organization_id, :clinic_id, :patient_id, :invoice_json, :status, :created_at, :updated_at)
             ON CONFLICT (id) DO UPDATE SET
+              organization_id = EXCLUDED.organization_id,
+              clinic_id = EXCLUDED.clinic_id,
               invoice_json = EXCLUDED.invoice_json,
               status = EXCLUDED.status,
               updated_at = EXCLUDED.updated_at
             """,
             {
                 "id": invoice["id"],
+                "organization_id": organization_id,
+                "clinic_id": clinic_id,
                 "patient_id": invoice["patient_id"],
                 "invoice_json": json.dumps(invoice, sort_keys=True, default=str),
                 "status": invoice["status"],
@@ -92,22 +116,23 @@ def save_invoice(invoice: Dict[str, Any]) -> None:
         )
 
 
-def get_invoice(invoice_id: str) -> Dict[str, Any] | None:
+def get_invoice(invoice_id: str, *, organization_id: str, clinic_id: str) -> Dict[str, Any] | None:
     init_store()
     with ENGINE.connect() as conn:
         row = execute(
             conn,
-            "SELECT invoice_json FROM invoices WHERE id = :invoice_id",
-            {"invoice_id": invoice_id},
+            """SELECT invoice_json FROM invoices
+               WHERE id = :invoice_id AND organization_id = :organization_id AND clinic_id = :clinic_id""",
+            {"invoice_id": invoice_id, "organization_id": organization_id, "clinic_id": clinic_id},
         ).mappings().first()
     return json.loads(row["invoice_json"]) if row else None
 
 
-def update_invoice(invoice: Dict[str, Any]) -> None:
-    save_invoice(invoice)
+def update_invoice(invoice: Dict[str, Any], *, organization_id: str | None = None, clinic_id: str | None = None) -> None:
+    save_invoice(invoice, organization_id=organization_id, clinic_id=clinic_id)
 
 
-def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
+def upsert_stock(item: Dict[str, Any], *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
     init_store()
     payload = dict(item)
     medicine_id = str(payload["medicine_id"])
@@ -118,15 +143,19 @@ def upsert_stock(item: Dict[str, Any]) -> Dict[str, Any]:
         execute(
             conn,
             """
-            INSERT INTO pharmacy_stock(medicine_id, payload_json, quantity, updated_at)
-            VALUES (:medicine_id, :payload_json, :quantity, :updated_at)
+            INSERT INTO pharmacy_stock(medicine_id, organization_id, clinic_id, payload_json, quantity, updated_at)
+            VALUES (:medicine_id, :organization_id, :clinic_id, :payload_json, :quantity, :updated_at)
             ON CONFLICT(medicine_id) DO UPDATE SET
+              organization_id = EXCLUDED.organization_id,
+              clinic_id = EXCLUDED.clinic_id,
               payload_json = EXCLUDED.payload_json,
               quantity = EXCLUDED.quantity,
               updated_at = EXCLUDED.updated_at
             """,
             {
                 "medicine_id": medicine_id,
+                "organization_id": organization_id,
+                "clinic_id": clinic_id,
                 "payload_json": json.dumps(payload, sort_keys=True, default=str),
                 "quantity": quantity,
                 "updated_at": updated_at,
@@ -228,60 +257,75 @@ def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id
         return result
 
 
-def list_stock() -> list[Dict[str, Any]]:
+def list_stock(*, organization_id: str, clinic_id: str) -> list[Dict[str, Any]]:
     init_store()
     with ENGINE.connect() as conn:
         rows = execute(
             conn,
-            "SELECT payload_json FROM pharmacy_stock ORDER BY medicine_id",
+            """SELECT payload_json FROM pharmacy_stock
+               WHERE organization_id = :organization_id AND clinic_id = :clinic_id
+               ORDER BY medicine_id""",
+            {"organization_id": organization_id, "clinic_id": clinic_id},
         ).mappings().all()
     return [json.loads(row["payload_json"]) for row in rows]
 
 
-def atomic_dispense(required: Dict[str, float]) -> Dict[str, Dict[str, Any]]:
+def atomic_dispense(
+    required: Dict[str, float], *, organization_id: str, clinic_id: str
+) -> Dict[str, Dict[str, Any]]:
+    """Atomically decrement tenant-scoped stock with database-conditional updates."""
     init_store()
     now = _now()
     with transaction(ENGINE) as conn:
-        rows: Dict[str, Dict[str, Any]] = {}
-        for medicine_id in required:
+        updated: Dict[str, Dict[str, Any]] = {}
+        for medicine_id, requested_qty in required.items():
+            requested_qty = float(requested_qty)
+            if requested_qty <= 0:
+                raise ValueError(medicine_id)
             row = execute(
                 conn,
-                "SELECT medicine_id, payload_json, quantity FROM pharmacy_stock WHERE medicine_id = :medicine_id",
-                {"medicine_id": medicine_id},
+                """SELECT medicine_id, payload_json, quantity FROM pharmacy_stock
+                   WHERE medicine_id = :medicine_id
+                     AND organization_id = :organization_id
+                     AND clinic_id = :clinic_id""",
+                {"medicine_id": medicine_id, "organization_id": organization_id, "clinic_id": clinic_id},
             ).mappings().first()
             if row is None:
                 raise KeyError(medicine_id)
-            rows[medicine_id] = dict(row)
-
-        for medicine_id, requested_qty in required.items():
-            if float(rows[medicine_id]["quantity"]) < float(requested_qty):
+            quantity = float(row["quantity"])
+            if quantity < requested_qty:
                 raise ValueError(medicine_id)
-
-        updated: Dict[str, Dict[str, Any]] = {}
-        for medicine_id, requested_qty in required.items():
-            new_qty = float(rows[medicine_id]["quantity"]) - float(requested_qty)
-            payload = json.loads(rows[medicine_id]["payload_json"])
+            payload = json.loads(row["payload_json"])
+            new_qty = quantity - requested_qty
             payload["quantity"] = new_qty
             payload["updated_at"] = now
-            execute(
+            result = execute(
                 conn,
-                """
-                UPDATE pharmacy_stock
-                SET payload_json = :payload_json, quantity = :quantity, updated_at = :updated_at
-                WHERE medicine_id = :medicine_id
-                """,
+                """UPDATE pharmacy_stock
+                   SET quantity = quantity - :requested_qty,
+                       payload_json = :payload_json,
+                       updated_at = :updated_at
+                   WHERE medicine_id = :medicine_id
+                     AND organization_id = :organization_id
+                     AND clinic_id = :clinic_id
+                     AND quantity >= :requested_qty
+                   RETURNING quantity""",
                 {
+                    "requested_qty": requested_qty,
                     "payload_json": json.dumps(payload, sort_keys=True, default=str),
-                    "quantity": new_qty,
                     "updated_at": now,
                     "medicine_id": medicine_id,
+                    "organization_id": organization_id,
+                    "clinic_id": clinic_id,
                 },
             )
+            if result.mappings().first() is None:
+                raise ValueError(medicine_id)
             updated[medicine_id] = payload
         return updated
 
 
-def record_payment_event(event_id: str, payload: Dict[str, Any]) -> bool:
+def record_payment_event(event_id: str, payload: Dict[str, Any], *, organization_id: str | None = None, clinic_id: str | None = None) -> bool:
     init_store()
     now = _now()
     try:
@@ -289,11 +333,13 @@ def record_payment_event(event_id: str, payload: Dict[str, Any]) -> bool:
             execute(
                 conn,
                 """
-                INSERT INTO payment_events(event_id, received_at, payload_json)
-                VALUES (:event_id, :received_at, :payload_json)
+                INSERT INTO payment_events(event_id, organization_id, clinic_id, received_at, payload_json)
+                VALUES (:event_id, :organization_id, :clinic_id, :received_at, :payload_json)
                 """,
                 {
                     "event_id": event_id,
+                    "organization_id": organization_id,
+                    "clinic_id": clinic_id,
                     "received_at": now,
                     "payload_json": json.dumps(payload, sort_keys=True, default=str),
                 },
