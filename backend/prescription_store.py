@@ -191,3 +191,41 @@ def cancel_prescription(
             {"id": prescription_id},
         ).mappings().first()
     return _decode(updated)
+
+
+def mark_prescription_dispensed(
+    prescription_id: str,
+    *,
+    organization_id: str,
+    clinic_id: str,
+) -> dict[str, Any]:
+    """Persist a successful full-dispense state, scoped to the active tenant."""
+    init_store()
+    now = _now()
+    with transaction(ENGINE) as conn:
+        row = execute(
+            conn,
+            """SELECT * FROM prescriptions
+               WHERE id = :id AND organization_id = :organization_id AND clinic_id = :clinic_id""",
+            {"id": prescription_id, "organization_id": organization_id, "clinic_id": clinic_id},
+        ).mappings().first()
+        if row is None:
+            raise KeyError(prescription_id)
+        if row["status"] != "active":
+            raise ValueError("Only active prescriptions can be dispensed")
+        if row["dispense_status"] == "dispensed":
+            return _decode(row)
+        execute(
+            conn,
+            """UPDATE prescriptions
+               SET dispense_status = 'dispensed', updated_at = :updated_at
+               WHERE id = :id AND organization_id = :organization_id AND clinic_id = :clinic_id
+                 AND status = 'active' AND dispense_status = 'not_dispensed'""",
+            {"id": prescription_id, "organization_id": organization_id, "clinic_id": clinic_id, "updated_at": now},
+        )
+        updated = execute(
+            conn,
+            "SELECT * FROM prescriptions WHERE id = :id AND organization_id = :organization_id AND clinic_id = :clinic_id",
+            {"id": prescription_id, "organization_id": organization_id, "clinic_id": clinic_id},
+        ).mappings().first()
+    return _decode(updated)
