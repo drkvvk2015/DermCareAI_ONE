@@ -150,7 +150,7 @@ INVOICES: Dict[str, Dict[str, Any]] = {}
 PHARMACY_STOCK: Dict[str, Dict[str, Any]] = {}
 
 
-def compute_invoice(req: InvoiceRequest, *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
+def compute_invoice(req: InvoiceRequest, *, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, Any]:
     lines = [
         BillLine(
             description=item.description,
