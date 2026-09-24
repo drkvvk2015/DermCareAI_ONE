@@ -24,3 +24,17 @@ def test_production_readiness_accepts_explicit_postgres_contract():
         firebase_auth_required=True,
     )
     assert findings == []
+
+
+def test_production_readiness_requires_redis_when_distributed_rate_limit_is_mandatory():
+    findings = evaluate_readiness(
+        app_env="production",
+        database_url="postgresql+psycopg://clinical/example",
+        commerce_database_url="postgresql+psycopg://commerce/example",
+        cors_origins="https://clinic.example",
+        app_version="5.1.0",
+        firebase_auth_required=True,
+        redis_url="",
+        require_distributed_rate_limit=True,
+    )
+    assert any(item.code == "RATE-001" for item in findings)

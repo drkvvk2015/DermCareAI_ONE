@@ -18,6 +18,8 @@ def evaluate_readiness(
     app_version: str,
     commerce_database_url: str | None = None,
     firebase_auth_required: bool = True,
+    redis_url: str | None = None,
+    require_distributed_rate_limit: bool = False,
 ) -> list[ReadinessFinding]:
     """Validate deployment contracts without opening a production connection.
 
@@ -35,6 +37,8 @@ def evaluate_readiness(
         findings.append(ReadinessFinding("WEB-001", "block", "Production CORS origins must be explicit"))
     if production and not firebase_auth_required:
         findings.append(ReadinessFinding("AUTH-001", "block", "Firebase authentication must remain enabled in production"))
+    if production and require_distributed_rate_limit and not (redis_url or "").strip():
+        findings.append(ReadinessFinding("RATE-001", "block", "Production requires Redis-backed distributed rate limiting"))
     if not app_version.strip():
         findings.append(ReadinessFinding("REL-001", "block", "APP_VERSION must be immutable and non-empty"))
     return findings
