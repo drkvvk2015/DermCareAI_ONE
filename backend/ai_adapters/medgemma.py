@@ -37,6 +37,8 @@ class MedGemmaAdapter:
         self._processor: Any | None = None
         self._model: Any | None = None
         self._error: str | None = None
+        if not self.config.enabled:
+            self._error = "disabled_by_configuration"
 
     @property
     def available(self) -> bool:
