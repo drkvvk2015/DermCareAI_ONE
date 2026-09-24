@@ -73,6 +73,10 @@ Clinical Encounter
 
 ## What is implemented
 
+#### Final stabilization sprint — 24 September 2026
+
+This release-critical pass adds a deterministic native Android smoke gate and records the clinical database migration version in a durable schema ledger. These are engineering gates only; independent clinical validation and regulatory/privacy review remain separate requirements.
+
 #### Final dermatology hardening wave — 24 September 2026
 
 The final engineering swarm has now been integrated as three independently validated streams:
@@ -85,7 +89,7 @@ The final engineering swarm has now been integrated as three independently valid
 | Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
 | Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
 | Full required CI matrix | ✅ All eight release workflows passed on PR #159, #160 and #161 heads before merge |
-| Open pull requests | ✅ 0 after stale dependency PR cleanup |
+| Native Android smoke gate | 🟡 Added in final stabilization; CI validates Expo prebuild + Java 17 Gradle debug build |\n| Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |\n| Open pull requests | 🟡 2 legacy maintenance PRs pending cleanup; neither is on the release-critical path |
 
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
