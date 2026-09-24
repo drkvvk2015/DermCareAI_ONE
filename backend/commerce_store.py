@@ -89,6 +89,30 @@ def init_store() -> None:
             CREATE INDEX IF NOT EXISTS idx_pharmacy_batches_tenant_fefo
             ON pharmacy_batches(organization_id, clinic_id, medicine_id, expiry, batch_id)
         """)
+        if os.getenv("APP_ENV", "development").lower() == "production":
+            legacy_stock = execute(conn, "SELECT COUNT(*) AS count FROM pharmacy_stock").mappings().first()
+            if legacy_stock and int(legacy_stock["count"]) > 0:
+                raise RuntimeError(
+                    "Legacy pharmacy_stock contains rows. Migrate them into pharmacy_stock_v2 "
+                    "with explicit organization_id/clinic_id before production startup."
+                )
+            legacy_tenant_rows = execute(
+                conn,
+                "SELECT COUNT(*) AS count FROM invoices WHERE organization_id IS NULL OR clinic_id IS NULL",
+            ).mappings().first()
+            if legacy_tenant_rows and int(legacy_tenant_rows["count"]) > 0:
+                raise RuntimeError(
+                    "Invoices contain missing tenant scope. Complete the tenant backfill before production startup."
+                )
+            batch_tenant_rows = execute(
+                conn,
+                "SELECT COUNT(*) AS count FROM pharmacy_batches WHERE organization_id IS NULL OR clinic_id IS NULL",
+            ).mappings().first()
+            if batch_tenant_rows and int(batch_tenant_rows["count"]) > 0:
+                raise RuntimeError(
+                    "Pharmacy batches contain missing tenant scope. Complete the tenant backfill before production startup."
+                )
+
         execute(conn, """
             CREATE TABLE IF NOT EXISTS pharmacy_stock_v2 (
                 stock_key TEXT PRIMARY KEY,
