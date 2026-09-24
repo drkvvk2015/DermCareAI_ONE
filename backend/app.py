@@ -234,11 +234,18 @@ class ModelService:
                 model_used = "MobileNetV2"
                 visualization = self.mobilenet.gradcam_visualization(processed_image, mobilenet_predicted_class)  # type: ignore[union-attr]
 
+        registry = verify_models(str(MODEL_DIR))
+        registry_integrity = all(
+            (not item.get("materialized")) or bool(item.get("hash_matches"))
+            for item in registry.values()
+        )
         decision = safety_gate(
             class_name=final_class,
             confidence=final_confidence,
             image_quality_ok=bool(quality["usable"]),
             minimum_confidence=MIN_CONFIDENCE,
+            model_registered=registry_integrity,
+            model_enabled=self.mode != "unavailable",
         )
         if not decision.accepted:
             final_class = ABSTAIN_LABEL

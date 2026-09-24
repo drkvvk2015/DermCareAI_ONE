@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from math import isnan
 from typing import Iterable, Mapping, Sequence
 
+from ai_safety import evaluate_ai_request
+
 
 ABSTAIN_LABEL = "Uncertain / Needs Clinical Review"
 
@@ -45,16 +47,46 @@ def safety_gate(
     confidence: object,
     image_quality_ok: bool = True,
     minimum_confidence: float = 0.70,
+    model_registered: bool = True,
+    model_enabled: bool = True,
+    consented: bool = True,
+    out_of_distribution: bool = False,
 ) -> SafetyDecision:
-    """Convert raw model output into a conservative application decision."""
+    """Convert raw model output into the governed AI safety decision used by inference.
+
+    Standalone /predict inference is intentionally consent-neutral because it has no
+    patient context. Consent is enforced again at the clinical media / AI-review
+    boundary where a patient and tenant are known.
+    """
     score = safe_confidence(confidence)
     if not image_quality_ok:
         return SafetyDecision(False, "Image quality is insufficient for reliable inference.", score)
-    if class_name.strip() == "":
-        return SafetyDecision(False, "The model returned no classification.", score)
-    if score < minimum_confidence:
-        return SafetyDecision(False, "Prediction confidence is below the safety threshold.", score)
-    return SafetyDecision(True, "Prediction passed the automated safety gate.", score)
+
+    decision = evaluate_ai_request(
+        consented=consented,
+        image_present=bool(class_name.strip()),
+        model_registered=model_registered,
+        model_enabled=model_enabled,
+        out_of_distribution=out_of_distribution,
+        confidence=score,
+        min_confidence=minimum_confidence,
+    )
+    if not decision.allowed:
+        reason_map = {
+            "clinical_image_consent_required": "Clinical image consent is required for a patient-linked inference.",
+            "clinical_image_required": "The model returned no classification.",
+            "model_not_registered": "The model is not registered for governed use.",
+            "model_not_enabled": "The model is not enabled for governed use.",
+            "out_of_distribution": "The image is outside the supported distribution.",
+            "invalid_confidence": "Prediction confidence is invalid.",
+            "below_minimum_confidence": "Prediction confidence is below the safety threshold.",
+        }
+        return SafetyDecision(
+            False,
+            next((reason_map[item] for item in decision.reasons if item in reason_map), "Prediction failed the automated safety gate."),
+            score,
+        )
+    return SafetyDecision(True, "Prediction passed the governed AI safety gateway.", score)
 
 
 def classification_metrics(

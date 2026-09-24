@@ -43,3 +43,13 @@ def test_metrics_are_bounded():
     assert 0 <= metrics.accuracy <= 1
     assert 0 <= metrics.macro_sensitivity <= 1
     assert 0 <= metrics.macro_specificity <= 1
+
+
+def test_safety_gate_uses_governed_gateway_for_model_registration_and_enablement():
+    unregistered = safety_gate(class_name="Melanoma", confidence=0.95, model_registered=False)
+    assert unregistered.accepted is False
+    assert "registered" in unregistered.reason
+
+    disabled = safety_gate(class_name="Melanoma", confidence=0.95, model_enabled=False)
+    assert disabled.accepted is False
+    assert "enabled" in disabled.reason
