@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_roles
 from audit import AuditEvent, record_event
+from idempotency import IdempotencyConflict, IdempotencyInProgress, begin_operation, complete_operation
 from billing_math import BillLine, invoice_total, money
 from commerce_store import atomic_dispense, atomic_fefo_dispense, get_invoice as store_get_invoice, list_stock as store_list_stock, list_batches as store_list_batches, upsert_batch as store_upsert_batch
 from commerce_store import record_payment_event, save_invoice, upsert_stock, update_invoice
@@ -115,8 +116,29 @@ def get_pharmacy_batches(
 
 
 @router.post("/pharmacy/dispense-fefo")
-def dispense_fefo(req: DispenseRequest, user: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
+def dispense_fefo(
+    req: DispenseRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor")),
+):
     organization_id, clinic_id = _tenant(user)
+    actor_id = str(user["uid"])
+    if idempotency_key:
+        try:
+            replay = begin_operation(
+                scope="commerce",
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                actor_id=actor_id,
+                operation_key=idempotency_key,
+                payload={"method": "POST", "path": "/commerce/pharmacy/dispense-fefo", "body": req.model_dump(mode="json")},
+            )
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except IdempotencyInProgress as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if replay is not None:
+            return replay
     required: Dict[str, float] = {}
     for item in req.items:
         required[item.medicine_id] = required.get(item.medicine_id, 0.0) + float(item.quantity)
@@ -138,12 +160,22 @@ def dispense_fefo(req: DispenseRequest, user: dict[str, Any] = Depends(require_r
         ),
         user,
     )
-    return {
+    result = {
         "patient_id": req.patient_id,
         "prescription_id": req.prescription_id,
         "allocations": allocations,
         "dispensed_at": now_iso(),
     }
+    if (idempotency_key):
+        complete_operation(
+            scope="commerce",
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            actor_id=actor_id,
+            operation_key=idempotency_key,
+            response=result,
+        )
+    return result
 
 
 INVOICES: Dict[str, Dict[str, Any]] = {}
@@ -190,9 +222,40 @@ def compute_invoice(req: InvoiceRequest, *, organization_id: str = "default-org"
 
 
 @router.post("/invoices")
-def create_invoice(req: InvoiceRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
+def create_invoice(
+    req: InvoiceRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing")),
+):
     organization_id, clinic_id = _tenant(_)
-    return compute_invoice(req, organization_id=organization_id, clinic_id=clinic_id)
+    actor_id = str(_["uid"])
+    if idempotency_key:
+        try:
+            replay = begin_operation(
+                scope="commerce",
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                actor_id=actor_id,
+                operation_key=idempotency_key,
+                payload={"method": "POST", "path": "/commerce/invoices", "body": req.model_dump(mode="json")},
+            )
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except IdempotencyInProgress as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if replay is not None:
+            return replay
+    result = compute_invoice(req, organization_id=organization_id, clinic_id=clinic_id)
+    if idempotency_key:
+        complete_operation(
+            scope="commerce",
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            actor_id=actor_id,
+            operation_key=idempotency_key,
+            response=result,
+        )
+    return result
 
 
 @router.get("/invoices/{invoice_id}")
