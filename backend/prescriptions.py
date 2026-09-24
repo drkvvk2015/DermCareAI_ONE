@@ -161,6 +161,15 @@ def dispense(
                 "allocations": ledger["allocations"],
                 "idempotent_replay": True,
             }
+            record_event(
+                AuditEvent(
+                    action="prescription_dispense_replayed",
+                    resource_type="prescription",
+                    resource_id=prescription_id,
+                    metadata={"patient_id": prescription["patient_id"], "idempotent_replay": True},
+                ),
+                user,
+            )
             return {"prescription": result, "dispensing": allocation}
 
         if ledger["status"] == "allocated":
