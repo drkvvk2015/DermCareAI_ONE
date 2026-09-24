@@ -163,7 +163,19 @@ export const api = {
     }
   },
 
-  async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number }> {
+  async clinicalSyncStatus(): Promise<{ remaining: number }> {
+    const user = auth.currentUser;
+    if (!user) return { remaining: 0 };
+    return { remaining: (await loadSyncQueue(user.uid)).length };
+  },
+
+  async clearClinicalSyncQueue(): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) return;
+    await clearSyncQueue(user.uid);
+  },
+
+  async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number; exhausted: number }> {
     const user = auth.currentUser;
     if (!user) return { sent: 0, conflicts: 0, remaining: 0 };
 
