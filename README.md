@@ -334,7 +334,14 @@ Minimum evidence includes frozen model artifact, locked test set, sensitivity/sp
 
 ## License
 
-See the repository for the applicable project licensing and dependency notices.
+DermCareAI is currently licensed under **GNU AGPLv3** unless a file or component states otherwise.
+
+- [AGPL-3.0 license text](LICENSE)
+- [Copyright & rights record](COPYRIGHT.md)
+- [Contribution and provenance policy](CONTRIBUTING.md)
+- [Repository attribution notice](NOTICE)
+
+The repository steward entry in `COPYRIGHT.md` records GitHub repository stewardship and review ownership; it does **not** by itself establish legal ownership of every historical contribution. Third-party components remain subject to their own licenses and copyright notices.
 
 
 ## Deployment hardware budget (India)
