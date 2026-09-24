@@ -136,18 +136,61 @@ def dispense(
     prescription = get_prescription(prescription_id, organization_id=organization_id, clinic_id=clinic_id)
     if prescription is None:
         raise HTTPException(status_code=404, detail="Prescription not found")
+    # Durable ledger prevents retry paths from decrementing stock twice after allocation.
     try:
-        from prescription_pharmacy import dispense_prescription
         from datetime import datetime, timezone
-        allocation = dispense_prescription(
+        from prescription_dispense_ledger import begin_or_get, record_allocated, finalize
+        from prescription_pharmacy import dispense_prescription
+
+        ledger = begin_or_get(
             prescription_id=prescription_id,
             organization_id=organization_id,
             clinic_id=clinic_id,
             patient_id=prescription["patient_id"],
-            on=datetime.now(timezone.utc).isoformat(),
         )
+
+        if ledger["status"] == "completed":
+            result = mark_prescription_dispensed(
+                prescription_id,
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+            )
+            allocation = {
+                "prescription_id": prescription_id,
+                "patient_id": prescription["patient_id"],
+                "allocations": ledger["allocations"],
+                "idempotent_replay": True,
+            }
+            return {"prescription": result, "dispensing": allocation}
+
+        if ledger["status"] == "allocated":
+            allocation = {
+                "prescription_id": prescription_id,
+                "patient_id": prescription["patient_id"],
+                "allocations": ledger["allocations"],
+            }
+        else:
+            allocation = dispense_prescription(
+                prescription_id=prescription_id,
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                patient_id=prescription["patient_id"],
+                on=datetime.now(timezone.utc).isoformat(),
+            )
+            record_allocated(
+                prescription_id=prescription_id,
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                allocations=allocation["allocations"],
+            )
+
         result = mark_prescription_dispensed(
             prescription_id,
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+        )
+        finalize(
+            prescription_id=prescription_id,
             organization_id=organization_id,
             clinic_id=clinic_id,
         )
@@ -155,6 +198,17 @@ def dispense(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    record_event(AuditEvent(action="prescription_dispensed", resource_type="prescription", resource_id=prescription_id,
-                            metadata={"patient_id": prescription["patient_id"], "allocation_count": len(allocation["allocations"])}), user)
+
+    record_event(
+        AuditEvent(
+            action="prescription_dispensed",
+            resource_type="prescription",
+            resource_id=prescription_id,
+            metadata={
+                "patient_id": prescription["patient_id"],
+                "allocation_count": len(allocation["allocations"]),
+            },
+        ),
+        user,
+    )
     return {"prescription": result, "dispensing": allocation}
