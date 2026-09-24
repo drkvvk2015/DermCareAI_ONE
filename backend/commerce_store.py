@@ -338,7 +338,7 @@ def atomic_fefo_dispense(
                 attempts += 1
                 row = execute(
                     conn,
-                    """SELECT batch_id, expiry, quantity
+                    """SELECT batch_id, expiry, quantity, payload_json
                        FROM pharmacy_batches
                        WHERE organization_id = :organization_id
                          AND clinic_id = :clinic_id
@@ -362,11 +362,14 @@ def atomic_fefo_dispense(
                 if take <= 0:
                     break
                 updated_at = _now()
+                payload_json = json.loads(row["payload_json"] or "{}")
+                payload_json["quantity"] = available - take
+                payload_json["updated_at"] = updated_at
                 result_update = execute(
                     conn,
                     """UPDATE pharmacy_batches
                        SET quantity = quantity - :take,
-                           payload_json = json_set(payload_json, '$.quantity', quantity - :take),
+                           payload_json = :payload_json,
                            updated_at = :updated_at
                        WHERE batch_id = :batch_id
                          AND organization_id = :organization_id
@@ -374,6 +377,7 @@ def atomic_fefo_dispense(
                          AND quantity >= :take""",
                     {
                         "take": take,
+                        "payload_json": json.dumps(payload_json, sort_keys=True, default=str),
                         "updated_at": updated_at,
                         "batch_id": row["batch_id"],
                         "organization_id": organization_id,
