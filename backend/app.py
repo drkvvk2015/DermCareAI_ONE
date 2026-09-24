@@ -371,6 +371,8 @@ def platform_readiness() -> ReadinessResponse:
         cors_origins=configured_origins,
         app_version=APP_VERSION,
         firebase_auth_required=auth_enabled,
+        redis_url=os.getenv("REDIS_URL"),
+        require_distributed_rate_limit=os.getenv("REQUIRE_DISTRIBUTED_RATE_LIMIT", "true").lower() == "true",
     )
     blocking_findings = [finding for finding in readiness_findings if finding.severity == "block"]
     components = {
