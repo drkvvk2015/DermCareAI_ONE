@@ -283,3 +283,33 @@ Minimum evidence includes frozen model artifact, locked test set, sensitivity/sp
 ## License
 
 See the repository for the applicable project licensing and dependency notices.
+
+
+## Deployment hardware budget (India)
+
+Indicative planning ranges; verify vendor quotations before procurement.
+
+| Tier | Typical configuration | Approx. one-time budget |
+|---|---|---:|
+| Development | Existing 8 GB SSD laptop/workstation | ₹0 incremental |
+| Small clinic | 4+ cores, 8–16 GB RAM, 256–512 GB SSD, UPS | ₹40,000–₹55,000 |
+| Recommended clinic | 8 cores, 16 GB RAM, 512 GB NVMe, UPS + backup storage | ₹70,000–₹95,000 |
+| AI-ready local inference | 8+ cores, 32 GB RAM, 1 TB NVMe, NVIDIA GPU with 8–12+ GB VRAM | ₹1.3–₹2.0 lakh+ |
+
+Recommended production baseline: Ubuntu 24.04 LTS, PostgreSQL 16, Python 3.12, Node.js 22 LTS and Docker/Compose. Use 32 GB RAM and a supported GPU only when local AI inference is independently validated for the intended workload.
+
+## Indicative cloud deployment budget
+
+Monthly planning ranges for a small-to-standard clinic; actual bills vary by region, storage, traffic, backups, managed services and GPU usage.
+
+| Deployment | Approx. monthly budget |
+|---|---:|
+| Development / low traffic | ₹0–₹1,500 |
+| Small clinic | ₹3,000–₹6,000 |
+| Standard clinic | ₹6,000–₹12,000 |
+| Multi-clinic | ₹15,000–₹35,000 |
+| AI/GPU-enabled | ₹35,000–₹80,000+ |
+
+A typical production stack consists of an application compute service, managed PostgreSQL, object storage/backups, monitoring and TLS. GPU inference should be treated as a separate cost center and enabled only for validated workloads.
+
+These figures are **budgetary estimates, not guaranteed cloud prices**. Obtain current provider quotations for the deployment region before committing.
