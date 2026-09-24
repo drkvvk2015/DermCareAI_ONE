@@ -317,39 +317,75 @@ def list_batches(medicine_id: str | None = None, *, organization_id: str = "defa
     return [json.loads(row["payload_json"]) for row in rows]
 
 
-def atomic_fefo_dispense(required: Dict[str, float], *, on: str, organization_id: str = "default-org", clinic_id: str = "default-clinic") -> Dict[str, list[tuple[str, float]]]:
-    """Allocate and decrement non-expired, unblocked batches inside one transaction."""
+def atomic_fefo_dispense(
+    required: Dict[str, float],
+    *,
+    on: str,
+    organization_id: str = "default-org",
+    clinic_id: str = "default-clinic",
+) -> Dict[str, list[tuple[str, float]]]:
+    """Allocate FEFO stock using conditional row updates to prevent concurrent over-dispensing."""
     init_store()
     with transaction(ENGINE) as conn:
         result: Dict[str, list[tuple[str, float]]] = {}
         for medicine_id, requested in required.items():
-            requested = float(requested)
-            if requested <= 0:
+            remaining = float(requested)
+            if remaining <= 0:
                 raise ValueError(medicine_id)
-            rows = execute(conn, """
-                SELECT batch_id, expiry, quantity, blocked
-                FROM pharmacy_batches
-                WHERE organization_id = :organization_id AND clinic_id = :clinic_id AND medicine_id = :medicine_id AND quantity > 0
-                  AND blocked = FALSE AND expiry >= :on
-                ORDER BY expiry, batch_id
-            """, {"organization_id": organization_id, "clinic_id": clinic_id, "medicine_id": medicine_id, "on": on}).mappings().all()
-            remaining = requested
             allocations: list[tuple[str, float]] = []
-            for row in rows:
-                take = min(remaining, float(row["quantity"]))
+            attempts = 0
+            while remaining > 0 and attempts < 1000:
+                attempts += 1
+                row = execute(
+                    conn,
+                    """SELECT batch_id, expiry, quantity
+                       FROM pharmacy_batches
+                       WHERE organization_id = :organization_id
+                         AND clinic_id = :clinic_id
+                         AND medicine_id = :medicine_id
+                         AND quantity > 0
+                         AND blocked = FALSE
+                         AND expiry >= :on
+                       ORDER BY expiry, batch_id
+                       LIMIT 1""",
+                    {
+                        "organization_id": organization_id,
+                        "clinic_id": clinic_id,
+                        "medicine_id": medicine_id,
+                        "on": on,
+                    },
+                ).mappings().first()
+                if row is None:
+                    break
+                available = float(row["quantity"])
+                take = min(remaining, available)
                 if take <= 0:
-                    continue
-                new_quantity = float(row["quantity"]) - take
+                    break
                 updated_at = _now()
-                payload = execute(conn, "SELECT payload_json FROM pharmacy_batches WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id}).mappings().first()
-                payload_json = json.loads(payload["payload_json"]) if payload else {}
-                payload_json["quantity"] = new_quantity
-                payload_json["updated_at"] = updated_at
-                execute(conn, "UPDATE pharmacy_batches SET quantity = :quantity, payload_json = :payload_json, updated_at = :updated_at WHERE batch_id = :batch_id AND organization_id = :organization_id AND clinic_id = :clinic_id", {"quantity": new_quantity, "payload_json": json.dumps(payload_json, sort_keys=True, default=str), "updated_at": updated_at, "batch_id": row["batch_id"], "organization_id": organization_id, "clinic_id": clinic_id})
+                result_update = execute(
+                    conn,
+                    """UPDATE pharmacy_batches
+                       SET quantity = quantity - :take,
+                           payload_json = json_set(payload_json, '$.quantity', quantity - :take),
+                           updated_at = :updated_at
+                       WHERE batch_id = :batch_id
+                         AND organization_id = :organization_id
+                         AND clinic_id = :clinic_id
+                         AND quantity >= :take""",
+                    {
+                        "take": take,
+                        "updated_at": updated_at,
+                        "batch_id": row["batch_id"],
+                        "organization_id": organization_id,
+                        "clinic_id": clinic_id,
+                    },
+                )
+                if result_update.rowcount != 1:
+                    continue
+
                 allocations.append((str(row["batch_id"]), take))
                 remaining -= take
-                if remaining <= 0:
-                    break
+
             if remaining > 0:
                 raise ValueError(medicine_id)
             result[medicine_id] = allocations
