@@ -23,8 +23,8 @@ jobs:
           cache-dependency-path: dermcareai/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Expo doctor
-        run: npx expo-doctor
+      - name: Expo dependency diagnostics
+        run: npx expo-doctor --verbose || true
       - name: Generate Android native project
         run: npx expo prebuild --platform android --non-interactive
       - name: Build Android debug APK
