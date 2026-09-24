@@ -1,0 +1,32 @@
+name: DermCareAI Native Android Smoke
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dermcareai
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Expo doctor
+        run: npx expo-doctor
+      - name: Generate Android native project
+        run: npx expo prebuild --platform android --non-interactive
+      - name: Build Android debug APK
+        working-directory: dermcareai/android
+        run: ./gradlew assembleDebug --no-daemon
