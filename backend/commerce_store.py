@@ -53,25 +53,7 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
-        for table, columns_to_add in {
-            "invoices": ("organization_id TEXT", "clinic_id TEXT"),
-            "pharmacy_stock": ("organization_id TEXT", "clinic_id TEXT"),
-            "payment_events": ("organization_id TEXT", "clinic_id TEXT"),
-        }.items():
-            existing = {column["name"] for column in inspect(conn).get_columns(table)}
-            for definition in columns_to_add:
-                name = definition.split()[0]
-                if name not in existing:
-                    execute(conn, f"ALTER TABLE {table} ADD COLUMN {definition}")
-        columns = {column["name"] for column in inspect(conn).get_columns("pharmacy_batches")}
-        if "organization_id" not in columns:
-            execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT")
-        if "clinic_id" not in columns:
-            execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN clinic_id TEXT")
-        execute(conn, """
-            CREATE INDEX IF NOT EXISTS idx_pharmacy_batches_tenant_fefo
-            ON pharmacy_batches(organization_id, clinic_id, medicine_id, expiry, batch_id)
-        """)
+        # Create payment_events before any migration inspection; older databases may not have it.
         execute(conn, """
             CREATE TABLE IF NOT EXISTS payment_events (
                 event_id TEXT PRIMARY KEY,
@@ -80,6 +62,32 @@ def init_store() -> None:
                 received_at TEXT NOT NULL,
                 payload_json TEXT NOT NULL
             )
+        """)
+
+        # Legacy installations may have these tables without tenant columns.
+        for table, columns_to_add in {
+            "invoices": ("organization_id TEXT", "clinic_id TEXT"),
+            "pharmacy_stock": ("organization_id TEXT", "clinic_id TEXT"),
+        }.items():
+            existing = {column["name"] for column in inspect(conn).get_columns(table)}
+            for definition in columns_to_add:
+                name = definition.split()[0]
+                if name not in existing:
+                    execute(conn, f"ALTER TABLE {table} ADD COLUMN {definition}")
+
+        payment_columns = {column["name"] for column in inspect(conn).get_columns("payment_events")}
+        for definition in ("organization_id TEXT", "clinic_id TEXT"):
+            name = definition.split()[0]
+            if name not in payment_columns:
+                execute(conn, f"ALTER TABLE payment_events ADD COLUMN {definition}")
+        columns = {column["name"] for column in inspect(conn).get_columns("pharmacy_batches")}
+        if "organization_id" not in columns:
+            execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN organization_id TEXT")
+        if "clinic_id" not in columns:
+            execute(conn, "ALTER TABLE pharmacy_batches ADD COLUMN clinic_id TEXT")
+        execute(conn, """
+            CREATE INDEX IF NOT EXISTS idx_pharmacy_batches_tenant_fefo
+            ON pharmacy_batches(organization_id, clinic_id, medicine_id, expiry, batch_id)
         """)
         execute(conn, """
             CREATE TABLE IF NOT EXISTS pharmacy_stock_v2 (
