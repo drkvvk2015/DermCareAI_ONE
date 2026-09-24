@@ -36,6 +36,12 @@ def db():
         conn.execute(
             f"CREATE TABLE IF NOT EXISTS audit_events (id {id_type}, timestamp TEXT NOT NULL, actor_id TEXT NOT NULL, actor_role TEXT NOT NULL, action TEXT NOT NULL, resource_type TEXT NOT NULL, resource_id TEXT NOT NULL, metadata_json TEXT NOT NULL, correlation_id TEXT, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS audit_chain_state (id INTEGER PRIMARY KEY, last_hash TEXT NOT NULL)"
+        )
+        current = conn.execute("SELECT last_hash FROM audit_chain_state WHERE id = 1").fetchone()
+        if current is None:
+            conn.execute("INSERT INTO audit_chain_state(id, last_hash) VALUES (1, 'GENESIS')")
         yield conn
 
 
@@ -45,8 +51,11 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
     actor_id = str(user["uid"])
     actor_role = roles[0] if roles else "staff"
     with db() as conn:
-        previous = conn.execute("SELECT event_hash FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
-        previous_hash = previous["event_hash"] if previous else "GENESIS"
+        if ENGINE.url.get_backend_name() == "postgresql":
+            previous = conn.execute("SELECT last_hash FROM audit_chain_state WHERE id = 1 FOR UPDATE").fetchone()
+        else:
+            previous = conn.execute("SELECT last_hash FROM audit_chain_state WHERE id = 1").fetchone()
+        previous_hash = previous["last_hash"] if previous else "GENESIS"
         canonical = {
             "timestamp": timestamp,
             "actor_id": actor_id,
@@ -70,6 +79,10 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
             ),
         )
         event_id = result.fetchone()["id"]
+        conn.execute(
+            "UPDATE audit_chain_state SET last_hash = ? WHERE id = 1",
+            (digest,),
+        )
     return {"id": f"AUD-{event_id:09d}", **canonical, "event_hash": digest}
 
 
