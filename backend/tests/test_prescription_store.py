@@ -50,3 +50,19 @@ def test_prescription_is_tenant_scoped_and_cancellable(prescription_env):
     assert cancelled["status"] == "cancelled"
     with pytest.raises(ValueError, match="Only active"):
         store.cancel_prescription(created["id"], organization_id="org-a", clinic_id="clinic-a")
+
+
+def test_prescription_store_schema_initialization_is_repeatable(prescription_env):
+    store = prescription_env
+    store.init_store()
+    store.init_store()
+    created = store.create_prescription(
+        organization_id="org-repeat",
+        clinic_id="clinic-repeat",
+        patient_id="patient-repeat",
+        encounter_id="enc-repeat",
+        instructions="repeatable schema migration",
+        items=[{"medicine_id": "m-repeat", "quantity": 1}],
+        prescribed_by="doctor-repeat",
+    )
+    assert created["dispense_status"] == "not_dispensed"

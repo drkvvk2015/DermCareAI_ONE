@@ -10,25 +10,28 @@ export type SyncOperation = {
   createdAt: number;
   attempts: number;
   idempotencyKey: string;
+  ownerUid: string;
 };
 
+const STORAGE_PREFIX = '@dermcareai/clinical-sync-v2:';
+const KEY_PREFIX = 'dermcareai-sync-key-v2:';
 const MAX_RETRY_ATTEMPTS = 8;
 const MAX_QUEUE_ITEMS = 100;
-const QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-function storageKey(scope: string): string {
-  return '@dermcareai/clinical-sync-v2:' + scope;
+async function getStorageKey(ownerUid: string): Promise<string> {
+  const secureKey = `${KEY_PREFIX}${ownerUid}`;
+  let key = await SecureStore.getItemAsync(secureKey);
+  if (!key) {
+    key = CryptoJS.lib.WordArray.random(32).toString();
+    await SecureStore.setItemAsync(secureKey, key, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+  }
+  return key;
 }
 
-async function encryptionKey(scope: string): Promise<string> {
-  const keyName = 'dermcareai.sync.key.' + scope;
-  const existing = await SecureStore.getItemAsync(keyName);
-  if (existing) return existing;
-  const generated = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Base64);
-  await SecureStore.setItemAsync(keyName, generated, {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  });
-  return generated;
+function storageId(ownerUid: string): string {
+  return `${STORAGE_PREFIX}${ownerUid}`;
 }
 
 function encrypt(value: string, key: string): string {
@@ -41,7 +44,7 @@ function decrypt(value: string, key: string): string {
 
 export function enqueueSync(queue: SyncOperation[], operation: SyncOperation): SyncOperation[] {
   if (queue.some(item => item.id === operation.id)) return queue;
-  return [...queue, operation].sort((a, b) => a.createdAt - b.createdAt).slice(-MAX_QUEUE_ITEMS);
+  return [...queue, operation].sort((a, b) => a.createdAt - b.createdAt).slice(0, MAX_QUEUE_ITEMS);
 }
 
 export function nextSync(queue: SyncOperation[]): SyncOperation | undefined {
@@ -52,38 +55,37 @@ export function markSyncRetry(queue: SyncOperation[], id: string): SyncOperation
   return queue.map(item => item.id === id ? { ...item, attempts: item.attempts + 1 } : item);
 }
 
-function pruneExpired(queue: SyncOperation[]): SyncOperation[] {
-  const cutoff = Date.now() - QUEUE_TTL_MS;
-  return queue.filter(item => item.createdAt >= cutoff);
-}
-
-export async function loadSyncQueue(scope: string): Promise<SyncOperation[]> {
-  const raw = await AsyncStorage.getItem(storageKey(scope));
+export async function loadSyncQueue(ownerUid: string): Promise<SyncOperation[]> {
+  const raw = await AsyncStorage.getItem(storageId(ownerUid));
   if (!raw) return [];
   try {
-    const key = await encryptionKey(scope);
+    const key = await getStorageKey(ownerUid);
     const parsed = JSON.parse(decrypt(raw, key));
-    return Array.isArray(parsed) ? pruneExpired(parsed) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(item => item?.ownerUid === ownerUid);
   } catch {
     return [];
   }
 }
 
-async function saveSyncQueue(scope: string, queue: SyncOperation[]): Promise<void> {
-  const key = await encryptionKey(scope);
-  const payload = JSON.stringify(pruneExpired(queue).slice(-MAX_QUEUE_ITEMS));
-  await AsyncStorage.setItem(storageKey(scope), encrypt(payload, key));
+async function saveSyncQueue(ownerUid: string, queue: SyncOperation[]): Promise<void> {
+  const key = await getStorageKey(ownerUid);
+  await AsyncStorage.setItem(storageId(ownerUid), encrypt(JSON.stringify(queue), key));
 }
 
-export async function clearSyncQueue(scope: string): Promise<void> {
-  await AsyncStorage.removeItem(storageKey(scope));
-}
-
-export async function enqueuePersistentSync(scope: string, operation: Omit<SyncOperation, 'attempts'>): Promise<SyncOperation[]> {
-  const current = await loadSyncQueue(scope);
-  const queued = enqueueSync(current, { ...operation, attempts: 0 });
-  await saveSyncQueue(scope, queued);
+export async function enqueuePersistentSync(
+  ownerUid: string,
+  operation: Omit<SyncOperation, 'attempts' | 'ownerUid'>
+): Promise<SyncOperation[]> {
+  const current = await loadSyncQueue(ownerUid);
+  const queued = enqueueSync(current, { ...operation, attempts: 0, ownerUid });
+  await saveSyncQueue(ownerUid, queued);
   return queued;
+}
+
+export async function clearSyncQueue(ownerUid: string): Promise<void> {
+  await AsyncStorage.removeItem(storageId(ownerUid));
+  await SecureStore.deleteItemAsync(`${KEY_PREFIX}${ownerUid}`);
 }
 
 export type SyncSendResult =
@@ -91,28 +93,30 @@ export type SyncSendResult =
   | { status: 'conflict'; message: string }
   | { status: 'retry'; message: string };
 
-export async function flushSyncQueue(scope: string, send: (operation: SyncOperation) => Promise<SyncSendResult>): Promise<{ sent: number; conflicts: number; remaining: number }> {
-  let queue = await loadSyncQueue(scope);
+export async function flushSyncQueue(
+  ownerUid: string,
+  send: (operation: SyncOperation) => Promise<SyncSendResult>
+): Promise<{ sent: number; conflicts: number; remaining: number; exhausted: number }> {
+  let queue = await loadSyncQueue(ownerUid);
   let sent = 0;
   let conflicts = 0;
+  let exhausted = 0;
+
   while (queue.length > 0) {
     const operation = nextSync(queue);
-    if (!operation || operation.attempts >= MAX_RETRY_ATTEMPTS) break;
+    if (!operation) break;
+    if (operation.attempts >= MAX_RETRY_ATTEMPTS) { exhausted += 1; break; }
     const result = await send(operation);
     if (result.status === 'sent') {
       queue = queue.filter(item => item.id !== operation.id);
-      await saveSyncQueue(scope, queue);
+      await saveSyncQueue(ownerUid, queue);
       sent += 1;
       continue;
     }
-    if (result.status === 'conflict') {
-      conflicts += 1;
-      await saveSyncQueue(scope, queue);
-      break;
-    }
+    if (result.status === 'conflict') { conflicts += 1; break; }
     queue = markSyncRetry(queue, operation.id);
-    await saveSyncQueue(scope, queue);
+    await saveSyncQueue(ownerUid, queue);
     break;
   }
-  return { sent, conflicts, remaining: queue.length };
+  return { sent, conflicts, remaining: queue.length, exhausted };
 }

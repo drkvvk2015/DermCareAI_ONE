@@ -3,7 +3,7 @@ import { auth } from '../config/firebase';
 import { API_URL } from '@env';
 import type { AIGovernanceCard } from '../types/platform';
 import { ClinicalApiError } from '../types/clinicalApi';
-import { flushSyncQueue, enqueuePersistentSync, clearSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
+import { flushSyncQueue, enqueuePersistentSync, loadSyncQueue, clearSyncQueue, type SyncOperation, type SyncSendResult } from './syncQueue';
 
 export const ABSTAIN_LABEL = 'Uncertain / Needs Clinical Review';
 
@@ -163,9 +163,21 @@ export const api = {
     }
   },
 
-  async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number }> {
+  async clinicalSyncStatus(): Promise<{ remaining: number }> {
     const user = auth.currentUser;
-    if (!user) return { sent: 0, conflicts: 0, remaining: 0 };
+    if (!user) return { remaining: 0 };
+    return { remaining: (await loadSyncQueue(user.uid)).length };
+  },
+
+  async clearClinicalSyncQueue(): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) return;
+    await clearSyncQueue(user.uid);
+  },
+
+  async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number; exhausted: number }> {
+    const user = auth.currentUser;
+    if (!user) return { sent: 0, conflicts: 0, remaining: 0, exhausted: 0 };
 
     const scope = user.uid;
     const token = await user.getIdToken();

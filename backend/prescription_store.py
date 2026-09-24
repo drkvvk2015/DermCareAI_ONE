@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, inspect
 
 from storage import create_store_engine, execute, require_postgres_in_production, transaction
 
@@ -36,10 +36,12 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
-        try:
-            execute(conn, "ALTER TABLE prescriptions ADD COLUMN dispense_status TEXT NOT NULL DEFAULT 'not_dispensed'")
-        except Exception:
-            pass
+        columns = {column["name"] for column in inspect(conn).get_columns("prescriptions")}
+        if "dispense_status" not in columns:
+            execute(
+                conn,
+                "ALTER TABLE prescriptions ADD COLUMN dispense_status TEXT NOT NULL DEFAULT 'not_dispensed'",
+            )
         execute(conn, """
             CREATE INDEX IF NOT EXISTS idx_prescriptions_patient
             ON prescriptions(clinic_id, patient_id, created_at DESC)
