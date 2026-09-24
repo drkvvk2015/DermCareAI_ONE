@@ -54,7 +54,7 @@ def test_dispense_validates_all_items_before_mutating_stock() -> None:
         ],
     )
     try:
-        dispense(request, {"uid": "u1", "roles": {"pharmacist"}})
+        dispense(request, {"uid": "u1", "roles": {"pharmacist"}, "claims": {"organization_id": "default-org", "clinic_id": "default-clinic"}})
     except HTTPException as exc:
         assert exc.status_code == 404
     else:
@@ -71,7 +71,7 @@ def test_dispense_aggregates_duplicate_items() -> None:
             {"medicine_id": "med-a", "quantity": 2},
         ],
     )
-    result = dispense(request, {"uid": "u1", "roles": {"pharmacist"}})
+    result = dispense(request, {"uid": "u1", "roles": {"pharmacist"}, "claims": {"organization_id": "default-org", "clinic_id": "default-clinic"}})
     assert list_stock()[0]["quantity"] == 0
     assert len(result["dispensed"]) == 2
 
