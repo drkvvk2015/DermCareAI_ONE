@@ -16,7 +16,7 @@ def test_idempotency_returns_cached_response_for_same_request():
         payload={"method": "POST", "body": {"value": 1}},
     )
     assert begin_operation(**kwargs) is None
-    complete_operation(**kwargs, response={"id": "LES-1"})
+    complete_operation(scope=kwargs["scope"], organization_id=kwargs["organization_id"], clinic_id=kwargs["clinic_id"], actor_id=kwargs["actor_id"], operation_key=kwargs["operation_key"], response={"id": "LES-1"})
     assert begin_operation(**kwargs) == {"id": "LES-1"}
 
 
@@ -30,7 +30,7 @@ def test_idempotency_rejects_key_reuse_with_different_payload():
         payload={"method": "POST", "body": {"value": 1}},
     )
     assert begin_operation(**kwargs) is None
-    complete_operation(**kwargs, response={"id": "LES-2"})
+    complete_operation(scope=kwargs["scope"], organization_id=kwargs["organization_id"], clinic_id=kwargs["clinic_id"], actor_id=kwargs["actor_id"], operation_key=kwargs["operation_key"], response={"id": "LES-2"})
     try:
         begin_operation(
             **{**kwargs, "payload": {"method": "POST", "body": {"value": 2}}}
