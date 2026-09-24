@@ -45,6 +45,23 @@ AI output remains **traceable and reviewable**. An attached AI assessment cannot
 
 The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
 
+
+## Current application UI previews
+
+The current mobile application contains dedicated screens for authentication, dashboard, patients, appointments, encounters, body-map/lesions, AI screening, billing, prescriptions and pharmacy. The visuals below are repository-local previews aligned to those current screens and workflows; they are **not device screenshots** and should be replaced by runtime captures when a device/emulator capture is available.
+
+| Preview | Current workflow represented |
+|---|---|
+| [Dashboard](docs/assets/ui-dashboard-preview.svg) | Clinic overview, appointments, clinical workspace and governed AI entry points |
+| [Patient + Encounter](docs/assets/ui-patient-encounter-preview.svg) | Patient 360, history, examination, lesions, media consent, assessment and sign-off |
+| [AI Review](docs/assets/ui-ai-review-preview.svg) | Image quality gate, model provenance, abstention and Accept / Reject / Override |
+| [Billing + Pharmacy](docs/assets/ui-billing-pharmacy-preview.svg) | Billing/UPI, prescription, inventory and replay-safe dispensing workflows |
+
+![DermCareAI dashboard UI preview](docs/assets/ui-dashboard-preview.svg)
+![DermCareAI patient and encounter UI preview](docs/assets/ui-patient-encounter-preview.svg)
+![DermCareAI AI review UI preview](docs/assets/ui-ai-review-preview.svg)
+![DermCareAI billing and pharmacy UI preview](docs/assets/ui-billing-pharmacy-preview.svg)
+
 ## System at a glance
 
 ```text
@@ -89,7 +106,7 @@ The final engineering swarm has now been integrated as three independently valid
 | Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
 | Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
 | Full required CI matrix | ✅ All eight release workflows passed on PR #159, #160 and #161 heads before merge |
-| Native Android smoke gate | 🟡 Added in final stabilization; CI validates Expo prebuild + Java 17 Gradle debug build |\n| Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |\n| Open pull requests | 🟡 2 legacy maintenance PRs pending cleanup; neither is on the release-critical path |
+| Native Android smoke gate | 🟡 Added in final stabilization; CI validates Expo prebuild + Java 17 Gradle debug build |\n| Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |\n| Final stabilization PR | 🟡 PR #174 contains Android smoke gating, schema migration evidence and current UI preview documentation; CI reruns are currently failing before workflow steps execute |
 
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
