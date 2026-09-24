@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import uuid
@@ -166,6 +167,20 @@ def init_store() -> None:
             CREATE INDEX IF NOT EXISTS idx_followups_clinic_due
               ON encounter_followups(clinic_id, due_at, status);
 
+            CREATE TABLE IF NOT EXISTS clinical_operations (
+                operation_id TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                clinic_id TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                path TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                response_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_clinical_operations_tenant
+              ON clinical_operations(organization_id, clinic_id, created_at DESC);
+
             CREATE TABLE IF NOT EXISTS encounter_ai_reviews (
                 id TEXT PRIMARY KEY,
                 organization_id TEXT NOT NULL,
@@ -221,6 +236,77 @@ def _decode(row: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
+def _operation_claim(
+    conn: Any,
+    *,
+    operation_id: str,
+    organization_id: str,
+    clinic_id: str,
+    actor_id: str,
+    method: str,
+    path: str,
+    request_hash: str,
+) -> dict[str, Any] | None:
+    """Claim an idempotent clinical operation inside the same DB transaction.
+
+    A completed operation is replayed byte-for-byte. Reusing a key with a different
+    payload is rejected. The unique key is protected with a savepoint so concurrent
+    duplicate requests can safely inspect the committed result on PostgreSQL.
+    """
+    nested = conn._conn.begin_nested()
+    try:
+        conn.execute(
+            """
+            INSERT INTO clinical_operations(
+                operation_id, organization_id, clinic_id, actor_id, method, path,
+                request_hash, response_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?)
+            """,
+            (
+                operation_id,
+                organization_id,
+                clinic_id,
+                actor_id,
+                method,
+                path,
+                request_hash,
+                _now(),
+            ),
+        )
+        nested.commit()
+        return None
+    except Exception:
+        nested.rollback()
+        existing = conn.execute(
+            """
+            SELECT organization_id, clinic_id, actor_id, method, path, request_hash, response_json
+            FROM clinical_operations
+            WHERE operation_id = ?
+            """,
+            (operation_id,),
+        ).fetchone()
+        if not existing:
+            raise
+        if (
+            existing["organization_id"] != organization_id
+            or existing["clinic_id"] != clinic_id
+            or existing["request_hash"] != request_hash
+            or existing["actor_id"] != actor_id
+        ):
+            raise ValueError("Idempotency key was already used for a different clinical operation")
+        response = json.loads(existing["response_json"])
+        if not response:
+            raise ValueError("The same clinical operation is currently being processed; retry shortly")
+        return response
+
+
+def _operation_finish(conn: Any, operation_id: str, response: dict[str, Any]) -> None:
+    conn.execute(
+        "UPDATE clinical_operations SET response_json = ? WHERE operation_id = ?",
+        (json.dumps(response, sort_keys=True), operation_id),
+    )
+
+
 def create_encounter(
     *,
     organization_id: str,
@@ -272,6 +358,11 @@ def update_encounter(
     clinic_id: str,
     expected_version: int,
     patch: dict[str, Any],
+    *,
+    organization_id: str | None = None,
+    idempotency_key: str | None = None,
+    actor_id: str = "system",
+    request_hash: str | None = None,
 ) -> dict[str, Any]:
     allowed = {"status", "complaints", "examination", "assessment", "plan", "closed_at"}
     unknown = set(patch) - allowed
@@ -298,14 +389,35 @@ def update_encounter(
     sets.extend(["version = version + 1", "updated_at = ?"])
     values.extend([now, encounter_id, clinic_id, expected_version])
     with transaction() as conn:
+        if organization_id is None:
+            organization_id = "legacy"
+        if idempotency_key:
+            replay = _operation_claim(
+                conn,
+                operation_id=idempotency_key,
+                organization_id=organization_id,
+                clinic_id=clinic_id,
+                actor_id=actor_id,
+                method="PATCH",
+                path=f"/api/v1/clinical/encounters/{encounter_id}",
+                request_hash=request_hash or hashlib.sha256(json.dumps(patch, sort_keys=True).encode()).hexdigest(),
+            )
+            if replay is not None:
+                return replay
         cursor = conn.execute(
-            f"UPDATE encounters SET {', '.join(sets)} WHERE id = ? AND clinic_id = ? AND version = ?",
-            values,
+            f"UPDATE encounters SET {', '.join(sets)} WHERE id = ? AND organization_id = ? AND clinic_id = ? AND version = ?",
+            [*values[:-3], encounter_id, organization_id, clinic_id, expected_version],
         )
         if cursor.rowcount != 1:
             raise ValueError("Encounter version conflict or record not found")
-        row = conn.execute("SELECT * FROM encounters WHERE id = ?", (encounter_id,)).fetchone()
-    return _decode(row)
+        row = conn.execute(
+            "SELECT * FROM encounters WHERE id = ? AND organization_id = ? AND clinic_id = ?",
+            (encounter_id, organization_id, clinic_id),
+        ).fetchone()
+        result = _decode(row)
+        if idempotency_key:
+            _operation_finish(conn, idempotency_key, result)
+    return result
 
 
 def upsert_lesion(**payload: Any) -> dict[str, Any]:
@@ -331,6 +443,29 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
         "confirmed_diagnosis": payload.get("confirmed_diagnosis"),
     }
     with _connect() as conn:
+        idempotency_key = payload.get("idempotency_key")
+        if idempotency_key:
+            replay = _operation_claim(
+                conn,
+                operation_id=str(idempotency_key),
+                organization_id=str(v["organization_id"]),
+                clinic_id=str(v["clinic_id"]),
+                actor_id=str(payload.get("actor_id") or "system"),
+                method="POST",
+                path="/api/v1/clinical/lesions",
+                request_hash=str(
+                    payload.get("request_hash")
+                    or hashlib.sha256(
+                        json.dumps(
+                            {k: payload.get(k) for k in sorted(payload) if k not in {"idempotency_key", "request_hash", "actor_id"}},
+                            sort_keys=True,
+                            default=str,
+                        ).encode()
+                    ).hexdigest()
+                ),
+            )
+            if replay is not None:
+                return replay
         conn.execute(
             """
             INSERT INTO lesions (
@@ -385,7 +520,10 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
                 v["confirmed_diagnosis"], now, str(payload.get("observed_by") or "system"),
             ),
         )
-    return _decode(row)
+        result = _decode(row)
+        if idempotency_key:
+            _operation_finish(conn, str(idempotency_key), result)
+    return result
 
 
 def list_lesion_timeline(*, clinic_id: str, patient_id: str, lesion_code: str) -> list[dict[str, Any]]:
