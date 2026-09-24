@@ -253,6 +253,10 @@ The repository intentionally keeps the **software release gate** separate from t
 ├── docs/
 │   ├── assets/
 │   ├── ai-validation/
+│   ├── AI_CLINICAL_VALIDATION_PROTOCOL.md
+│   ├── PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md
+│   ├── INDIA_REGULATORY_ASSESSMENT.md
+│   ├── PRODUCTION_DEPLOYMENT_RUNBOOK.md
 │   ├── WAVE3_PRODUCTION_RELEASE.md
 │   ├── WAVE4_CLINICAL_WORKFLOW.md
 │   └── WAVE5_RELEASE_EVIDENCE_STATUS.md
