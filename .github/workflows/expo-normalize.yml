@@ -1,0 +1,48 @@
+name: DermCareAI Expo Dependency Normalizer
+
+on:
+  push:
+    branches: [swarm/p1-expo-modernization]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    if: ${{ !contains(github.event.head_commit.message, 'ci: normalize Expo dependencies') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dermcareai
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - name: Install current lock
+        run: npm ci
+      - name: Align Expo SDK dependencies
+        run: npx expo install --fix
+      - name: Add direct native SVG dependency
+        run: npx expo install react-native-svg
+      - name: Remove unnecessary direct Expo internals
+        run: npm uninstall @expo/config-plugins @expo/metro-config @expo/prebuild-config expo-modules-autolinking
+      - name: Commit normalized dependency graph
+        shell: bash
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes required."
+            exit 0
+          fi
+          git commit -m "ci: normalize Expo dependencies"
+          git push origin "HEAD:${BRANCH}"
