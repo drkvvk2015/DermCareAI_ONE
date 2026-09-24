@@ -165,7 +165,7 @@ export const api = {
 
   async flushClinicalSyncQueue(): Promise<{ sent: number; conflicts: number; remaining: number }> {
     const user = auth.currentUser;
-    if (!user) return { sent: 0, conflicts: 0, remaining: (await import('./syncQueue')).loadSyncQueue().then(() => 0) as any };
+    if (!user) return { sent: 0, conflicts: 0, remaining: 0 };
 
     const scope = user.uid;
     const token = await user.getIdToken();
