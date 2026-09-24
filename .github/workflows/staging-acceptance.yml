@@ -35,7 +35,7 @@ jobs:
 
       - name: Run clinical acceptance tests
         run: |
-          docker compose -f docker-compose.staging.yml exec -T backend             python -m pytest -q tests/test_clinical_e2e.py tests/test_clinical_platform.py tests/test_ai_governance_api.py
+          docker compose -f docker-compose.staging.yml exec -T backend             python -m pytest -q tests/test_clinical_e2e.py tests/test_clinical_platform.py tests/test_ai_governance_api.py tests/test_prescription_dispense_ledger.py tests/test_prescription_pharmacy_contract.py tests/test_prescription_store.py tests/test_pharmacy_integrity.py tests/test_pharmacy_inventory.py tests/test_pharmacy_store_fefo.py tests/test_commerce_tenant.py tests/test_idempotency.py
       - name: Capture staging diagnostics
         if: always()
         run: |
