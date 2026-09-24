@@ -45,6 +45,10 @@ def record_event(event: AuditEvent, user: dict[str, Any]) -> Dict[str, Any]:
     actor_id = str(user["uid"])
     actor_role = roles[0] if roles else "staff"
     with db() as conn:
+        # PostgreSQL advisory lock serializes hash-chain append operations across workers.
+        # SQLite transactions already serialize writers at the database level.
+        if ENGINE.url.get_backend_name() == "postgresql":
+            conn.execute("SELECT pg_advisory_xact_lock(781239451)")
         previous = conn.execute("SELECT event_hash FROM audit_events ORDER BY id DESC LIMIT 1").fetchone()
         previous_hash = previous["event_hash"] if previous else "GENESIS"
         canonical = {
