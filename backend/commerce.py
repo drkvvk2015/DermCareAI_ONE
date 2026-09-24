@@ -150,7 +150,7 @@ INVOICES: Dict[str, Dict[str, Any]] = {}
 PHARMACY_STOCK: Dict[str, Dict[str, Any]] = {}
 
 
-def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
+def compute_invoice(req: InvoiceRequest, *, organization_id: str, clinic_id: str) -> Dict[str, Any]:
     lines = [
         BillLine(
             description=item.description,
@@ -181,20 +181,25 @@ def compute_invoice(req: InvoiceRequest) -> Dict[str, Any]:
         "currency": req.currency.upper(),
         "status": "unpaid",
         "created_at": now_iso(),
+        "organization_id": organization_id,
+        "clinic_id": clinic_id,
     }
     INVOICES[invoice_id] = invoice
-    save_invoice(invoice)
+    save_invoice(invoice, organization_id=organization_id, clinic_id=clinic_id)
     return invoice
 
 
 @router.post("/invoices")
 def create_invoice(req: InvoiceRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
-    return compute_invoice(req)
+    organization_id, clinic_id = _tenant(_)
+    return compute_invoice(req, organization_id=organization_id, clinic_id=clinic_id)
 
 
 @router.get("/invoices/{invoice_id}")
 def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
-    invoice = INVOICES.get(invoice_id) or store_get_invoice(invoice_id)
+    organization_id, clinic_id = _tenant(_)
+    invoice = INVOICES.get(invoice_id) or store_get_invoice(invoice_id, organization_id=organization_id, clinic_id=clinic_id)
+
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     INVOICES[invoice_id] = invoice
@@ -203,7 +208,8 @@ def get_invoice(invoice_id: str, _: dict[str, Any] = Depends(require_roles("admi
 
 @router.post("/payments/razorpay")
 async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depends(require_roles("admin", "doctor", "receptionist", "billing"))):
-    invoice = INVOICES.get(req.invoice_id) or store_get_invoice(req.invoice_id)
+    organization_id, clinic_id = _tenant(_)
+    invoice = store_get_invoice(req.invoice_id, organization_id=organization_id, clinic_id=clinic_id) or INVOICES.get(req.invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice.get("status") != "unpaid":
@@ -237,7 +243,7 @@ async def create_razorpay_payment(req: PaymentRequest, _: dict[str, Any] = Depen
     data = response.json()
     invoice["razorpay_payment_link_id"] = data.get("id")
     INVOICES[invoice["id"]] = invoice
-    update_invoice(invoice)
+    update_invoice(invoice, organization_id=organization_id, clinic_id=clinic_id)
     return {"provider": "razorpay", "id": data.get("id"), "short_url": data.get("short_url"), "status": data.get("status"), "invoice_id": req.invoice_id, "amount_paise": amount_paise, "upi_supported": True, "note": "Use UPI Intent/QR through the hosted checkout; do not use deprecated UPI Collect flows."}
 
 
@@ -258,9 +264,12 @@ async def payment_webhook(request: Request, x_razorpay_signature: str | None = H
     entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
     notes = entity.get("notes") or {}
     reference_id = notes.get("invoice_id") or entity.get("order_id") or entity.get("reference_id")
-    invoice = INVOICES.get(reference_id) or store_get_invoice(reference_id) if reference_id else None
+    invoice = INVOICES.get(reference_id) if reference_id else None
+    if invoice is None and reference_id:
+        from commerce_store import find_invoice_by_id
+        invoice = find_invoice_by_id(reference_id)
     if invoice is None:
-        record_payment_event(event_id, payload)
+        record_payment_event(event_id, payload, organization_id=str(invoice.get("organization_id") or "") if invoice else None, clinic_id=str(invoice.get("clinic_id") or "") if invoice else None)
         return {"received": True, "ignored": True, "reason": "invoice_not_found"}
 
     expected_amount = int(money(invoice["total"]) * 100)
@@ -281,26 +290,28 @@ async def payment_webhook(request: Request, x_razorpay_signature: str | None = H
     invoice["razorpay_payment_id"] = payment_id
     invoice["paid_amount_paise"] = provider_amount
     INVOICES[invoice["id"]] = invoice
-    update_invoice(invoice)
-    if not record_payment_event(event_id, payload):
+    update_invoice(invoice, organization_id=str(invoice["organization_id"]), clinic_id=str(invoice["clinic_id"]))
+    if not record_payment_event(event_id, payload, organization_id=str(invoice["organization_id"]), clinic_id=str(invoice["clinic_id"])):
         return {"received": True, "idempotent": True}
     return {"received": True, "updated": True}
 
 
 @router.post("/pharmacy/stock")
 def add_stock(item: Dict[str, Any], _: dict[str, Any] = Depends(require_roles("admin", "pharmacist"))):
+    organization_id, clinic_id = _tenant(_)
     medicine_id = str(item.get("medicine_id", "")).strip()
     if not medicine_id:
         raise HTTPException(status_code=400, detail="medicine_id is required")
     item = {**item, "medicine_id": medicine_id, "quantity": float(item.get("quantity", 0))}
-    saved = upsert_stock(item)
+    saved = upsert_stock(item, organization_id=organization_id, clinic_id=clinic_id)
     PHARMACY_STOCK[medicine_id] = saved
     return saved
 
 
 @router.get("/pharmacy/stock")
 def list_stock(_: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
-    items = store_list_stock()
+    organization_id, clinic_id = _tenant(_)
+    items = store_list_stock(organization_id=organization_id, clinic_id=clinic_id)
     PHARMACY_STOCK.clear()
     PHARMACY_STOCK.update({str(item["medicine_id"]): item for item in items})
     return items
@@ -308,11 +319,12 @@ def list_stock(_: dict[str, Any] = Depends(require_roles("admin", "pharmacist", 
 
 @router.post("/pharmacy/dispense")
 def dispense(req: DispenseRequest, _: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
+    organization_id, clinic_id = _tenant(_)
     required: Dict[str, float] = {}
     for item in req.items:
         required[item.medicine_id] = required.get(item.medicine_id, 0.0) + float(item.quantity)
     try:
-        updated = atomic_dispense(required)
+        updated = atomic_dispense(required, organization_id=organization_id, clinic_id=clinic_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Medicine {exc.args[0]} not found") from exc
     except ValueError as exc:
