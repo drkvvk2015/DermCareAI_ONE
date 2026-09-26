@@ -29,7 +29,7 @@ gunicorn
 setuptools
 
 # Production persistence
-SQLAlchemy>=2.0,<3
+SQLAlchemy>=2.0.54,<3
 psycopg[binary]>=3.2,<4
 
 # Distributed production rate limiting
