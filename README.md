@@ -45,6 +45,23 @@ AI output remains **traceable and reviewable**. An attached AI assessment cannot
 
 The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
 
+
+## Current application UI previews
+
+The current mobile application contains dedicated screens for authentication, dashboard, patients, appointments, encounters, body-map/lesions, AI screening, billing, prescriptions and pharmacy. The visuals below are repository-local previews aligned to those current screens and workflows; they are **not device screenshots** and should be replaced by runtime captures when a device/emulator capture is available.
+
+| Preview | Current workflow represented |
+|---|---|
+| [Dashboard](docs/assets/ui-dashboard-preview.svg) | Clinic overview, appointments, clinical workspace and governed AI entry points |
+| [Patient + Encounter](docs/assets/ui-patient-encounter-preview.svg) | Patient 360, history, examination, lesions, media consent, assessment and sign-off |
+| [AI Review](docs/assets/ui-ai-review-preview.svg) | Image quality gate, model provenance, abstention and Accept / Reject / Override |
+| [Billing + Pharmacy](docs/assets/ui-billing-pharmacy-preview.svg) | Billing/UPI, prescription, inventory and replay-safe dispensing workflows |
+
+![DermCareAI dashboard UI preview](docs/assets/ui-dashboard-preview.svg)
+![DermCareAI patient and encounter UI preview](docs/assets/ui-patient-encounter-preview.svg)
+![DermCareAI AI review UI preview](docs/assets/ui-ai-review-preview.svg)
+![DermCareAI billing and pharmacy UI preview](docs/assets/ui-billing-pharmacy-preview.svg)
+
 ## System at a glance
 
 ```text
@@ -73,6 +90,10 @@ Clinical Encounter
 
 ## What is implemented
 
+#### Final stabilization sprint — 24 September 2026
+
+This release-critical pass adds a deterministic native Android smoke gate and records the clinical database migration version in a durable schema ledger. These are engineering gates only; independent clinical validation and regulatory/privacy review remain separate requirements.
+
 #### Final dermatology hardening wave — 24 September 2026
 
 The final engineering swarm has now been integrated as three independently validated streams:
@@ -84,8 +105,12 @@ The final engineering swarm has now been integrated as three independently valid
 | Persistent mobile offline sync | ✅ PR #160 merged; replay-safe encounter updates and lesion upserts persist locally, retry with authenticated transport, and retain real 409 concurrency conflicts |
 | Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
 | Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
-| Full required CI matrix | ✅ All eight release workflows passed on PR #159, #160 and #161 heads before merge |
-| Open pull requests | ✅ 0 after stale dependency PR cleanup |
+| Full required CI matrix | ✅ Historical integration evidence: required workflows passed on PR #159, #160 and #161 heads before merge |
+| Native Android smoke gate | 🟡 Added in final stabilization; current GitHub Actions runs are failing before any job steps execute, so no new executable evidence is available |
+| Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |
+| Copyright/contributor governance | ✅ COPYRIGHT.md, CONTRIBUTING.md, CODEOWNERS and NOTICE added |
+| Clinical/regulatory/deployment preparation | ✅ Evidence protocols, regulatory dossier and production runbook added |
+| Final stabilization PR | 🟡 PR #174 contains the release-preparation work; current CI blocker is pre-step GitHub Actions execution failure |
 
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
@@ -152,12 +177,26 @@ The final engineering swarm has now been integrated as three independently valid
 | Disaster-recovery drill | ✅ Implemented |
 | Dependency audit | ✅ Reporting enabled |
 | SBOM/provenance | ✅ Container workflow enabled |
-| Independent AI clinical validation | ⚠️ Evidence still required |
-| Prospective clinical validation | ⚠️ Evidence still required |
-| Regulatory classification/approval | ⚠️ Formal assessment required |
-| Production cloud deployment | ⚠️ Environment-specific setup required |
+| Independent AI clinical validation | 🟡 **Evidence package ready** — [validation protocol](docs/AI_CLINICAL_VALIDATION_PROTOCOL.md) + manifest; independent execution/sign-off still required |
+| Prospective clinical validation | 🟡 **Protocol ready** — [prospective evaluation protocol](docs/PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md); real-world execution still required |
+| Regulatory classification/approval | 🟡 **Assessment dossier ready** — [India regulatory/privacy assessment](docs/INDIA_REGULATORY_ASSESSMENT.md); formal accountable classification/approval still required |
+| Production cloud deployment | 🟢 **Deployment package ready** — [production runbook](docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md); environment activation requires organization infrastructure, secrets and approval |
 
 See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
+
+### Clinical, regulatory and deployment readiness packages
+
+The repository-side preparation for the four previously open release areas is now complete:
+
+| Area | Repository package | What remains outside code |
+|---|---|---|
+| Independent AI clinical validation | [AI validation protocol](docs/AI_CLINICAL_VALIDATION_PROTOCOL.md) + [release manifest template](docs/ai-validation/release-manifest.template.json) | Locked study data, independent analysis, actual results and accountable sign-off |
+| Prospective clinical evaluation | [Prospective protocol](docs/PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md) | Institutional/ethics governance where applicable, real prospective execution and safety review |
+| India regulatory/privacy | [Regulatory assessment dossier](docs/INDIA_REGULATORY_ASSESSMENT.md) | Formal classification, legal/regulatory review, institutional approvals and applicable registrations |
+| Production deployment | [Production deployment runbook](docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md) | Organization-owned cloud account, secrets, infrastructure activation and release approval |
+
+These gates are intentionally not marked as completed by software alone. No clinical result, regulatory clearance or live production environment is claimed unless the corresponding external evidence exists.
+
 
 ### Final mainline engineering checkpoint
 
@@ -167,7 +206,7 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
 | Required PR CI matrix | ✅ Green on the final integration wave |
-| Open release PRs | ✅ 0 |
+| Open release PRs | 🟡 PR #174 remains open pending executable CI evidence |
 | Clinical validation / regulatory approval | ⚠️ Separate evidence and governance gates remain |
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
@@ -214,6 +253,10 @@ The repository intentionally keeps the **software release gate** separate from t
 ├── docs/
 │   ├── assets/
 │   ├── ai-validation/
+│   ├── AI_CLINICAL_VALIDATION_PROTOCOL.md
+│   ├── PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md
+│   ├── INDIA_REGULATORY_ASSESSMENT.md
+│   ├── PRODUCTION_DEPLOYMENT_RUNBOOK.md
 │   ├── WAVE3_PRODUCTION_RELEASE.md
 │   ├── WAVE4_CLINICAL_WORKFLOW.md
 │   └── WAVE5_RELEASE_EVIDENCE_STATUS.md
@@ -282,7 +325,7 @@ The dependency audit workflow produces machine-readable npm and Python vulnerabi
 
 ## Clinical / regulatory boundary
 
-The platform does not claim regulatory approval or clinical validation.
+The platform does not claim regulatory approval or clinical validation. Repository-side evidence preparation is documented, but external clinical, regulatory and production-operations gates remain distinct.
 
 For India, the release review should assess the Medical Devices Rules, 2017; current CDSCO guidance applicable to Medical Device Software; Digital Personal Data Protection Act/Rules obligations; institutional privacy/consent/retention/incident controls; pharmacy requirements; payment-provider requirements; and professional/clinical governance.
 
@@ -313,7 +356,14 @@ Minimum evidence includes frozen model artifact, locked test set, sensitivity/sp
 
 ## License
 
-See the repository for the applicable project licensing and dependency notices.
+DermCareAI is currently licensed under **GNU AGPLv3** unless a file or component states otherwise.
+
+- [AGPL-3.0 license text](LICENSE)
+- [Copyright & rights record](COPYRIGHT.md)
+- [Contribution and provenance policy](CONTRIBUTING.md)
+- [Repository attribution notice](NOTICE)
+
+The repository steward entry in `COPYRIGHT.md` records GitHub repository stewardship and review ownership; it does **not** by itself establish legal ownership of every historical contribution. Third-party components remain subject to their own licenses and copyright notices.
 
 
 ## Deployment hardware budget (India)
