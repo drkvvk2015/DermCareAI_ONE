@@ -5,13 +5,14 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
 
 from ai_registry import init_store as init_ai_store
 from audit import db as audit_db
+from clinical_store import ENGINE as CLINICAL_ENGINE
 from clinical_store import init_store as init_clinical_store
 from commerce_store import init_store as init_commerce_store
 
@@ -19,18 +20,14 @@ MIGRATION_VERSION = "2026-09-24-hardening-1"
 
 
 def main() -> None:
-    if os.getenv("APP_ENV", "").lower() == "production" and not os.getenv("DATABASE_URL"):
-        raise SystemExit("DATABASE_URL is required for production migrations.")
-
     init_commerce_store()
     init_clinical_store()
     init_ai_store()
     with audit_db():
         pass
 
-    database_url = os.getenv("CLINICAL_DATABASE_URL") or os.getenv("DATABASE_URL")
-    if database_url:
-        engine = create_engine(database_url)
+    engine = CLINICAL_ENGINE
+    if engine:
         with engine.begin() as conn:
             conn.execute(
                 text(
@@ -53,8 +50,6 @@ def main() -> None:
                     "applied_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
-        engine.dispose()
-
     print(f"DermCareAI database schemas initialized ({MIGRATION_VERSION}).")
 
 
