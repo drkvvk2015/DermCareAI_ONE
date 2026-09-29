@@ -58,7 +58,10 @@ test('validates APK package, version, launcher, and signature', () => {
 test('rejects a missing APK', () => {
   const context = setup();
   try {
-    assert.throws(() => context.run({ apkPath: path.join(context.directory, 'missing.apk') }), /does not exist/);
+    assert.throws(
+      () => context.run({ apkPath: path.join(context.directory, 'missing.apk') }),
+      /does not exist/,
+    );
   } finally {
     fs.rmSync(context.directory, { recursive: true, force: true });
   }
@@ -81,7 +84,19 @@ test('rejects mismatched application ID and version metadata', () => {
       () =>
         context.run({
           runCommand: (command) =>
-            command === 'aapt' ? badging.replace("versionCode='1'", "versionCode='2'") : 'Verifies',
+            command === 'aapt'
+              ? badging.replace("versionCode='1'", "versionCode='2'")
+              : 'Verifies',
+        }),
+      /version/,
+    );
+    assert.throws(
+      () =>
+        context.run({
+          runCommand: (command) =>
+            command === 'aapt'
+              ? badging.replace("versionName='1.0.0'", "versionName='2.0.0'")
+              : 'Verifies',
         }),
       /version/,
     );
