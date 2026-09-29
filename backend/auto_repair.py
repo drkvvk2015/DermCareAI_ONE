@@ -7,7 +7,7 @@ It never mutates source code, pushes branches, merges PRs, or deploys software.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import StrEnum
 import hashlib
 import json
@@ -73,17 +73,20 @@ class RepairGuard:
         if self.max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
         self._attempts: dict[str, int] = {}
-        self._seen_keys: set[str] = set()
+        self._seen_attempts: set[tuple[str, int]] = set()
 
-    def allow(self, idempotency_key: str) -> bool:
+    def allow(self, idempotency_key: str, attempt: int | None = None) -> bool:
         key = idempotency_key.strip()
-        if not key or key in self._seen_keys:
+        if not key:
             return False
-        attempts = self._attempts.get(key, 0)
-        if attempts >= self.max_attempts:
+        next_attempt = self._attempts.get(key, 0) + 1 if attempt is None else attempt
+        if next_attempt < 1 or next_attempt > self.max_attempts:
             return False
-        self._attempts[key] = attempts + 1
-        self._seen_keys.add(key)
+        marker = (key, next_attempt)
+        if marker in self._seen_attempts:
+            return False
+        self._seen_attempts.add(marker)
+        self._attempts[key] = max(self._attempts.get(key, 0), next_attempt)
         return True
 
     def attempts(self, idempotency_key: str) -> int:
@@ -154,11 +157,7 @@ def propose_repair(log_text: str, *, paths: Iterable[str] = ()) -> RepairProposa
     }
     confidence = 0.85 if kind is not FailureKind.UNKNOWN else 0.10
     risk = assess_risk(kind, paths)
-    requires_human_review = (
-        True
-        if risk in (RiskLevel.HIGH, RiskLevel.CRITICAL) or not path_gate
-        else True
-    )
+    requires_human_review = True
     summary = (
         f"Detected {kind.value} failure; generate a minimal reviewed patch and rerun the failing gate."
     )
