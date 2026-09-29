@@ -1,6 +1,6 @@
 # Wave 5 — Release Evidence Status
 
-Updated: 2026-09-23
+Updated: 2026-09-24
 
 This document separates automated software evidence from clinical, regulatory and deployment evidence that requires real-world data, environments or accountable human review.
 
@@ -20,13 +20,26 @@ This document separates automated software evidence from clinical, regulatory an
 | Staging acceptance | PASS in current release gating | Docker staging workflow; current hotfix gate passed build, schema init and clinical acceptance |
 | Dependency audit | PASS / INVENTORY ENABLED | Current release gate + machine-readable audit artifact |
 | SBOM/provenance | ENABLED | Container release workflow |
-| Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation |
-| Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence |
-| AI calibration/subgroup/OOD evidence | NOT ESTABLISHED | Evidence manifest required |
-| Regulatory classification | PENDING FORMAL ASSESSMENT | Depends on intended use, claims and deployment |
-| Production cloud deployment | READY FOR ENVIRONMENT SETUP | Requires organization secrets, infrastructure and accountable release approval |
-| Privacy operational program | PARTIAL | Technical controls exist; organizational policies and rights workflows still require implementation |
+| Independent clinical validation | 🟡 EVIDENCE PACKAGE READY | Protocol + release manifest are now versioned; independent execution/sign-off still required |
+| Prospective clinical evaluation | 🟡 PROTOCOL READY | Prospective protocol, safety monitoring and end-of-study evidence structure are versioned; real-world execution still required |
+| AI calibration/subgroup/OOD evidence | 🟡 EVIDENCE PACKAGE READY | Pre-specified evidence fields and protocol are versioned; populate only from actual locked-study results |
+| Regulatory classification | 🟡 ASSESSMENT DOSSIER READY | India regulatory/privacy assessment checklist is versioned; formal accountable classification/review remains required |
+| Production cloud deployment | 🟢 DEPLOYMENT PACKAGE READY | Production runbook, security gate and activation record are versioned; actual cloud activation requires organization-owned infrastructure/secrets/approval |
+| Privacy operational program | 🟡 OPERATIONAL PACKAGE READY | Technical controls plus deployment/privacy assessment structure are versioned; organization-specific SOPs and approvals remain required |
 | Guardrailed CI auto-repair proposals | ENABLED | Failure classification + repair evidence; human-reviewed merge required |
+
+
+## Newly completed release-preparation packages — 24 September 2026
+
+| Package | Location |
+|---|---|
+| Independent AI clinical validation protocol | [docs/AI_CLINICAL_VALIDATION_PROTOCOL.md](AI_CLINICAL_VALIDATION_PROTOCOL.md) |
+| Prospective clinical evaluation protocol | [docs/PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md](PROSPECTIVE_CLINICAL_EVALUATION_PROTOCOL.md) |
+| India regulatory/privacy assessment dossier | [docs/INDIA_REGULATORY_ASSESSMENT.md](INDIA_REGULATORY_ASSESSMENT.md) |
+| Production deployment runbook | [docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md](PRODUCTION_DEPLOYMENT_RUNBOOK.md) |
+| AI validation manifest template hardened against false-green defaults | [docs/ai-validation/release-manifest.template.json](ai-validation/release-manifest.template.json) |
+
+These packages close the repository-side preparation work. They do not manufacture clinical outcomes, regulatory clearance, ethics approval, or cloud infrastructure that does not yet exist.
 
 ## Clinical / AI release evidence that must not be fabricated
 
