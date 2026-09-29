@@ -58,3 +58,28 @@ jobs:
         run: npx expo-doctor
       - name: Validate native project generation
         run: npx expo prebuild --no-install --non-interactive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build Android debug APK
+        run: cd android && ./gradlew :app:assembleDebug
+      - name: Validate Android APK metadata and installability assumptions
+        shell: bash
+        run: |
+          android_sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          aapt="$(find "$android_sdk/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          apksigner="$(find "$android_sdk/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          node scripts/validate-android-apk.cjs \
+            --apk android/app/build/outputs/apk/debug/app-debug.apk \
+            --aapt "$aapt" \
+            --apksigner "$apksigner"
+      - name: Run Android APK validator tests
+        run: node --test tests/android-artifact.test.cjs
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dermcareai-android-debug-apk
+          path: dermcareai/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
