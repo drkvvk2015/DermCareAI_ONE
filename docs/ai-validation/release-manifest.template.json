@@ -49,15 +49,22 @@
   "subgroups": {
     "status": "not_assessed",
     "results": null,
-    "evidence": null
+    "evidence": null,
+    "groups": []
   },
   "ood": {
     "status": "not_assessed",
+    "response_policy": null,
     "results": null,
-    "evidence": null
+    "evidence": null,
+    "challenge_sets": []
   },
   "abstention": {
     "status": "not_assessed",
+    "policy": null,
+    "threshold": null,
+    "coverage": null,
+    "selective_risk": null,
     "results": null,
     "evidence": null
   },

@@ -43,7 +43,15 @@ def _revision(value: Any) -> bool:
 
 
 def _number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
+
+
+def _positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def _validate_manifest(data: Any) -> list[str]:
@@ -117,7 +125,7 @@ def _validate_manifest(data: Any) -> list[str]:
         required_string(dataset, field, "dataset")
     required_hash(dataset, "manifest_sha256", "dataset")
     count = dataset.get("sample_count")
-    if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
+    if not _positive_int(count):
         problems.append("dataset.sample_count: expected a positive integer")
     prevalence = dataset.get("intended_population_prevalence")
     if not _number(prevalence) or not 0 < prevalence < 1:
@@ -141,8 +149,8 @@ def _validate_manifest(data: Any) -> list[str]:
     for section_name, fields in {
         "calibration": ("method", "result", "evidence"),
         "subgroups": ("results", "evidence"),
-        "ood": ("results", "evidence"),
-        "abstention": ("results", "evidence"),
+        "ood": ("response_policy", "results", "evidence"),
+        "abstention": ("policy", "results", "evidence"),
         "clinician_review": ("override_analysis", "evidence"),
         "external_validation": ("site_or_dataset", "results", "evidence"),
         "approval": ("approved_by", "approved_at", "decision_id", "audit_record"),
@@ -156,8 +164,42 @@ def _validate_manifest(data: Any) -> list[str]:
             required_string(section, field, section_name)
         if section_name == "clinician_review":
             reviewers = section.get("reviewer_count")
-            if not isinstance(reviewers, int) or isinstance(reviewers, bool) or reviewers <= 0:
+            if not _positive_int(reviewers):
                 problems.append("clinician_review.reviewer_count: expected a positive integer")
+        if section_name == "subgroups":
+            groups = section.get("groups")
+            if not isinstance(groups, list) or not groups:
+                problems.append("subgroups.groups: expected at least one assessed subgroup")
+            else:
+                for index, group in enumerate(groups):
+                    path = f"subgroups.groups[{index}]"
+                    if not isinstance(group, dict):
+                        problems.append(f"{path}: expected an object")
+                        continue
+                    required_string(group, "name", path)
+                    if not _positive_int(group.get("sample_count")):
+                        problems.append(f"{path}.sample_count: expected a positive integer")
+                    required_string(group, "results", path)
+                    required_string(group, "evidence", path)
+        if section_name == "ood":
+            challenge_sets = section.get("challenge_sets")
+            if not isinstance(challenge_sets, list) or not challenge_sets:
+                problems.append("ood.challenge_sets: expected at least one assessed challenge set")
+            else:
+                for index, challenge_set in enumerate(challenge_sets):
+                    path = f"ood.challenge_sets[{index}]"
+                    if not isinstance(challenge_set, dict):
+                        problems.append(f"{path}: expected an object")
+                        continue
+                    for field in ("name", "observed_behavior", "evidence"):
+                        required_string(challenge_set, field, path)
+                    if not _positive_int(challenge_set.get("sample_count")):
+                        problems.append(f"{path}.sample_count: expected a positive integer")
+        if section_name == "abstention":
+            for field in ("threshold", "coverage", "selective_risk"):
+                value = section.get(field)
+                if not _number(value) or not 0 <= value <= 1:
+                    problems.append(f"abstention.{field}: expected a number between 0 and 1")
         if section_name == "external_validation" and section.get("independent") is not True:
             problems.append("external_validation.independent: must be true")
         if section_name == "approval":
@@ -185,7 +227,7 @@ def _validate_manifest(data: Any) -> list[str]:
 def validate_file(path: str) -> list[str]:
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         return [f"manifest: unable to read valid JSON ({exc})"]
     return _validate_manifest(data)
 

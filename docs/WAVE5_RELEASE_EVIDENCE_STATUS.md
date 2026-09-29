@@ -46,21 +46,20 @@ Those claims require actual evidence, not software tests.
 
 Before enabling any diagnostic or high-consequence clinical claim, provide:
 
-1. frozen model artifact and SHA-256;
-2. frozen test-set manifest;
-3. dataset provenance and inclusion/exclusion criteria;
-4. pre-specified primary and secondary metrics;
-5. sensitivity and specificity with confidence intervals;
-6. PPV/NPV for the intended prevalence setting;
-7. ROC-AUC and PR-AUC where appropriate;
-8. calibration assessment;
-9. subgroup analysis;
-10. out-of-distribution / low-quality image behavior;
-11. abstention performance;
-12. clinician override analysis;
-13. independent or external validation;
-14. locked approval record;
-15. deployment and rollback evidence.
+1. frozen model artifact and SHA-256, source revision, and training-data provenance;
+2. frozen test-set manifest and SHA-256, data source, split, inclusion/exclusion criteria, and population prevalence;
+3. evaluation code revision, environment, dependency-lock digest, random seed, and protocol version;
+4. pre-specified primary and secondary metrics, with sensitivity, specificity, PPV/NPV, and ROC-AUC/PR-AUC as applicable and confidence intervals;
+5. calibration assessment with method and traceable results;
+6. subgroup definitions, sample counts, results, and evidence;
+7. out-of-distribution challenge sets, sample counts, observed behavior, and evidence;
+8. abstention policy, threshold, coverage, selective risk, and evidence;
+9. clinician reviewer count and override analysis;
+10. independent external-validation site/dataset and traceable results;
+11. accountable approval decision, timestamp, and audit record;
+12. deployment and rollback evidence.
+
+The software manifest validator checks completeness and internal consistency only. A passing manifest does not authenticate evidence or establish clinical validity. Independent clinical validation and clinician approval remain **NOT ESTABLISHED** until real evidence and accountable records are supplied.
 
 ## India regulatory/privacy references
 

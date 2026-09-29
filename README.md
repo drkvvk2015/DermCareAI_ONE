@@ -299,9 +299,9 @@ Use `docs/ai-validation/release-manifest.template.json` and validate a completed
 python backend/scripts/validate_ai_release_manifest.py docs/ai-validation/release-manifest.json
 ```
 
-Do **not** enter estimated or invented clinical performance values.
+The template intentionally remains `research_only` and `not_ready`. A validator PASS checks completeness and consistency only; it does not authenticate evidence, establish clinical performance, or grant clinical approval. Keep independent clinical validation and clinician approval unmet until real evidence and accountable records are supplied. Do **not** enter estimated, synthetic, or invented clinical performance values.
 
-Minimum evidence includes frozen model artifact, locked test set, sensitivity/specificity, PPV/NPV where appropriate, ROC-AUC/PR-AUC where appropriate, calibration, subgroup analysis, OOD behavior, abstention performance, clinician override analysis, independent/external validation and accountable approval.
+Minimum evidence includes frozen model and training-data provenance, a locked and characterized test set, evaluation reproducibility metadata, metrics with confidence intervals, calibration, subgroup definitions/results, OOD challenge-set behavior, abstention policy/performance, clinician override analysis, independent external validation, accountable approval/audit records, and deployment/rollback evidence. See [the manifest guide](docs/ai-validation/README.md).
 
 ## Important limitations
 
