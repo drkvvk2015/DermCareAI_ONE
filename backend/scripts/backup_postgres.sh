@@ -6,6 +6,9 @@ BACKUP_DIR="${BACKUP_DIR:-./backups}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$BACKUP_DIR"
 
-pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL"   > "$BACKUP_DIR/dermcareai-$TIMESTAMP.dump"
+BACKUP_FILE="$BACKUP_DIR/dermcareai-$TIMESTAMP.dump"
+pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$BACKUP_FILE"
+test -s "$BACKUP_FILE"
+pg_restore --list "$BACKUP_FILE" >/dev/null
 
-echo "Backup written to $BACKUP_DIR/dermcareai-$TIMESTAMP.dump"
+echo "Backup written and verified: $BACKUP_FILE"

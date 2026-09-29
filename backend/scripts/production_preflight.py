@@ -30,11 +30,28 @@ def _check_database_url(value: str) -> CheckResult:
     return CheckResult("DATABASE_URL", "PASS", "PostgreSQL connection string is configured.")
 
 
+def _check_storage(values: Mapping[str, str]) -> CheckResult:
+    required = (
+        "CLOUDINARY_CLOUD_NAME",
+        "CLOUDINARY_API_KEY",
+        "CLOUDINARY_API_SECRET",
+        "CLOUDINARY_UPLOAD_PRESET",
+    )
+    missing = [name for name in required if not values.get(name, "").strip()]
+    if missing:
+        return CheckResult(
+            "OBJECT_STORAGE",
+            "FAIL",
+            f"Clinical image storage configuration is incomplete; missing {', '.join(missing)}.",
+        )
+    return CheckResult("OBJECT_STORAGE", "PASS", "Clinical image object storage is configured.")
+
+
 def _check_cors(value: str) -> CheckResult:
     origins = [item.strip() for item in value.split(",") if item.strip()]
     if not origins or "*" in origins:
         return CheckResult("CORS_ORIGINS", "FAIL", "Production CORS_ORIGINS must explicitly list approved origins.")
-    invalid = [origin for origin in origins if urlparse(origin).scheme != "https"]
+    invalid = [origin for origin in origins if urlparse(origin).scheme != "https" or not urlparse(origin).netloc]
     if invalid:
         return CheckResult("CORS_ORIGINS", "FAIL", "Production origins must use HTTPS.")
     return CheckResult("CORS_ORIGINS", "PASS", f"{len(origins)} explicit HTTPS origin(s) configured.")
@@ -67,6 +84,7 @@ def evaluate_environment(env: Mapping[str, str] | None = None) -> list[CheckResu
 
     results.append(_check_database_url(values.get("DATABASE_URL", "")))
     results.append(_check_cors(values.get("CORS_ORIGINS", "")))
+    results.append(_check_storage(values))
 
     firebase_configured = bool(
         values.get("FIREBASE_SERVICE_ACCOUNT_JSON")

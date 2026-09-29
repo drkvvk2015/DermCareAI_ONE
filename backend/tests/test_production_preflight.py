@@ -12,6 +12,10 @@ def base_env() -> dict[str, str]:
         "ENABLE_EMBEDDED_DERM_MODEL": "false",
         "MIN_CONFIDENCE": "0.70",
         "MAX_IMAGE_BYTES": "12582912",
+        "CLOUDINARY_CLOUD_NAME": "dermcareai-prod",
+        "CLOUDINARY_API_KEY": "storage-key",
+        "CLOUDINARY_API_SECRET": "storage-secret",
+        "CLOUDINARY_UPLOAD_PRESET": "dermcareai_signed",
     }
 
 
@@ -47,6 +51,18 @@ def test_rejects_research_model_in_production() -> None:
 def test_rejects_http_origins() -> None:
     env = base_env()
     env["CORS_ORIGINS"] = "https://clinic.example.com,http://localhost:8081"
+    assert statuses(env)["CORS_ORIGINS"] == "FAIL"
+
+
+def test_rejects_incomplete_object_storage_configuration() -> None:
+    env = base_env()
+    env.pop("CLOUDINARY_API_SECRET")
+    assert statuses(env)["OBJECT_STORAGE"] == "FAIL"
+
+
+def test_rejects_https_origin_without_hostname() -> None:
+    env = base_env()
+    env["CORS_ORIGINS"] = "https://"
     assert statuses(env)["CORS_ORIGINS"] == "FAIL"
 
 

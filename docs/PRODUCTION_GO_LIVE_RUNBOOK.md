@@ -1,5 +1,7 @@
 # DermCareAI Production Go-Live Runbook
 
+> Canonical deployment procedure: [`PRODUCTION_DEPLOYMENT_RUNBOOK.md`](PRODUCTION_DEPLOYMENT_RUNBOOK.md).
+
 Updated: 2026-09-22
 
 This runbook is the operational handoff for deploying the current DermCareAI engineering baseline. It does not replace clinical validation, regulatory/privacy review, or accountable release approval.
