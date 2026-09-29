@@ -1,5 +1,5 @@
 {
-  "release_status": "not_ready",
+  "release_status": "evidence_pending",
   "intended_use_statement": "Describe the exact intended clinical use and limitations.",
   "research_only": true,
   "model": {
@@ -25,28 +25,29 @@
     "result": "RESULT"
   },
   "subgroups": {
-    "status": "completed",
+    "status": "not_started",
     "results": "ATTACHMENT_OR_TABLE"
   },
   "ood": {
-    "status": "completed",
+    "status": "not_started",
     "results": "ATTACHMENT_OR_TABLE"
   },
   "abstention": {
-    "status": "completed",
+    "status": "not_started",
     "results": "ATTACHMENT_OR_TABLE"
   },
   "clinician_review": {
-    "status": "completed",
+    "status": "not_started",
     "override_analysis": "ATTACHMENT_OR_TABLE"
   },
   "external_validation": {
-    "status": "completed",
-    "site_or_dataset": "INDEPENDENT_SITE_OR_DATASET"
+    "status": "not_started",
+    "site_or_dataset": ""
   },
   "approval": {
-    "status": "completed",
-    "approved_by": "ACCOUNTABLE_APPROVER",
-    "approved_at": "ISO8601"
-  }
+    "status": "not_started",
+    "approved_by": "",
+    "approved_at": ""
+  },
+  "notes": "Template only. Populate with actual independently generated evidence; never use estimates or placeholders as clinical results."
 }
