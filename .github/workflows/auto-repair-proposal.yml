@@ -31,12 +31,13 @@ jobs:
       - name: Generate conservative repair proposal
         env:
           PYTHONPATH: backend
-        run: python -m backend.auto_repair_cli \
-  --log repair-evidence/combined.log \
-  --output repair-evidence/repair-report.json \
-  --attempt 1 \
-  --max-attempts 2 \
-  --idempotency-key "workflow-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.head_sha }}"
+        run: |
+          python -m backend.auto_repair_cli \
+            --log repair-evidence/combined.log \
+            --output repair-evidence/repair-report.json \
+            --attempt 1 \
+            --max-attempts 2 \
+            --idempotency-key "workflow-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.head_sha }}"
       - name: Publish repair evidence
         uses: actions/upload-artifact@v4
         with:
