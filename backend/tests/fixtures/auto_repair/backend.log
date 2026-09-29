@@ -1,0 +1,3 @@
+pytest failed
+AssertionError: expected approved=True
+backend/tests/test_auth.py:42
