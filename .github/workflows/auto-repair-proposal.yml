@@ -31,13 +31,18 @@ jobs:
       - name: Generate conservative repair proposal
         env:
           PYTHONPATH: backend
-        run: python -m backend.auto_repair_cli --log repair-evidence/combined.log --output repair-evidence/repair-proposal.json
+        run: python -m backend.auto_repair_cli \
+  --log repair-evidence/combined.log \
+  --output repair-evidence/repair-report.json \
+  --attempt 1 \
+  --max-attempts 2 \
+  --idempotency-key "workflow-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.head_sha }}"
       - name: Publish repair evidence
         uses: actions/upload-artifact@v4
         with:
-          name: guardrailed-auto-repair-proposal-${{ github.event.workflow_run.id }}
+          name: guardrailed-auto-repair-evidence-${{ github.event.workflow_run.id }}
           path: repair-evidence/
       - name: Explain human-review boundary
         run: |
           echo 'No source files, protected clinical paths, branches, or deployments are modified by this workflow.'
-          echo 'A human-reviewed repair PR is required before any correction is merged.'
+          echo 'The report is proposal/evidence only; a human-reviewed repair PR is required before any correction is merged.'
