@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:compatibility": "node --test tests/dependency-compatibility.test.mjs"
   },
   "dependencies": {
     "@cloudinary/url-gen": "^1.21.0",

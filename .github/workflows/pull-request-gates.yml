@@ -50,6 +50,8 @@ jobs:
           cache-dependency-path: dermcareai/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Run dependency compatibility tests
+        run: npm run test:compatibility
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: Expo web export smoke test

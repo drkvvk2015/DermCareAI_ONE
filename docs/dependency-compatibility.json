@@ -1,0 +1,128 @@
+{
+  "assessment_date": "2026-09-29",
+  "automatic_merge": false,
+  "merge_policy": "A status is not approval to merge. Resolve every required check and follow the listed order; keep each dependency PR separately reviewable.",
+  "candidate_check_evidence": "At assessment, all 12 check runs on each of PRs #175-#182 had conclusion=failure. GitHub's job-log endpoint returned HTTP 404, so the causes could not be independently established. No PR has green candidate validation.",
+  "entries": [
+    {
+      "pr": 175,
+      "status": "HOLD",
+      "package": "23-package npm group; includes @react-navigation/native, @react-navigation/native-stack, and @react-navigation/bottom-tabs 6.x to 7.x; cloudinary-react-native 1.0.x to 1.3.x",
+      "evidence": [
+        "The PR changes the app's three React Navigation major-version ranges while package.json keeps Expo ~52.0.49, React Native 0.76.9, and React 18.3.1.",
+        "Navigation is used throughout src/navigation and screen components; a grouped lockfile refresh obscures which package change causes a regression.",
+        "The grouped PR overlaps the standalone Cloudinary upgrade in PR #182."
+      ],
+      "required_validation": [
+        "Split the group into isolated updates; do not merge this aggregate as-is.",
+        "For a React Navigation 7 candidate, pass npm run test:compatibility, npx tsc --noEmit, npx expo export --platform web, npx expo-doctor, and npx expo prebuild --no-install --non-interactive.",
+        "Review all 23 package changes for security fixes before separating or deferring them."
+      ],
+      "merge_order": "After splitting, handle security-only transitive updates independently; test any navigation major upgrade separately from PR #182."
+    },
+    {
+      "pr": 176,
+      "status": "NEEDS_REVIEW",
+      "package": "date-fns 2.30.0 to 4.4.0",
+      "evidence": [
+        "The application imports format, parseISO, isAfter, and isSameDay in appointment, dashboard, patient, and report screens.",
+        "This is a major-version change; the APIs used have a focused calendar behavior test, but the current PR has no passing candidate checks."
+      ],
+      "required_validation": [
+        "Pass npm run test:compatibility and the mobile TypeScript, Expo web export, Expo Doctor, and prebuild gates against the PR lockfile.",
+        "Review date-only and ISO timestamp rendering for timezone-sensitive screens."
+      ],
+      "merge_order": "Independent of the backend updates; validate and merge separately."
+    },
+    {
+      "pr": 177,
+      "status": "NEEDS_REVIEW",
+      "package": "SQLAlchemy >=2.0,<3 to >=2.0.54,<3",
+      "evidence": [
+        "The change remains within SQLAlchemy 2.x but raises the supported minimum.",
+        "The backend creates engines in storage.py and its durable stores; the repository has PostgreSQL persistence and production-boundary tests.",
+        "No candidate check passed."
+      ],
+      "required_validation": [
+        "Pass the backend regression suite and PostgreSQL staging persistence tests with the candidate requirement.",
+        "Retain SQLite development behavior and assert PostgreSQL store initialization succeeds."
+      ],
+      "merge_order": "Test separately from PR #180 first; then run PostgreSQL integration with both resolved dependencies."
+    },
+    {
+      "pr": 178,
+      "status": "NEEDS_REVIEW",
+      "package": "redis >=5,<6 to >=8.1.0,<9",
+      "evidence": [
+        "The upgrade crosses Redis client's major versions and raises the production minimum.",
+        "backend/rate_limit.py uses the synchronous Redis.from_url, incr, and expire methods; its production failure-closed behavior must remain intact.",
+        "No candidate check passed, and current PR gates do not install Redis or exercise a Redis server."
+      ],
+      "required_validation": [
+        "Pass backend/tests/test_rate_limit_redis_contract.py.",
+        "Run a Redis 8.1+ integration smoke test for URL connection, INCR/EXPIRE limits, and production fail-closed behavior before merge."
+      ],
+      "merge_order": "Keep separate from database-driver changes; do not merge until an actual Redis-server integration result is green."
+    },
+    {
+      "pr": 179,
+      "status": "HOLD",
+      "package": "expo-file-system ~18.0.11 to ~57.0.7",
+      "evidence": [
+        "The app is on Expo SDK 52 with React Native 0.76.9; the candidate jumps the Expo module from the SDK 52 generation to 57.",
+        "ScreeningReportScreen.tsx calls the legacy documentDirectory and moveAsync APIs.",
+        "The candidate PR lockfile retains expo-file-system 18.0.12 nested under Expo while installing 57.0.7 at the app root, leaving two incompatible generations in the tree."
+      ],
+      "required_validation": [
+        "Do not merge this package bump independently. Use the SDK 52-compatible expo-file-system version or plan a coordinated Expo SDK upgrade.",
+        "For an SDK upgrade, migrate the file APIs and pass TypeScript, web export, Expo Doctor, native prebuild, and native platform builds."
+      ],
+      "merge_order": "Last, only as part of a deliberate Expo SDK/RN upgrade. Never combine with an SDK 52 app unchanged."
+    },
+    {
+      "pr": 180,
+      "status": "NEEDS_REVIEW",
+      "package": "psycopg[binary] >=3.2,<4 to >=3.3.6,<4",
+      "evidence": [
+        "The constraint stays on Psycopg 3, and backend/storage.py normalizes postgres:// and postgresql:// URLs to postgresql+psycopg://.",
+        "PostgreSQL 16 staging tests exercise durable stores through this dialect.",
+        "No candidate check passed."
+      ],
+      "required_validation": [
+        "Pass backend regression and PostgreSQL staging persistence tests using the candidate psycopg version.",
+        "Verify all store engines report PostgreSQL and use the psycopg dialect."
+      ],
+      "merge_order": "Test separately from PR #177 first; then run PostgreSQL integration with both resolved dependencies."
+    },
+    {
+      "pr": 181,
+      "status": "NEEDS_REVIEW",
+      "package": "react-native-svg 15.8.0 to 15.15.5",
+      "evidence": [
+        "The app is Expo SDK 52 / React Native 0.76.9 with newArchEnabled=true and uses react-native-svg-transformer.",
+        "The candidate release notes include native Android/iOS and React Native props changes; JavaScript-only typechecking cannot establish native compatibility.",
+        "No candidate check passed."
+      ],
+      "required_validation": [
+        "Pass TypeScript, Expo web export, Expo Doctor, and Expo prebuild on the candidate lockfile.",
+        "Build and smoke-test Android and iOS native targets with the Expo SDK 52 / new architecture configuration."
+      ],
+      "merge_order": "After SDK compatibility is established; keep separate from PR #179 and any React Native major upgrade."
+    },
+    {
+      "pr": 182,
+      "status": "NEEDS_REVIEW",
+      "package": "cloudinary-react-native 1.0.1 to 1.3.0",
+      "evidence": [
+        "The release notes for 1.2.0 explicitly add Expo 52/53 support, matching the app's Expo 52 generation.",
+        "A repository search finds no imports of cloudinary-react-native; current upload flows use @cloudinary/url-gen and fetch in src/services/cloudinary.ts.",
+        "PR #175 also changes Cloudinary, and no candidate check passed."
+      ],
+      "required_validation": [
+        "Confirm the dependency remains unused or exercise its installed native component before retaining it.",
+        "Pass npm ci, mobile TypeScript/export/doctor/prebuild gates on this PR's lockfile."
+      ],
+      "merge_order": "Do not merge alongside PR #175; resolve the duplicate Cloudinary update after splitting that grouped PR."
+    }
+  ]
+}
