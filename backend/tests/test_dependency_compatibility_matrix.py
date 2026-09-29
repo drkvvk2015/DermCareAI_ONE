@@ -7,6 +7,7 @@ def test_dependabot_compatibility_matrix_covers_open_prs_without_automerge():
     matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
 
     assert matrix["automatic_merge"] is False
+    assert len(matrix["entries"]) == 8
     assert {entry["pr"] for entry in matrix["entries"]} == set(range(175, 183))
     assert all(entry["status"] in {"PASS", "NEEDS_REVIEW", "HOLD"} for entry in matrix["entries"])
     assert all(entry["evidence"] and entry["required_validation"] for entry in matrix["entries"])
