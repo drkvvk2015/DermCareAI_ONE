@@ -44,8 +44,11 @@ def test_failure_signature_is_stable() -> None:
 
 def test_repair_guard_bounds_and_deduplicates_attempts() -> None:
     guard = RepairGuard(max_attempts=2)
-    assert guard.allow("k1") is True
-    assert guard.allow("k1") is False
+    assert guard.allow("k1", attempt=1) is True
+    assert guard.allow("k1", attempt=1) is False
+    assert guard.allow("k1", attempt=2) is True
+    assert guard.allow("k1", attempt=3) is False
+    assert guard.attempts("k1") == 2
     assert guard.allow("k2") is True
     assert guard.attempts("k2") == 1
 
