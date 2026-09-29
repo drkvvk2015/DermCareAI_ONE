@@ -7,6 +7,6 @@ therefore requires the matching web runtime packages:
 - `react-native-web@~0.19.13`
 
 These dependencies are intentionally pinned through the project package manifest and lockfile.
-Native Android validation remains the primary mobile release path; the web export is a build
+The Expo SDK 52 web export also requires the matching `expo-asset` package used by Metro asset resolution. Native Android validation remains the primary mobile release path; the web export is a build
 smoke check and is not a substitute for Android/device validation.
 
