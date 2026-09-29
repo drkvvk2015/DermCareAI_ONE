@@ -5,7 +5,7 @@
 Run:
 
 ```bash
-./scripts/android_device_smoke.sh
+bash scripts/android_device_smoke.sh
 ```
 
 The script requires exactly one connected Android device unless `ANDROID_SERIAL` is set.
