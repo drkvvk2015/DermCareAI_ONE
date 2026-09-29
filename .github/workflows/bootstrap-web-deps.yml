@@ -1,0 +1,31 @@
+name: Bootstrap Expo web dependencies
+
+on:
+  push:
+    branches: [hotfix/web-support-deps-2026-09-29]
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - name: Resolve Expo web dependencies
+        working-directory: dermcareai
+        run: npx expo install react-dom@18.3.1 react-native-web@~0.19.13
+      - name: Commit generated dependency state and remove helper workflow
+        run: |
+          rm -f .github/workflows/bootstrap-web-deps.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dermcareai/package.json dermcareai/package-lock.json .github/workflows/bootstrap-web-deps.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(mobile): add Expo web runtime dependencies [skip ci]"
+          git push
