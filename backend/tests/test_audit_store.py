@@ -1,7 +1,7 @@
 import os
 from uuid import uuid4
 
-os.environ["AUDIT_DB_PATH"] = f"/tmp/dermcareai-audit-test-{uuid4().hex}.db"
+os.environ["AUDIT_DB_PATH"] = f"dermcareai-audit-test-{uuid4().hex}.db"
 
 from audit import AuditEvent, list_audit_events, record_event
 
