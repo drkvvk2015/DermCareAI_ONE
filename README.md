@@ -3,11 +3,8 @@
 DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 360, encounter documentation, longitudinal lesion tracking, AI-assisted image review, billing, pharmacy, notifications, auditability and production operations**.
 
 > ⚠️ **Clinical boundary:** AI output is decision support, not a diagnosis. The current embedded HAM10000 model is a research fallback and is **not clinically validated for routine patient care**. Clinical deployment requires intended-use review, independent validation and applicable regulatory/privacy approvals.
-
 > ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are merged into `main`. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
->
 > **Dermatology Completion:** v5.1 Wave 1 + Wave 2 are integrated into `main` through the validated `develop` release path. `main` is the stable engineering baseline; clinical validation and regulatory/privacy approval remain separate gates.
->
 > **Current swarm hardening:** the final mainline wave adds durable prescription-dispense idempotency, concurrent dispense ownership protection with bounded recovery, and explicit audit events for idempotent replay. CI remains the final technical evidence gate for each merge.
 
 ## Visual overview
@@ -15,7 +12,7 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 The README uses **repository-local SVG diagrams** so the documentation renders without relying on an external image host. Each visual is also linked to its source file for full-size inspection.
 
 | Visual | Purpose |
-|---|---|
+| --- | --- |
 | [Production architecture](docs/assets/architecture.svg) | Client, API, AI governance, object storage and PostgreSQL boundaries |
 | [Clinical encounter workflow](docs/assets/clinical-workflow.svg) | Patient 360 → encounter → examination → lesion → assessment → review → sign-off |
 | [AI safety boundary](docs/assets/ai-safety.svg) | Consent, quality gate, model provenance, abstention and clinician controls |
@@ -73,12 +70,12 @@ Clinical Encounter
 
 ## What is implemented
 
-#### Final dermatology hardening wave — 24 September 2026
+### Final dermatology hardening wave — 24 September 2026
 
 The final engineering swarm has now been integrated as three independently validated streams:
 
 | Stream | Evidence |
-|---|---|
+| --- | --- |
 | Governed AI safety gateway | ✅ PR #159 merged; inference safety now consumes the shared AI safety gateway and model-registry integrity state |
 | Clinical consent boundary | ✅ PR #159 merged; patient-linked AI assessments require active clinical-image consent when linked to media |
 | Persistent mobile offline sync | ✅ PR #160 merged; replay-safe encounter updates and lesion upserts persist locally, retry with authenticated transport, and retain real 409 concurrency conflicts |
@@ -90,7 +87,9 @@ The final engineering swarm has now been integrated as three independently valid
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
 **Production boundary:** software engineering gates are now hardened, but independent AI clinical validation, intended-use/regulatory review, privacy governance, and deployment into a real production environment remain external evidence/operations gates.
-## Clinical workflow
+
+### Clinical workflow
+
 - Patient 360 clinical summary
 - Encounter-centered documentation
 - Structured dermatology history and examination
@@ -107,6 +106,7 @@ The final engineering swarm has now been integrated as three independently valid
 - Optimistic concurrency protection
 
 ### Production platform
+
 - FastAPI `/api/v1` platform contract
 - Firebase ID-token authentication
 - Role-based authorization
@@ -125,6 +125,7 @@ The final engineering swarm has now been integrated as three independently valid
 - Controlled SQLite → PostgreSQL migration utility
 
 ### AI governance
+
 - Model registry
 - Artifact SHA-256 verification
 - Model status/approval lifecycle
@@ -139,7 +140,7 @@ The final engineering swarm has now been integrated as three independently valid
 ## Release state
 
 | Gate | State |
-|---|---|
+| --- | --- |
 | Backend regression | ✅ Automated |
 | Mobile TypeScript | ✅ Automated |
 | Expo export smoke test | ✅ Automated |
@@ -162,7 +163,7 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 ### Final mainline engineering checkpoint
 
 | Change | Mainline evidence |
-|---|---|
+| --- | --- |
 | Durable prescription dispense ledger integration | ✅ PR #155 merged |
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
@@ -172,10 +173,9 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
 
+## Clinical workflow overview
 
-## Clinical workflow
-
-**Patient 360 → Start Clinical Encounter → History → Dermatology Examination → Lesion Capture → Assessment → AI Review (optional) → Follow-up → Sign-off**
+Patient 360 → Start Clinical Encounter → History → Dermatology Examination → Lesion Capture → Assessment → AI Review (optional) → Follow-up → Sign-off
 
 An AI result can be attached to the encounter, but it cannot silently become a signed diagnosis. Every attached AI assessment must receive an explicit clinician decision before the encounter can be signed.
 
@@ -224,6 +224,7 @@ The repository intentionally keeps the **software release gate** separate from t
 ## Local development
 
 ### Backend
+
 ```bash
 cd backend
 python -m pip install -U pip
@@ -233,6 +234,7 @@ python -m compileall -q .
 ```
 
 ### Mobile
+
 ```bash
 cd dermcareai
 npm ci
@@ -241,6 +243,7 @@ npx expo export --platform web
 ```
 
 ### Local PostgreSQL staging
+
 ```bash
 docker compose -f docker-compose.staging.yml up --build
 docker compose -f docker-compose.staging.yml exec backend python scripts/migrate_postgres.py
@@ -249,6 +252,7 @@ docker compose -f docker-compose.staging.yml exec backend python scripts/migrate
 ## Production database migration
 
 A controlled migration utility is included:
+
 ```bash
 python backend/scripts/copy_sqlite_to_postgres.py \
   --source sqlite:///clinical.db \
@@ -261,11 +265,13 @@ Pre-create the PostgreSQL schema first and use a maintenance window for producti
 ## Backup and restore
 
 Create a PostgreSQL backup:
+
 ```bash
 DATABASE_URL=... BACKUP_DIR=./backups ./backend/scripts/backup_postgres.sh
 ```
 
 Restore:
+
 ```bash
 DATABASE_URL=... BACKUP_FILE=./backups/<backup>.dump ./backend/scripts/restore_postgres.sh
 ```
@@ -287,9 +293,10 @@ The platform does not claim regulatory approval or clinical validation.
 For India, the release review should assess the Medical Devices Rules, 2017; current CDSCO guidance applicable to Medical Device Software; Digital Personal Data Protection Act/Rules obligations; institutional privacy/consent/retention/incident controls; pharmacy requirements; payment-provider requirements; and professional/clinical governance.
 
 Official references:
-- CDSCO Medical Device & Diagnostics: https://www.cdsco.gov.in/opencms/opencms/en/Medical-Device-Diagnostics/
-- CDSCO Medical Devices Rules: https://cdsco.gov.in/opencms/opencms/en/Acts-and-rules/Medical-Devices-Rules/
-- MeitY DPDP Rules 2025: https://www.meity.gov.in/documents/act-and-policies/digital-personal-data-protection-rules-2025-gDOxUjMtQWa
+
+- CDSCO Medical Device & Diagnostics: <https://www.cdsco.gov.in/opencms/opencms/en/Medical-Device-Diagnostics/>
+- CDSCO Medical Devices Rules: <https://cdsco.gov.in/opencms/opencms/en/Acts-and-rules/Medical-Devices-Rules/>
+- MeitY DPDP Rules 2025: <https://www.meity.gov.in/documents/act-and-policies/digital-personal-data-protection-rules-2025-gDOxUjMtQWa>
 
 ## AI validation release package
 
@@ -315,13 +322,12 @@ Minimum evidence includes frozen model artifact, locked test set, sensitivity/sp
 
 See the repository for the applicable project licensing and dependency notices.
 
-
 ## Deployment hardware budget (India)
 
 Indicative planning ranges; verify vendor quotations before procurement.
 
 | Tier | Typical configuration | Approx. one-time budget |
-|---|---|---:|
+| --- | --- | ---: |
 | Development | Existing 8 GB SSD laptop/workstation | ₹0 incremental |
 | Small clinic | 4+ cores, 8–16 GB RAM, 256–512 GB SSD, UPS | ₹40,000–₹55,000 |
 | Recommended clinic | 8 cores, 16 GB RAM, 512 GB NVMe, UPS + backup storage | ₹70,000–₹95,000 |
@@ -334,7 +340,7 @@ Recommended production baseline: Ubuntu 24.04 LTS, PostgreSQL 16, Python 3.12, N
 Monthly planning ranges for a small-to-standard clinic; actual bills vary by region, storage, traffic, backups, managed services and GPU usage.
 
 | Deployment | Approx. monthly budget |
-|---|---:|
+| --- | ---: |
 | Development / low traffic | ₹0–₹1,500 |
 | Small clinic | ₹3,000–₹6,000 |
 | Standard clinic | ₹6,000–₹12,000 |
