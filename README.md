@@ -106,15 +106,32 @@ The final engineering swarm has now been integrated as three independently valid
 | Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
 | Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
 | Full required CI matrix | ✅ Historical integration evidence: required workflows passed on PR #159, #160 and #161 heads before merge |
-| Native Android smoke gate | 🟡 Added in final stabilization; current GitHub Actions runs are failing before any job steps execute, so no new executable evidence is available |
+| Native Android smoke gate | ✅ Automated workflow evidence is green on the current mainline; physical-device execution remains a separate release validation step |
 | Schema migration ledger | ✅ Migration bootstrap now records idempotent version evidence |
 | Copyright/contributor governance | ✅ COPYRIGHT.md, CONTRIBUTING.md, CODEOWNERS and NOTICE added |
 | Clinical/regulatory/deployment preparation | ✅ Evidence protocols, regulatory dossier and production runbook added |
-| Final stabilization PR | 🟡 PR #174 contains the release-preparation work; current CI blocker is pre-step GitHub Actions execution failure |
+| Final stabilization PR | ✅ Release-preparation work is merged into main; current engineering PR backlog is clear |
 
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
 **Production boundary:** software engineering gates are now hardened, but independent AI clinical validation, intended-use/regulatory review, privacy governance, and deployment into a real production environment remain external evidence/operations gates.
+## Final engineering status — 30 September 2026
+
+The final dependency-contract PR (#202) has been merged into main after green validation. The repository currently reports **no open pull requests and no open GitHub issues**. The engineering backlog is therefore considered consolidated; remaining release gates are external clinical/regulatory/operational activities that cannot be truthfully completed by repository automation alone.
+
+| Area | Current state |
+|---|---|
+| Core dermatology application engineering | ✅ Integrated |
+| Backend/mobile/PostgreSQL/security CI | ✅ Automated gates in place |
+| Expo web dependency contract | ✅ PR #202 merged |
+| Release regression/evidence documentation | ✅ Integrated |
+| Android automated smoke | ✅ Green engineering gate |
+| Physical Android device validation | 🟡 Requires an actual Android device execution |
+| Independent AI clinical validation | 🟡 Requires independent study/evidence |
+| Prospective clinical evaluation | 🟡 Requires real-world prospective execution |
+| India regulatory/privacy assessment | 🟡 Requires accountable formal review/approval |
+| Production cloud activation | 🟡 Requires organization infrastructure, secrets and release authorization |
+
 ## Clinical workflow
 - Patient 360 clinical summary
 - Encounter-centered documentation
@@ -186,7 +203,7 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 
 ### Clinical, regulatory and deployment readiness packages
 
-The repository-side preparation for the four previously open release areas is now complete:
+The repository-side preparation for the four release areas is complete. The remaining external gates are execution/approval activities, not missing repository implementation:
 
 | Area | Repository package | What remains outside code |
 |---|---|---|
@@ -206,7 +223,7 @@ These gates are intentionally not marked as completed by software alone. No clin
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
 | Required PR CI matrix | ✅ Green on the final integration wave |
-| Open release PRs | 🟡 PR #174 remains open pending executable CI evidence |
+| Open release PRs | ✅ None — current repository search reports no open pull requests |
 | Clinical validation / regulatory approval | ⚠️ Separate evidence and governance gates remain |
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
