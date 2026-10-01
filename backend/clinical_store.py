@@ -199,7 +199,7 @@ def init_store() -> None:
         if "lesion_id" not in columns:
             conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN lesion_id TEXT")
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(clinic_id, media_id, created_at DESC)"
+            "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(organization_id, clinic_id, media_id, created_at DESC)"
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
@@ -223,6 +223,7 @@ def init_store() -> None:
                     "CREATE UNIQUE INDEX IF NOT EXISTS uq_lesions_tenant "
                     "ON lesions(organization_id, clinic_id, patient_id, lesion_code)"
                 )
+                conn.execute("DROP INDEX IF EXISTS uq_encounter_signoff")
                 conn.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff_tenant "
                     "ON encounter_signoffs(organization_id, clinic_id, encounter_id)"
