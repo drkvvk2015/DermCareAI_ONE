@@ -51,3 +51,9 @@ def test_anonymous_rate_limit_honors_forwarded_for_from_trusted_proxy(monkeypatc
     monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.9")
     request = _request("10.0.0.9", "203.0.113.10")
     assert client_key(request) == "anonymous:203.0.113.10"
+
+
+def test_anonymous_rate_limit_ignores_spoofed_left_prefix_from_trusted_proxy(monkeypatch):
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.9")
+    request = _request("10.0.0.9", "198.51.100.77, 203.0.113.10")
+    assert client_key(request) == "anonymous:203.0.113.10"
