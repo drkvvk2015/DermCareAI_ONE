@@ -21,4 +21,4 @@ def test_procedure_roundtrip():
         outcome="specimen sent",
     )
     assert row["procedure_type"] == "biopsy"
-    assert list_procedures(clinic_id="clinic1", patient_id="patient1")[0]["id"] == row["id"]
+    assert list_procedures(organization_id="org1", clinic_id="clinic1", patient_id="patient1")[0]["id"] == row["id"]
