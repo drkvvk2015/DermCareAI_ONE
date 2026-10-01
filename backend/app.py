@@ -40,6 +40,7 @@ from request_context import get_request_id, new_request_id, reset_request_id, se
 from rate_limit import client_key, enforce_rate_limit
 from resilience import file_sha256
 from production_readiness import evaluate_readiness
+from request_limits import RequestBodyLimitMiddleware
 from upload_limits import MAX_IMAGE_BYTES, MAX_REQUEST_BODY_BYTES, read_upload_limited
 
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +73,7 @@ class PredictionResponse(BaseModel):
 
 
 app = FastAPI(title="DermCareAI Clinic Platform API", version=APP_VERSION)
+app.add_middleware(RequestBodyLimitMiddleware, max_body_bytes=MAX_REQUEST_BODY_BYTES)
 configured_origins = os.getenv("CORS_ORIGINS", "http://localhost:8081")
 if APP_ENV == "production" and configured_origins.strip() in {"", "*"}:
     raise RuntimeError("Production CORS_ORIGINS must explicitly list approved origins")
