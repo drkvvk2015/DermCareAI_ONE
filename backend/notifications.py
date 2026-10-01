@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import require_roles
+from idempotency import IdempotencyConflict
 from notification_outbox import claim_batch, enqueue_registration, mark_failed, mark_sent
 
 
@@ -111,8 +112,8 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
 
 
 async def _deliver(row: dict[str, Any]) -> None:
-    req = RegistrationNotification.model_validate(json.loads(row["payload_json"]))
     try:
+        req = RegistrationNotification.model_validate(json.loads(row["payload_json"]))
         if row["channel"] == "whatsapp":
             result = await send_whatsapp(req)
         elif row["channel"] == "sms":
@@ -185,14 +186,17 @@ async def registration_notifications(
     if not req.channels:
         raise HTTPException(status_code=400, detail="At least one notification channel is required")
 
-    rows = await asyncio.to_thread(
-        enqueue_registration,
-        organization_id=organization_id,
-        clinic_id=clinic_id,
-        event_key=idempotency_key,
-        payload=req.model_dump(),
-        channels=req.channels,
-    )
+    try:
+        rows = await asyncio.to_thread(
+            enqueue_registration,
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            event_key=idempotency_key,
+            payload=req.model_dump(),
+            channels=req.channels,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
         "status": "queued",
         "event_key": idempotency_key,
