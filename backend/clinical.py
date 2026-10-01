@@ -344,8 +344,12 @@ def patient_clinical_summary(
     patient_id: str,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor", "receptionist")),
 ):
-    _, clinic_id = _tenant(user)
-    return get_patient_clinical_summary(clinic_id=clinic_id, patient_id=patient_id)
+    organization_id, clinic_id = _tenant(user)
+    return get_patient_clinical_summary(
+        organization_id=organization_id,
+        clinic_id=clinic_id,
+        patient_id=patient_id,
+    )
 
 
 @router.get("/consents/{patient_id}/active")

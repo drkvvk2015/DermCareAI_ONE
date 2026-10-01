@@ -8,6 +8,32 @@ Existing entries must never be silently rewritten or deleted.
 
 <!-- CodeSwarm-Evolver appends new entries below this line. -->
 
+### LEARNING-0001
+
+- Date (UTC): 2026-10-01
+- Run ID: NOT_PROVIDED
+- Source stage: DEBUG
+- Pattern: Escalation left frontend validation incomplete after the package-manager command targeted the wrong directory.
+- Root cause: `npm ci --prefix webapp` was run with the persistent working directory set to `backend/`, so npm resolved the prefix as `backend/webapp` instead of the repository-root `webapp/`.
+- Evidence: The frontend install attempt failed to find the lockfile; the Debugger's two-attempt limit was exhausted and frontend checks were not run.
+- Action: Before package-manager commands that use relative prefixes, verify the current working directory or use an explicitly repository-root-relative path; classify any remaining unrun checks as blockers rather than passing validation.
+- Affected area: webapp validation / CodeSwarm Debugger
+- Occurrences: 1
+- Confidence: low
+
+### LEARNING-0002
+
+- Date (UTC): 2026-10-01
+- Run ID: NOT_PROVIDED
+- Source stage: EVOLVE
+- Pattern: The earlier account conflated a successful frontend install with a later command that resolved its relative prefix from the wrong working directory.
+- Root cause: `npm install --prefix webapp` succeeded and generated `webapp/package-lock.json`. A later `npm ci --prefix webapp` ran with cwd `backend/`, resolved to `backend/webapp`, and failed there; reruns from the explicit `webapp/` root passed.
+- Evidence: Debugger reports `npm ci` from `E:\DermCareAI_ONE\webapp` passed on two runs; final lint passed with one non-blocking react-refresh warning, frontend tests passed (2 files, 6 tests), production build passed, and Vite HTTP smoke passed. Earlier backend suite passed 150 tests; no optimizer backend changes.
+- Action: Keep the initial package install/lockfile creation distinct from the later cwd-relative prefix failure; use the explicit `webapp/` working directory for npm validation. EVOLUTION_REJECTED: a single correction does not meet the independent-run threshold for prompt evolution.
+- Affected area: webapp validation / CodeSwarm Debugger
+- Occurrences: 1
+- Confidence: low
+
 ## Entry Format
 
 ```text

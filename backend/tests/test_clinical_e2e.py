@@ -250,5 +250,55 @@ def test_tenant_boundary_blocks_cross_clinic_access_to_clinical_records():
         "/api/v1/clinical/patients/patient-tenant-a/lesions/TENANT-L1/timeline"
     ).json() == []
     assert client.get("/api/v1/clinical/patients/patient-tenant-a/summary").json()["encounters"] == []
-
     _CURRENT["claims"] = {"organization_id": "org-1", "clinic_id": "clinic-tenant-a"}
+
+
+def test_clinical_summary_isolated_between_organizations_in_same_clinic():
+    client = TestClient(app)
+    _CURRENT["claims"] = {"organization_id": "org-summary-a", "clinic_id": "clinic-shared"}
+    created = client.post(
+        "/api/v1/clinical/encounters",
+        json={
+            "patient_id": "patient-shared",
+            "complaints": {"chief_complaint": "synthetic summary test", "duration": "1 day"},
+            "examination": {"distribution": "forearm", "morphology": "papule"},
+            "assessment": {"summary": "synthetic assessment"},
+            "plan": {"summary": "synthetic follow-up"},
+        },
+    )
+    assert created.status_code == 200
+    encounter_id = created.json()["id"]
+
+    lesion = client.post(
+        "/api/v1/clinical/lesions",
+        json={
+            "patient_id": "patient-shared",
+            "encounter_id": encounter_id,
+            "lesion_code": "SUMMARY-L1",
+            "body_site": "forearm",
+            "morphology": {"primary": "papule"},
+        },
+    )
+    assert lesion.status_code == 200
+    followup = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/followups",
+        json={"due_at": "2026-10-15T09:00:00+00:00", "instructions": "Synthetic follow-up test."},
+    )
+    assert followup.status_code == 200
+    signoff = client.post(
+        f"/api/v1/clinical/encounters/{encounter_id}/sign",
+        json={"attestation": "I reviewed this synthetic encounter and approve this test record."},
+    )
+    assert signoff.status_code == 200
+
+    _CURRENT["claims"] = {"organization_id": "org-summary-b", "clinic_id": "clinic-shared"}
+    summary = client.get("/api/v1/clinical/patients/patient-shared/summary")
+    assert summary.status_code == 200
+    assert summary.json() == {
+        "patient_id": "patient-shared",
+        "encounters": [],
+        "lesions": [],
+        "followups": [],
+        "signoffs": [],
+    }
+    _CURRENT["claims"] = {"organization_id": "org-1", "clinic_id": "clinic-1"}

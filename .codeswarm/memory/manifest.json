@@ -7,11 +7,11 @@
     "schemaVersion": "schema-version",
     "snapshots": "snapshots/"
   },
-  "recordCount": 0,
-  "firstRecordId": null,
-  "latestRecordId": null,
+  "recordCount": 2,
+  "firstRecordId": "LEARNING-0001",
+  "latestRecordId": "LEARNING-0002",
   "latestRecordHash": null,
-  "lastUpdated": null,
+  "lastUpdated": "2026-10-01",
   "integrityStatus": "UNVERIFIED",
   "cryptographicIntegrity": "UNVERIFIED",
   "memoryState": "INITIALIZED"

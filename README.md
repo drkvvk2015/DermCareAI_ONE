@@ -223,23 +223,55 @@ The repository intentionally keeps the **software release gate** separate from t
 
 ## Local development
 
+### One-click Windows setup
+
+Use the repository root helper script to install both the backend Python environment and the frontend web app in one step.
+
+```powershell
+# From the repository root
+powershell -ExecutionPolicy Bypass -File .\setup-dev.ps1
+# or
+.\setup-dev.cmd
+```
+
+This script will:
+
+- create `backend/.venv` if it does not exist;
+- install the Python requirements from `backend/requirements.txt`;
+- copy `webapp/.env.example` to `webapp/.env` when needed;
+- install the frontend dependencies from `webapp/package.json` with `npm ci` when a lockfile is present.
+
 ### Backend
 
-```bash
+```powershell
 cd backend
-python -m pip install -U pip
-python -m pip install -r requirements.txt
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app:app --reload --host 0.0.0.0 --port 8000
+```
+
+Optional validation:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
 pytest -q tests
 python -m compileall -q .
 ```
 
-### Mobile
+### Frontend web app
 
-```bash
-cd dermcareai
-npm ci
-npx tsc --noEmit
-npx expo export --platform web
+```powershell
+cd webapp
+npm run dev -- --host 0.0.0.0
+```
+
+Production-style frontend validation:
+
+```powershell
+cd webapp
+npm run lint
+npm test -- --run
+npm run build
 ```
 
 ### Local PostgreSQL staging

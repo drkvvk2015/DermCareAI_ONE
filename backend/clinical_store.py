@@ -752,42 +752,50 @@ def list_ai_reviews(*, clinic_id: str, encounter_id: str) -> list[dict[str, Any]
 
 
 
-def get_patient_clinical_summary(*, clinic_id: str, patient_id: str) -> dict[str, Any]:
+def get_patient_clinical_summary(
+    *,
+    organization_id: str,
+    clinic_id: str,
+    patient_id: str,
+) -> dict[str, Any]:
     init_store()
     with _connect() as conn:
         encounters = conn.execute(
             """
             SELECT * FROM encounters
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY opened_at DESC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
         lesions = conn.execute(
             """
             SELECT * FROM lesions
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY updated_at DESC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
         followups = conn.execute(
             """
             SELECT * FROM encounter_followups
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY due_at ASC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
         signoffs = conn.execute(
             """
             SELECT s.*
             FROM encounter_signoffs s
-            JOIN encounters e ON e.id = s.encounter_id
-            WHERE s.clinic_id = ? AND e.patient_id = ?
+                        JOIN encounters e
+                            ON e.id = s.encounter_id
+                         AND e.organization_id = s.organization_id
+                         AND e.clinic_id = s.clinic_id
+                        WHERE s.organization_id = ? AND s.clinic_id = ? AND e.patient_id = ?
             ORDER BY s.signed_at DESC
             """,
-            (clinic_id, patient_id),
+                        (organization_id, clinic_id, patient_id),
         ).fetchall()
     return {
         "patient_id": patient_id,

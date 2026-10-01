@@ -95,6 +95,7 @@ def create_procedure(**payload: Any) -> dict[str, Any]:
 
 def list_procedures(
     *,
+    organization_id: str,
     clinic_id: str,
     patient_id: str,
 ) -> list[dict[str, Any]]:
@@ -103,9 +104,9 @@ def list_procedures(
         rows = conn.execute(
             """
             SELECT * FROM dermatology_procedures
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY performed_at DESC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
     return [dict(row) for row in rows]
