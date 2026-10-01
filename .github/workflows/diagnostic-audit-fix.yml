@@ -22,15 +22,18 @@ jobs:
         run: npm ci
       - name: Apply lockfile-only audit fixes
         working-directory: dermcareai
-        run: npm audit fix --package-lock-only --ignore-scripts
+        run: npm audit fix --package-lock-only --ignore-scripts || true
       - name: Show candidate
         run: |
           git diff --stat
+          npm audit --audit-level=high --json > /tmp/candidate-audit.json || true
+          node -e 'const a=require("/tmp/candidate-audit.json"); console.log("CANDIDATE", JSON.stringify(a.metadata?.vulnerabilities||{}));'
           git diff -- dermcareai/package.json dermcareai/package-lock.json | head -n 250
           git status --short
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add dermcareai/package.json dermcareai/package-lock.json
+          git rm .github/workflows/diagnostic-audit-fix.yml
           git diff --cached --quiet && exit 0
           git commit -m "chore(security): candidate npm audit lockfile remediation"
           git push
