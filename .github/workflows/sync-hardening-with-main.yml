@@ -1,0 +1,26 @@
+name: Sync hardening branch with main
+
+on:
+  push:
+    branches: [hardening/production-readiness-2026-10]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: hardening/production-readiness-2026-10
+      - name: Merge main and remove helper
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rm .github/workflows/sync-hardening-with-main.yml
+          git commit -m "chore(ci): remove hardening sync helper"
+          git push origin HEAD:hardening/production-readiness-2026-10
