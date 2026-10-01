@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO
 
 import pytest
@@ -8,12 +9,14 @@ from rate_limit import client_key
 from upload_limits import read_upload_limited
 
 
-@pytest.mark.asyncio
-async def test_upload_reader_rejects_oversize_without_unbounded_buffer():
-    upload = UploadFile(filename="large.jpg", file=BytesIO(b"x" * 100))
-    with pytest.raises(HTTPException) as exc:
-        await read_upload_limited(upload, 64)
-    assert exc.value.status_code == 413
+def test_upload_reader_rejects_oversize_without_unbounded_buffer():
+    async def exercise():
+        upload = UploadFile(filename="large.jpg", file=BytesIO(b"x" * 100))
+        with pytest.raises(HTTPException) as exc:
+            await read_upload_limited(upload, 64)
+        assert exc.value.status_code == 413
+
+    asyncio.run(exercise())
 
 
 def _request(peer: str, forwarded: str = "") -> Request:
