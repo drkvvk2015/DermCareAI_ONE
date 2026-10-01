@@ -105,19 +105,25 @@ def test_notification_worker_marks_bad_persisted_payload_failed(monkeypatch, tmp
         },
         channels=["sms"],
     )
-    row = notification_outbox.claim_batch(limit=1)[0]
     with engine.begin() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT * FROM notification_outbox WHERE event_key = ?",
+            ("notify-bad-payload-001",),
+        ).mappings().one()
         conn.exec_driver_sql(
             "UPDATE notification_outbox SET payload_json = ? WHERE id = ?",
             ('{"not_a_registration": true}', row["id"]),
         )
 
+    row = dict(row)
+    row["payload_json"] = '{"not_a_registration": true}'
     asyncio.run(notifications._deliver(row))
 
     with engine.begin() as conn:
         stored = conn.exec_driver_sql(
-            "SELECT status, last_error FROM notification_outbox WHERE id = ?",
+            "SELECT attempts, status, last_error FROM notification_outbox WHERE id = ?",
             (row["id"],),
         ).fetchone()
-    assert stored[0] == "pending"
-    assert stored[1]
+    assert stored[0] == 0
+    assert stored[1] == "pending"
+    assert stored[2]
