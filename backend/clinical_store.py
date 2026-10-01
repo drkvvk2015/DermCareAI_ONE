@@ -762,7 +762,7 @@ def record_ai_review(
 
 
 def review_ai_assessment(
-    *, clinic_id: str, encounter_id: str, review_id: str, clinician_decision: str,
+    *, organization_id: str, clinic_id: str, encounter_id: str, review_id: str, clinician_decision: str,
     clinician_override_label: str | None, reviewed_by: str,
 ) -> dict[str, Any]:
     if clinician_decision not in {"accepted", "overridden", "rejected"}:
@@ -774,7 +774,7 @@ def review_ai_assessment(
             UPDATE encounter_ai_reviews
             SET clinician_decision = ?, clinician_override_label = ?,
                 reviewed_by = ?, reviewed_at = ?
-            WHERE id = ? AND clinic_id = ? AND encounter_id = ?
+            WHERE id = ? AND organization_id = ? AND clinic_id = ? AND encounter_id = ?
             """,
             (
                 clinician_decision,
@@ -782,6 +782,7 @@ def review_ai_assessment(
                 reviewed_by,
                 now,
                 review_id,
+                organization_id,
                 clinic_id,
                 encounter_id,
             ),
@@ -794,72 +795,72 @@ def review_ai_assessment(
     return dict(row)
 
 
-def has_pending_ai_reviews(*, clinic_id: str, encounter_id: str) -> bool:
+def has_pending_ai_reviews(*, organization_id: str, clinic_id: str, encounter_id: str) -> bool:
     init_store()
     with _connect() as conn:
         row = conn.execute(
             """
             SELECT 1 FROM encounter_ai_reviews
-            WHERE clinic_id = ? AND encounter_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?
               AND clinician_decision IS NULL
             LIMIT 1
             """,
-            (clinic_id, encounter_id),
+            (organization_id, clinic_id, encounter_id),
         ).fetchone()
     return row is not None
 
 
-def list_ai_reviews(*, clinic_id: str, encounter_id: str) -> list[dict[str, Any]]:
+def list_ai_reviews(*, organization_id: str, clinic_id: str, encounter_id: str) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT * FROM encounter_ai_reviews
-            WHERE clinic_id = ? AND encounter_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?
             ORDER BY created_at DESC
             """,
-            (clinic_id, encounter_id),
+            (organization_id, clinic_id, encounter_id),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
 
-def get_patient_clinical_summary(*, clinic_id: str, patient_id: str) -> dict[str, Any]:
+def get_patient_clinical_summary(*, organization_id: str, clinic_id: str, patient_id: str) -> dict[str, Any]:
     init_store()
     with _connect() as conn:
         encounters = conn.execute(
             """
             SELECT * FROM encounters
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY opened_at DESC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
         lesions = conn.execute(
             """
             SELECT * FROM lesions
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY updated_at DESC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
         followups = conn.execute(
             """
             SELECT * FROM encounter_followups
-            WHERE clinic_id = ? AND patient_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
             ORDER BY due_at ASC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, patient_id),
         ).fetchall()
         signoffs = conn.execute(
             """
             SELECT s.*
             FROM encounter_signoffs s
             JOIN encounters e ON e.id = s.encounter_id
-            WHERE s.clinic_id = ? AND e.patient_id = ?
+            WHERE s.organization_id = ? AND s.clinic_id = ? AND e.organization_id = ? AND e.clinic_id = ? AND e.patient_id = ?
             ORDER BY s.signed_at DESC
             """,
-            (clinic_id, patient_id),
+            (organization_id, clinic_id, organization_id, clinic_id, patient_id),
         ).fetchall()
     return {
         "patient_id": patient_id,
