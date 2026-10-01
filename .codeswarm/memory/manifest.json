@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "project": "DermCareAI_ONE",
+  "files": {
+    "learnings": "learnings.md",
+    "promptVersions": "prompt-versions.md",
+    "schemaVersion": "schema-version",
+    "snapshots": "snapshots/"
+  },
+  "recordCount": 2,
+  "firstRecordId": "LEARNING-0001",
+  "latestRecordId": "LEARNING-0002",
+  "latestRecordHash": null,
+  "lastUpdated": "2026-10-01",
+  "integrityStatus": "UNVERIFIED",
+  "cryptographicIntegrity": "UNVERIFIED",
+  "memoryState": "INITIALIZED"
+}
