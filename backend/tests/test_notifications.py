@@ -14,5 +14,5 @@ def test_unknown_notification_channel_is_rejected() -> None:
         channels=["carrier_pigeon"],
     )
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(registration_notifications(req, {"uid": "u1", "roles": {"doctor"}}))
+        asyncio.run(registration_notifications(req, "notify-test-unknown-channel", {"uid": "u1", "claims": {"organization_id": "org1", "clinic_id": "clinic1"}, "roles": {"doctor"}}))
     assert exc.value.status_code == 400
