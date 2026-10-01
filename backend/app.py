@@ -476,10 +476,10 @@ def health_check() -> Dict[str, Any]:
 
 
 @app.post("/self-heal")
-def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
+async def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
     user_key = client_key(request, user["uid"])
     enforce_rate_limit(f"self-heal:{user_key}", limit=3, window_seconds=300)
-    recovered = asyncio.run(asyncio.to_thread(model_service.recover))
+    recovered = await asyncio.to_thread(model_service.recover)
     return {"recovered": recovered, "status": model_service.status()}
 
 
