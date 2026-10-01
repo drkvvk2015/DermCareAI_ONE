@@ -84,18 +84,26 @@ async def request_context_middleware(request: Request, call_next):
     request_id = new_request_id(request.headers.get("X-Request-ID"))
     token = set_request_id(request_id)
     started = time.perf_counter()
+    response: JSONResponse | Any
     content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > MAX_REQUEST_BODY_BYTES:
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": "Request body exceeds configured size limit"},
-                )
-        except ValueError:
-            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
     try:
-        response = await call_next(request)
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                    response = JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request body exceeds configured size limit"},
+                    )
+                else:
+                    response = await call_next(request)
+            except ValueError:
+                response = JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid Content-Length header"},
+                )
+        else:
+            response = await call_next(request)
+
         elapsed_ms = (time.perf_counter() - started) * 1000
         record_request(response.status_code, elapsed_ms)
         response.headers["X-Request-ID"] = request_id
