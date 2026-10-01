@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -85,9 +84,9 @@ def enqueue_registration(
             (organization_id, clinic_id, event_key),
         ).fetchone()
         if existing:
-            existing_hash = existing["payload_hash"] or hashlib.sha256(
-                str(existing["payload_json"]).encode("utf-8")
-            ).hexdigest()
+            existing_hash = existing["payload_hash"] or request_hash(
+                json.loads(str(existing["payload_json"]))
+            )
             if existing_hash != payload_digest:
                 raise IdempotencyConflict(
                     "Idempotency-Key was already used with different notification data"
