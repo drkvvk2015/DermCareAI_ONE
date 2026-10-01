@@ -326,18 +326,19 @@ def create_encounter(
     return _decode(row)
 
 
-def get_encounter(encounter_id: str, clinic_id: str) -> dict[str, Any] | None:
+def get_encounter(encounter_id: str, organization_id: str, clinic_id: str) -> dict[str, Any] | None:
     init_store()
     with _connect() as conn:
         row = conn.execute(
-            "SELECT * FROM encounters WHERE id = ? AND clinic_id = ?",
-            (encounter_id, clinic_id),
+            "SELECT * FROM encounters WHERE id = ? AND organization_id = ? AND clinic_id = ?",
+            (encounter_id, organization_id, clinic_id),
         ).fetchone()
     return _decode(row) if row else None
 
 
 def update_encounter(
     encounter_id: str,
+    organization_id: str,
     clinic_id: str,
     expected_version: int,
     patch: dict[str, Any],
@@ -365,10 +366,10 @@ def update_encounter(
         raise ValueError("No changes supplied")
     now = _now()
     sets.extend(["version = version + 1", "updated_at = ?"])
-    values.extend([now, encounter_id, clinic_id, expected_version])
+    values.extend([now, encounter_id, organization_id, clinic_id, expected_version])
     with transaction() as conn:
         cursor = conn.execute(
-            f"UPDATE encounters SET {', '.join(sets)} WHERE id = ? AND clinic_id = ? AND version = ?",
+            f"UPDATE encounters SET {', '.join(sets)} WHERE id = ? AND organization_id = ? AND clinic_id = ? AND version = ?",
             values,
         )
         if cursor.rowcount != 1:
@@ -408,7 +409,7 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
               evolution, symptoms_json, clinical_impression, differential_json,
               confirmed_diagnosis, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(clinic_id, patient_id, lesion_code) DO UPDATE SET
+            ON CONFLICT(organization_id, clinic_id, patient_id, lesion_code) DO UPDATE SET
               encounter_id=excluded.encounter_id,
               body_site=excluded.body_site,
               laterality=excluded.laterality,
@@ -432,8 +433,8 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
             ),
         )
         row = conn.execute(
-            "SELECT * FROM lesions WHERE clinic_id = ? AND patient_id = ? AND lesion_code = ?",
-            (v["clinic_id"], v["patient_id"], v["lesion_code"]),
+            "SELECT * FROM lesions WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND lesion_code = ?",
+            (v["organization_id"], v["clinic_id"], v["patient_id"], v["lesion_code"]),
         ).fetchone()
         conn.execute(
             """
