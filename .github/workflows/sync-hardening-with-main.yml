@@ -15,12 +15,27 @@ jobs:
         with:
           fetch-depth: 0
           ref: hardening/production-readiness-2026-10
-      - name: Merge main and remove helper
+      - name: Merge main and resolve known clinical overlaps
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-          git merge --no-edit origin/main
+          git merge --no-edit origin/main || true
+
+          # The hardening branch already contains the organization+clinic tenant
+          # scoping introduced in these overlapping files.
+          git checkout --ours backend/clinical.py
+          git checkout --ours backend/clinical_store.py
+          git checkout --ours backend/dermatology/procedure_api.py
+
+          # main contains the superset regression coverage and current Expo
+          # doctor configuration for these two files.
+          git checkout --theirs backend/tests/test_procedure_store.py
+          git checkout --theirs dermcareai/package.json
+
+          git add -A
           git rm .github/workflows/sync-hardening-with-main.yml
-          git commit -m "chore(ci): remove hardening sync helper"
+          git commit -m "chore(ci): synchronize hardening branch with main"
           git push origin HEAD:hardening/production-readiness-2026-10
