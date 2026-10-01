@@ -79,6 +79,6 @@ def test_dispense_aggregates_duplicate_items() -> None:
 def test_duplicate_payment_event_is_idempotent() -> None:
     from commerce_store import record_payment_event
 
-    payload = {"id": "evt-1", "event": "payment.captured"}
-    assert record_payment_event("evt-1", payload) is True
-    assert record_payment_event("evt-1", payload) is False
+    payload = {"id": "evt-test-idempotency", "event": "payment.captured"}
+    assert record_payment_event("evt-test-idempotency", payload) is True
+    assert record_payment_event("evt-test-idempotency", payload) is False
