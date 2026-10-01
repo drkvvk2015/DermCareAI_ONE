@@ -72,7 +72,7 @@ def create(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         if replay is not None:
             return replay
-    encounter = get_encounter(req.encounter_id, clinic_id)
+    encounter = get_encounter(req.encounter_id, organization_id, clinic_id)
     if encounter is None or encounter.get("organization_id") != organization_id or encounter.get("patient_id") != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient and tenant")
 

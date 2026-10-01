@@ -69,10 +69,10 @@ def init_store() -> None:
                 confirmed_diagnosis TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                UNIQUE(clinic_id, patient_id, lesion_code)
+                UNIQUE(organization_id, clinic_id, patient_id, lesion_code)
             );
             CREATE INDEX IF NOT EXISTS idx_lesions_patient
-              ON lesions(clinic_id, patient_id, created_at DESC);
+              ON lesions(organization_id, clinic_id, patient_id, created_at DESC);
 
             CREATE TABLE IF NOT EXISTS lesion_observations (
                 id TEXT PRIMARY KEY,
@@ -96,7 +96,7 @@ def init_store() -> None:
                 observed_by TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_lesion_observations_timeline
-              ON lesion_observations(clinic_id, patient_id, lesion_code, observed_at ASC);
+              ON lesion_observations(organization_id, clinic_id, patient_id, lesion_code, observed_at ASC);
 
             CREATE TABLE IF NOT EXISTS consents (
                 id TEXT PRIMARY KEY,
@@ -113,7 +113,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_consents_active
-              ON consents(clinic_id, patient_id, purpose, status);
+              ON consents(organization_id, clinic_id, patient_id, purpose, status);
 
             CREATE TABLE IF NOT EXISTS clinical_media (
                 id TEXT PRIMARY KEY,
@@ -134,7 +134,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_media_patient
-              ON clinical_media(clinic_id, patient_id, captured_at DESC);
+              ON clinical_media(organization_id, clinic_id, patient_id, captured_at DESC);
 
             CREATE TABLE IF NOT EXISTS encounter_signoffs (
                 id TEXT PRIMARY KEY,
@@ -147,7 +147,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff
-              ON encounter_signoffs(clinic_id, encounter_id);
+              ON encounter_signoffs(organization_id, clinic_id, encounter_id);
 
             CREATE TABLE IF NOT EXISTS encounter_followups (
                 id TEXT PRIMARY KEY,
@@ -164,7 +164,7 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_followups_clinic_due
-              ON encounter_followups(clinic_id, due_at, status);
+              ON encounter_followups(organization_id, clinic_id, due_at, status);
 
             CREATE TABLE IF NOT EXISTS encounter_ai_reviews (
                 id TEXT PRIMARY KEY,
@@ -186,9 +186,9 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_ai_reviews_encounter
-              ON encounter_ai_reviews(clinic_id, encounter_id, created_at DESC);
+              ON encounter_ai_reviews(organization_id, clinic_id, encounter_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_ai_reviews_media
-              ON encounter_ai_reviews(clinic_id, media_id, created_at DESC);
+              ON encounter_ai_reviews(organization_id, clinic_id, media_id, created_at DESC);
             """
         )
         # Compatibility migration for existing installations created before AI
@@ -199,8 +199,78 @@ def init_store() -> None:
         if "lesion_id" not in columns:
             conn.execute("ALTER TABLE encounter_ai_reviews ADD COLUMN lesion_id TEXT")
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(clinic_id, media_id, created_at DESC)"
+            "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(organization_id, clinic_id, media_id, created_at DESC)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        migration = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?",
+            ("tenant-scope-v1",),
+        ).fetchone()
+        if not migration:
+            dialect = conn._conn.dialect.name
+            if dialect == "postgresql":
+                for uq in inspect(conn._conn).get_unique_constraints("lesions"):
+                    if tuple(uq.get("column_names") or ()) == ("clinic_id", "patient_id", "lesion_code"):
+                        name = str(uq["name"]).replace('"', '""')
+                        conn.execute(f'ALTER TABLE lesions DROP CONSTRAINT IF EXISTS "{name}"')
+                for uq in inspect(conn._conn).get_unique_constraints("encounter_signoffs"):
+                    if tuple(uq.get("column_names") or ()) == ("clinic_id", "encounter_id"):
+                        name = str(uq["name"]).replace('"', '""')
+                        conn.execute(f'ALTER TABLE encounter_signoffs DROP CONSTRAINT IF EXISTS "{name}"')
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_lesions_tenant "
+                    "ON lesions(organization_id, clinic_id, patient_id, lesion_code)"
+                )
+                conn.execute("DROP INDEX IF EXISTS uq_encounter_signoff")
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff_tenant "
+                    "ON encounter_signoffs(organization_id, clinic_id, encounter_id)"
+                )
+            elif dialect == "sqlite":
+                legacy = False
+                for idx in conn._conn.exec_driver_sql("PRAGMA index_list('lesions')").fetchall():
+                    idx_name = str(idx[1])
+                    is_unique = bool(idx[2])
+                    columns = [str(row[2]) for row in conn._conn.exec_driver_sql(
+                        f'PRAGMA index_info("{idx_name.replace(chr(34), chr(34)+chr(34))}")'
+                    ).fetchall()]
+                    if is_unique and columns == ["clinic_id", "patient_id", "lesion_code"]:
+                        legacy = True
+                        break
+                if legacy:
+                    conn.execute("PRAGMA foreign_keys=OFF")
+                    conn.execute("""CREATE TABLE lesions__tenant_v1 (
+                        id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, clinic_id TEXT NOT NULL,
+                        patient_id TEXT NOT NULL, encounter_id TEXT NOT NULL, lesion_code TEXT NOT NULL,
+                        body_site TEXT NOT NULL, laterality TEXT, morphology_json TEXT NOT NULL,
+                        size_mm REAL, duration_days INTEGER, evolution TEXT, symptoms_json TEXT NOT NULL,
+                        clinical_impression TEXT, differential_json TEXT NOT NULL, confirmed_diagnosis TEXT,
+                        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                        UNIQUE(organization_id, clinic_id, patient_id, lesion_code)
+                    )""")
+                    conn.execute("""INSERT INTO lesions__tenant_v1
+                        SELECT id, organization_id, clinic_id, patient_id, encounter_id, lesion_code,
+                               body_site, laterality, morphology_json, size_mm, duration_days, evolution,
+                               symptoms_json, clinical_impression, differential_json, confirmed_diagnosis,
+                               created_at, updated_at FROM lesions""")
+                    conn.execute("DROP TABLE lesions")
+                    conn.execute("ALTER TABLE lesions__tenant_v1 RENAME TO lesions")
+                    conn.execute("PRAGMA foreign_keys=ON")
+                conn.execute("DROP INDEX IF EXISTS uq_encounter_signoff")
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_lesions_tenant "
+                    "ON lesions(organization_id, clinic_id, patient_id, lesion_code)"
+                )
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff_tenant "
+                    "ON encounter_signoffs(organization_id, clinic_id, encounter_id)"
+                )
+            conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                ("tenant-scope-v1", _now()),
+            )
 
 
 @contextmanager
@@ -257,18 +327,19 @@ def create_encounter(
     return _decode(row)
 
 
-def get_encounter(encounter_id: str, clinic_id: str) -> dict[str, Any] | None:
+def get_encounter(encounter_id: str, organization_id: str, clinic_id: str) -> dict[str, Any] | None:
     init_store()
     with _connect() as conn:
         row = conn.execute(
-            "SELECT * FROM encounters WHERE id = ? AND clinic_id = ?",
-            (encounter_id, clinic_id),
+            "SELECT * FROM encounters WHERE id = ? AND organization_id = ? AND clinic_id = ?",
+            (encounter_id, organization_id, clinic_id),
         ).fetchone()
     return _decode(row) if row else None
 
 
 def update_encounter(
     encounter_id: str,
+    organization_id: str,
     clinic_id: str,
     expected_version: int,
     patch: dict[str, Any],
@@ -296,10 +367,10 @@ def update_encounter(
         raise ValueError("No changes supplied")
     now = _now()
     sets.extend(["version = version + 1", "updated_at = ?"])
-    values.extend([now, encounter_id, clinic_id, expected_version])
+    values.extend([now, encounter_id, organization_id, clinic_id, expected_version])
     with transaction() as conn:
         cursor = conn.execute(
-            f"UPDATE encounters SET {', '.join(sets)} WHERE id = ? AND clinic_id = ? AND version = ?",
+            f"UPDATE encounters SET {', '.join(sets)} WHERE id = ? AND organization_id = ? AND clinic_id = ? AND version = ?",
             values,
         )
         if cursor.rowcount != 1:
@@ -339,7 +410,7 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
               evolution, symptoms_json, clinical_impression, differential_json,
               confirmed_diagnosis, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(clinic_id, patient_id, lesion_code) DO UPDATE SET
+            ON CONFLICT(organization_id, clinic_id, patient_id, lesion_code) DO UPDATE SET
               encounter_id=excluded.encounter_id,
               body_site=excluded.body_site,
               laterality=excluded.laterality,
@@ -363,8 +434,8 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
             ),
         )
         row = conn.execute(
-            "SELECT * FROM lesions WHERE clinic_id = ? AND patient_id = ? AND lesion_code = ?",
-            (v["clinic_id"], v["patient_id"], v["lesion_code"]),
+            "SELECT * FROM lesions WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND lesion_code = ?",
+            (v["organization_id"], v["clinic_id"], v["patient_id"], v["lesion_code"]),
         ).fetchone()
         conn.execute(
             """
@@ -388,16 +459,16 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
     return _decode(row)
 
 
-def list_lesion_timeline(*, clinic_id: str, patient_id: str, lesion_code: str) -> list[dict[str, Any]]:
+def list_lesion_timeline(*, organization_id: str, clinic_id: str, patient_id: str, lesion_code: str) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT * FROM lesion_observations
-            WHERE clinic_id = ? AND patient_id = ? AND lesion_code = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND lesion_code = ?
             ORDER BY observed_at ASC
             """,
-            (clinic_id, patient_id, lesion_code),
+            (organization_id, clinic_id, patient_id, lesion_code),
         ).fetchall()
     result = []
     for row in rows:
@@ -416,9 +487,9 @@ def create_consent(**payload: Any) -> dict[str, Any]:
                 """
                 UPDATE consents
                 SET status = 'withdrawn', withdrawn_at = COALESCE(withdrawn_at, ?)
-                WHERE clinic_id = ? AND patient_id = ? AND purpose = ? AND status = 'granted'
+                WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND purpose = ? AND status = 'granted'
                 """,
-                (payload.get("withdrawn_at") or now, payload["clinic_id"], payload["patient_id"], payload["purpose"]),
+                (payload.get("withdrawn_at") or now, payload["organization_id"], payload["clinic_id"], payload["patient_id"], payload["purpose"]),
             )
         conn.execute(
             """
@@ -438,25 +509,26 @@ def create_consent(**payload: Any) -> dict[str, Any]:
     return dict(row)
 
 
-def has_active_consent(*, clinic_id: str, patient_id: str, purpose: str) -> bool:
+def has_active_consent(*, organization_id: str, clinic_id: str, patient_id: str, purpose: str) -> bool:
     init_store()
     with _connect() as conn:
         row = conn.execute(
             """
             SELECT 1 FROM consents
-            WHERE clinic_id = ? AND patient_id = ? AND purpose = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND purpose = ?
               AND status = 'granted'
               AND (expires_at IS NULL OR expires_at > ?)
               AND withdrawn_at IS NULL
             ORDER BY created_at DESC LIMIT 1
             """,
-            (clinic_id, patient_id, purpose, _now()),
+            (organization_id, clinic_id, patient_id, purpose, _now()),
         ).fetchone()
     return row is not None
 
 
 def create_media(**payload: Any) -> dict[str, Any]:
     if not has_active_consent(
+        organization_id=payload["organization_id"],
         clinic_id=payload["clinic_id"],
         patient_id=payload["patient_id"],
         purpose=payload["consent_purpose"],
@@ -540,6 +612,7 @@ def get_lesion(lesion_id: str, *, organization_id: str, clinic_id: str, patient_
 
 def list_media(
     *,
+    organization_id: str,
     clinic_id: str,
     patient_id: str,
     encounter_id: str | None = None,
@@ -547,8 +620,8 @@ def list_media(
 ) -> list[dict[str, Any]]:
     """Return tenant-scoped clinical media metadata for longitudinal review."""
     init_store()
-    clauses = ["clinic_id = ?", "patient_id = ?"]
-    params: list[Any] = [clinic_id, patient_id]
+    clauses = ["organization_id = ?", "clinic_id = ?", "patient_id = ?"]
+    params: list[Any] = [organization_id, clinic_id, patient_id]
     if encounter_id:
         clauses.append("encounter_id = ?")
         params.append(encounter_id)
@@ -576,8 +649,8 @@ def create_signoff(
     now = _now()
     with transaction() as conn:
         existing = conn.execute(
-            "SELECT * FROM encounter_signoffs WHERE clinic_id = ? AND encounter_id = ?",
-            (clinic_id, encounter_id),
+            "SELECT * FROM encounter_signoffs WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?",
+            (organization_id, clinic_id, encounter_id),
         ).fetchone()
         if existing:
             return dict(existing)
@@ -594,20 +667,20 @@ def create_signoff(
             UPDATE encounters
             SET status = 'signed', closed_at = COALESCE(closed_at, ?),
                 version = version + 1, updated_at = ?
-            WHERE id = ? AND clinic_id = ?
+            WHERE id = ? AND organization_id = ? AND clinic_id = ?
             """,
-            (now, now, encounter_id, clinic_id),
+            (now, now, encounter_id, organization_id, clinic_id),
         )
         row = conn.execute("SELECT * FROM encounter_signoffs WHERE id = ?", (signoff_id,)).fetchone()
     return dict(row)
 
 
-def get_signoff(*, clinic_id: str, encounter_id: str) -> dict[str, Any] | None:
+def get_signoff(*, organization_id: str, clinic_id: str, encounter_id: str) -> dict[str, Any] | None:
     init_store()
     with _connect() as conn:
         row = conn.execute(
-            "SELECT * FROM encounter_signoffs WHERE clinic_id = ? AND encounter_id = ?",
-            (clinic_id, encounter_id),
+            "SELECT * FROM encounter_signoffs WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?",
+            (organization_id, clinic_id, encounter_id),
         ).fetchone()
     return dict(row) if row else None
 
@@ -637,26 +710,26 @@ def create_followup(
     return dict(row)
 
 
-def list_followups(*, clinic_id: str, patient_id: str | None = None) -> list[dict[str, Any]]:
+def list_followups(*, organization_id: str, clinic_id: str, patient_id: str | None = None) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         if patient_id:
             rows = conn.execute(
                 """
                 SELECT * FROM encounter_followups
-                WHERE clinic_id = ? AND patient_id = ?
+                WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
                 ORDER BY due_at ASC
                 """,
-                (clinic_id, patient_id),
+                (organization_id, clinic_id, patient_id),
             ).fetchall()
         else:
             rows = conn.execute(
                 """
                 SELECT * FROM encounter_followups
-                WHERE clinic_id = ?
+                WHERE organization_id = ? AND clinic_id = ?
                 ORDER BY due_at ASC
                 """,
-                (clinic_id,),
+                (organization_id, clinic_id),
             ).fetchall()
     return [dict(row) for row in rows]
 
@@ -690,7 +763,7 @@ def record_ai_review(
 
 
 def review_ai_assessment(
-    *, clinic_id: str, encounter_id: str, review_id: str, clinician_decision: str,
+    *, organization_id: str, clinic_id: str, encounter_id: str, review_id: str, clinician_decision: str,
     clinician_override_label: str | None, reviewed_by: str,
 ) -> dict[str, Any]:
     if clinician_decision not in {"accepted", "overridden", "rejected"}:
@@ -702,7 +775,7 @@ def review_ai_assessment(
             UPDATE encounter_ai_reviews
             SET clinician_decision = ?, clinician_override_label = ?,
                 reviewed_by = ?, reviewed_at = ?
-            WHERE id = ? AND clinic_id = ? AND encounter_id = ?
+            WHERE id = ? AND organization_id = ? AND clinic_id = ? AND encounter_id = ?
             """,
             (
                 clinician_decision,
@@ -710,6 +783,7 @@ def review_ai_assessment(
                 reviewed_by,
                 now,
                 review_id,
+                organization_id,
                 clinic_id,
                 encounter_id,
             ),
@@ -722,42 +796,37 @@ def review_ai_assessment(
     return dict(row)
 
 
-def has_pending_ai_reviews(*, clinic_id: str, encounter_id: str) -> bool:
+def has_pending_ai_reviews(*, organization_id: str, clinic_id: str, encounter_id: str) -> bool:
     init_store()
     with _connect() as conn:
         row = conn.execute(
             """
             SELECT 1 FROM encounter_ai_reviews
-            WHERE clinic_id = ? AND encounter_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?
               AND clinician_decision IS NULL
             LIMIT 1
             """,
-            (clinic_id, encounter_id),
+            (organization_id, clinic_id, encounter_id),
         ).fetchone()
     return row is not None
 
 
-def list_ai_reviews(*, clinic_id: str, encounter_id: str) -> list[dict[str, Any]]:
+def list_ai_reviews(*, organization_id: str, clinic_id: str, encounter_id: str) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT * FROM encounter_ai_reviews
-            WHERE clinic_id = ? AND encounter_id = ?
+            WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?
             ORDER BY created_at DESC
             """,
-            (clinic_id, encounter_id),
+            (organization_id, clinic_id, encounter_id),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
 
-def get_patient_clinical_summary(
-    *,
-    organization_id: str,
-    clinic_id: str,
-    patient_id: str,
-) -> dict[str, Any]:
+def get_patient_clinical_summary(*, organization_id: str, clinic_id: str, patient_id: str) -> dict[str, Any]:
     init_store()
     with _connect() as conn:
         encounters = conn.execute(
@@ -788,14 +857,11 @@ def get_patient_clinical_summary(
             """
             SELECT s.*
             FROM encounter_signoffs s
-                        JOIN encounters e
-                            ON e.id = s.encounter_id
-                         AND e.organization_id = s.organization_id
-                         AND e.clinic_id = s.clinic_id
-                        WHERE s.organization_id = ? AND s.clinic_id = ? AND e.patient_id = ?
+            JOIN encounters e ON e.id = s.encounter_id
+            WHERE s.organization_id = ? AND s.clinic_id = ? AND e.organization_id = ? AND e.clinic_id = ? AND e.patient_id = ?
             ORDER BY s.signed_at DESC
             """,
-                        (organization_id, clinic_id, patient_id),
+            (organization_id, clinic_id, organization_id, clinic_id, patient_id),
         ).fetchall()
     return {
         "patient_id": patient_id,

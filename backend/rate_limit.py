@@ -78,9 +78,33 @@ def enforce_rate_limit(key: str, *, limit: int, window_seconds: int) -> None:
     _local_limit(key, limit=limit, window_seconds=window_seconds)
 
 
-def client_key(request: Request, identity: str | None = None) -> str:
+def _trusted_client_ip(request: Request) -> str:
+    peer = request.client.host if request.client else "unknown"
+    trusted = {
+        item.strip()
+        for item in os.getenv("TRUSTED_PROXY_IPS", "").split(",")
+        if item.strip()
+    }
+    if peer not in trusted:
+        return peer
+
     forwarded = request.headers.get("X-Forwarded-For", "")
-    ip = forwarded.split(",")[0].strip() if forwarded else (
-        request.client.host if request.client else "unknown"
-    )
-    return f"{identity or 'anonymous'}:{ip}"
+    if not forwarded:
+        return peer
+
+    # Walk right-to-left through the forwarded chain. The first hop that is
+    # not itself a configured proxy is the client address; caller-controlled
+    # left-side prefixes are therefore ignored.
+    hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        if hop not in trusted:
+            return hop
+    return peer
+
+
+def client_key(request: Request, identity: str | None = None) -> str:
+    if identity:
+        # Authenticated callers are rate-limited by stable identity, not a
+        # caller-controlled forwarding header or changing network address.
+        return f"user:{identity}"
+    return f"anonymous:{_trusted_client_ip(request)}"

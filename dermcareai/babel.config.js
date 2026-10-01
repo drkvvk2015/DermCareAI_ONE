@@ -1,5 +1,5 @@
 module.exports = {
-  presets: ['@react-native/babel-preset'],
+  presets: ['babel-preset-expo'],
   plugins: [
     ['module:react-native-dotenv', {
       moduleName: '@env',
@@ -9,6 +9,6 @@ module.exports = {
       safe: false,
       allowUndefined: true,
     }],
-    ["@babel/plugin-transform-private-methods", { "loose": true }]
+    ['@babel/plugin-transform-private-methods', { loose: true }],
   ],
-}; 
+};

@@ -199,8 +199,8 @@ def post_encounter(req: EncounterCreate, user: dict[str, Any] = Depends(require_
 
 @router.get("/encounters/{encounter_id}")
 def read_encounter(encounter_id: str, user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor"))):
-    _, clinic_id = _tenant(user)
-    encounter = get_encounter(encounter_id, clinic_id)
+    organization_id, clinic_id = _tenant(user)
+    encounter = get_encounter(encounter_id, organization_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     return encounter
@@ -235,7 +235,7 @@ def patch_encounter(
             return replay
     patch = {key: value for key, value in req.model_dump().items() if key != "expected_version" and value is not None}
     try:
-        result = update_encounter(encounter_id, clinic_id, req.expected_version, patch)
+        result = update_encounter(encounter_id, organization_id, clinic_id, req.expected_version, patch)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if idempotency_key:
@@ -276,7 +276,7 @@ def post_lesion(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if replay is not None:
             return replay
-    encounter = get_encounter(req.encounter_id, clinic_id)
+    encounter = get_encounter(req.encounter_id, organization_id, clinic_id)
     if not encounter or encounter["patient_id"] != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient")
     result = upsert_lesion(organization_id=organization_id, clinic_id=clinic_id, **req.model_dump())
@@ -295,8 +295,8 @@ def post_lesion(
 
 @router.get("/patients/{patient_id}/lesions/{lesion_code}/timeline")
 def lesion_timeline(patient_id: str, lesion_code: str, user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor"))):
-    _, clinic_id = _tenant(user)
-    return list_lesion_timeline(clinic_id=clinic_id, patient_id=patient_id, lesion_code=lesion_code)
+    organization_id, clinic_id = _tenant(user)
+    return list_lesion_timeline(organization_id=organization_id, clinic_id=clinic_id, patient_id=patient_id, lesion_code=lesion_code)
 
 
 @router.post("/consents")
@@ -330,8 +330,9 @@ def patient_media(
     lesion_id: str | None = None,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
 ):
-    _, clinic_id = _tenant(user)
+    organization_id, clinic_id = _tenant(user)
     return list_media(
+        organization_id=organization_id,
         clinic_id=clinic_id,
         patient_id=patient_id,
         encounter_id=encounter_id,
@@ -345,11 +346,7 @@ def patient_clinical_summary(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor", "receptionist")),
 ):
     organization_id, clinic_id = _tenant(user)
-    return get_patient_clinical_summary(
-        organization_id=organization_id,
-        clinic_id=clinic_id,
-        patient_id=patient_id,
-    )
+    return get_patient_clinical_summary(organization_id=organization_id, clinic_id=clinic_id, patient_id=patient_id)
 
 
 @router.get("/consents/{patient_id}/active")
@@ -358,12 +355,12 @@ def active_consent(
     purpose: str = "clinical-image",
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "receptionist")),
 ):
-    _, clinic_id = _tenant(user)
+    organization_id, clinic_id = _tenant(user)
     from clinical_store import has_active_consent
     return {
         "patient_id": patient_id,
         "purpose": purpose,
-        "active": has_active_consent(clinic_id=clinic_id, patient_id=patient_id, purpose=purpose),
+        "active": has_active_consent(organization_id=organization_id, clinic_id=clinic_id, patient_id=patient_id, purpose=purpose),
     }
 
 
@@ -374,11 +371,11 @@ def sign_encounter(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
     organization_id, clinic_id = _tenant(user)
-    encounter = get_encounter(encounter_id, clinic_id)
+    encounter = get_encounter(encounter_id, organization_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     if encounter["status"] == "signed":
-        existing = get_signoff(clinic_id=clinic_id, encounter_id=encounter_id)
+        existing = get_signoff(organization_id=organization_id, clinic_id=clinic_id, encounter_id=encounter_id)
         return existing or {"status": "signed"}
 
     issues = validate_encounter(_documentation_fields(encounter))
@@ -392,7 +389,7 @@ def sign_encounter(
             },
         )
 
-    if has_pending_ai_reviews(clinic_id=clinic_id, encounter_id=encounter_id):
+    if has_pending_ai_reviews(organization_id=organization_id, clinic_id=clinic_id, encounter_id=encounter_id):
         raise HTTPException(
             status_code=409,
             detail="Clinical sign-off requires an explicit clinician decision on every attached AI assessment.",
@@ -421,10 +418,10 @@ def read_signoff(
     encounter_id: str,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
 ):
-    _, clinic_id = _tenant(user)
-    if not get_encounter(encounter_id, clinic_id):
+    organization_id, clinic_id = _tenant(user)
+    if not get_encounter(encounter_id, organization_id, clinic_id):
         raise HTTPException(status_code=404, detail="Encounter not found")
-    return get_signoff(clinic_id=clinic_id, encounter_id=encounter_id)
+    return get_signoff(organization_id=organization_id, clinic_id=clinic_id, encounter_id=encounter_id)
 
 
 @router.post("/encounters/{encounter_id}/followups")
@@ -434,7 +431,7 @@ def post_followup(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
     organization_id, clinic_id = _tenant(user)
-    encounter = get_encounter(encounter_id, clinic_id)
+    encounter = get_encounter(encounter_id, organization_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     result = create_followup(
@@ -463,8 +460,8 @@ def patient_followups(
     patient_id: str,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "receptionist", "auditor")),
 ):
-    _, clinic_id = _tenant(user)
-    return list_followups(clinic_id=clinic_id, patient_id=patient_id)
+    organization_id, clinic_id = _tenant(user)
+    return list_followups(organization_id=organization_id, clinic_id=clinic_id, patient_id=patient_id)
 
 
 @router.post("/encounters/{encounter_id}/ai-reviews")
@@ -474,7 +471,7 @@ def post_ai_review(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
     organization_id, clinic_id = _tenant(user)
-    encounter = get_encounter(encounter_id, clinic_id)
+    encounter = get_encounter(encounter_id, organization_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     payload = req.model_dump()
@@ -486,6 +483,7 @@ def post_ai_review(
         if media_id and (not media or media.get("encounter_id") != encounter_id):
             raise HTTPException(status_code=404, detail="Linked clinical media not found for encounter")
         if media_id and not has_active_consent(
+            organization_id=organization_id,
             clinic_id=clinic_id,
             patient_id=encounter["patient_id"],
             purpose="clinical-image",
@@ -527,12 +525,13 @@ def patch_ai_review(
     req: AIReviewDecision,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
-    _, clinic_id = _tenant(user)
-    encounter = get_encounter(encounter_id, clinic_id)
+    organization_id, clinic_id = _tenant(user)
+    encounter = get_encounter(encounter_id, organization_id, clinic_id)
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     try:
         result = review_ai_assessment(
+            organization_id=organization_id,
             clinic_id=clinic_id,
             encounter_id=encounter_id,
             review_id=review_id,
@@ -563,7 +562,7 @@ def encounter_ai_reviews(
     encounter_id: str,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
 ):
-    _, clinic_id = _tenant(user)
-    if not get_encounter(encounter_id, clinic_id):
+    organization_id, clinic_id = _tenant(user)
+    if not get_encounter(encounter_id, organization_id, clinic_id):
         raise HTTPException(status_code=404, detail="Encounter not found")
-    return list_ai_reviews(clinic_id=clinic_id, encounter_id=encounter_id)
+    return list_ai_reviews(organization_id=organization_id, clinic_id=clinic_id, encounter_id=encounter_id)
