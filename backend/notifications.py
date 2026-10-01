@@ -120,9 +120,7 @@ async def _deliver(row: dict[str, Any]) -> None:
             result = await social_safe_webhook(req)
         status = result.get("status")
         if status == "not_configured":
-            # A missing optional integration is terminal for this queued event,
-            # but remains visible to operators through the outbox state.
-            mark_sent(row_id=row["id"], provider_message_id=None)
+            mark_failed(row_id=row["id"], error=f"{row['channel']} provider is not configured", max_attempts=1)
             return
         mark_sent(
             row_id=row["id"],
