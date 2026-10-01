@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from auth import require_roles
 from dermatology.vision_analysis import analyze_image
+from upload_limits import MAX_IMAGE_BYTES, read_upload_limited
 
 router = APIRouter(
     prefix="/api/v1/dermatology/vision",
@@ -19,7 +20,7 @@ async def analyze_dermatology_image(
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    content = await file.read()
+    content = await read_upload_limited(file, MAX_IMAGE_BYTES)
     if not content:
         raise HTTPException(status_code=400, detail="Empty image upload")
 
