@@ -92,4 +92,4 @@ def test_consent_withdrawal_invalidates_previous_grant() -> None:
         withdrawn_at="2026-09-19T01:00:00+00:00",
         recorded_by="doctor1",
     )
-    assert not has_active_consent(clinic_id="clinic1", patient_id="patient1", purpose="clinical-image")
+    assert not has_active_consent(organization_id="org1", clinic_id="clinic1", patient_id="patient1", purpose="clinical-image")
