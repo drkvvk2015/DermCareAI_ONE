@@ -42,6 +42,14 @@ AI output remains **traceable and reviewable**. An attached AI assessment cannot
 
 The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
 
+## Production hardening — 1 October 2026
+
+PR #206 contains the current security/reliability hardening wave. It addresses the ten-item audit set covering composite tenant isolation, bounded image uploads, trusted-proxy rate limiting, redacted public health checks, dependency-audit release gating, a real vulnerability-reporting process, bounded/off-event-loop AI inference, durable notification outbox processing, regression tests, and staging network/runtime hardening.
+
+The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI.
+
+The Android build path has also been aligned with Expo's Babel preset so clean native prebuilds link Expo native modules consistently.
+
 ## System at a glance
 
 ```text
@@ -151,7 +159,7 @@ The final engineering swarm has now been integrated as three independently valid
 | CodeQL | ✅ Automated |
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
-| Dependency audit | ✅ Reporting enabled |
+| Dependency audit | ✅ Release-gated on high-severity findings; Python lock resolved in CI |
 | SBOM/provenance | ✅ Container workflow enabled |
 | Independent AI clinical validation | ⚠️ Evidence still required |
 | Prospective clinical validation | ⚠️ Evidence still required |
