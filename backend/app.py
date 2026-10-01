@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import io
 import logging
@@ -41,6 +40,7 @@ from rate_limit import client_key, enforce_rate_limit
 from resilience import file_sha256
 from production_readiness import evaluate_readiness
 from request_limits import RequestBodyLimitMiddleware
+from inference_runtime import recover_exclusively, run_inference
 from upload_limits import MAX_IMAGE_BYTES, MAX_REQUEST_BODY_BYTES, read_upload_limited
 
 logging.basicConfig(level=logging.INFO)
@@ -54,8 +54,6 @@ ENABLE_EMBEDDED_DERM_MODEL = os.getenv(
     "false" if APP_ENV == "production" else "true",
 ).lower() == "true"
 AI_ENABLED_IN_PRODUCTION = os.getenv("AI_ENABLED_IN_PRODUCTION", "false").lower() == "true"
-INFERENCE_CONCURRENCY = max(1, int(os.getenv("INFERENCE_CONCURRENCY", "1")))
-INFERENCE_SEMAPHORE = asyncio.Semaphore(INFERENCE_CONCURRENCY)
 Image.MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", "25000000"))
 
 
@@ -326,7 +324,7 @@ model_service = ModelService()
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    await asyncio.to_thread(model_service.load)
+    await run_inference(model_service.load)
     start_notification_worker()
 
 
@@ -484,7 +482,7 @@ def health_check() -> Dict[str, Any]:
 async def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
     user_key = client_key(request, user["uid"])
     enforce_rate_limit(f"self-heal:{user_key}", limit=3, window_seconds=300)
-    recovered = await asyncio.to_thread(model_service.recover)
+    recovered = await recover_exclusively(model_service.recover)
     return {"recovered": recovered, "status": model_service.status()}
 
 
@@ -503,15 +501,13 @@ async def predict(request: Request, file: UploadFile = File(...), user: dict[str
     if not contents:
         raise HTTPException(status_code=400, detail="Empty image upload")
     try:
-        async with INFERENCE_SEMAPHORE:
-            return await asyncio.to_thread(model_service.process_image, contents)
+        return await run_inference(model_service.process_image, contents)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        if await asyncio.to_thread(model_service.recover):
+        if await recover_exclusively(model_service.recover):
             try:
-                async with INFERENCE_SEMAPHORE:
-                    return await asyncio.to_thread(model_service.process_image, contents)
+                return await run_inference(model_service.process_image, contents)
             except Exception as retry_exc:
                 raise HTTPException(status_code=503, detail="AI service temporarily unavailable") from retry_exc
         raise HTTPException(status_code=503, detail="AI service unavailable") from exc
