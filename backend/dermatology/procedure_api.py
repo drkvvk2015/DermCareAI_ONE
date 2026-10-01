@@ -116,4 +116,4 @@ def patient_procedures(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
 ):
     organization_id, clinic_id = _tenant(user)
-    return list_procedures(clinic_id=clinic_id, patient_id=patient_id)
+    return list_procedures(organization_id=organization_id, clinic_id=clinic_id, patient_id=patient_id)
