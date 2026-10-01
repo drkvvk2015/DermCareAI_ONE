@@ -11,6 +11,7 @@ from typing import Any, Dict
 import numpy as np
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -31,13 +32,16 @@ from commerce import router as commerce_router
 from prescriptions import router as prescriptions_router
 from evaluation import ABSTAIN_LABEL, safety_gate, validate_prediction_payload
 from model_registry import production_artifact_eligible, verify_models
-from notifications import router as notifications_router
+from notifications import router as notifications_router, start_notification_worker, stop_notification_worker
 from observability import record_prediction, record_request, snapshot as observability_snapshot
 from platform_contracts import AIGovernanceCard, PlatformInfo, ReadinessComponent, ReadinessResponse, utc_now
 from request_context import get_request_id, new_request_id, reset_request_id, set_request_id
 from rate_limit import client_key, enforce_rate_limit
 from resilience import file_sha256
 from production_readiness import evaluate_readiness
+from request_limits import RequestBodyLimitMiddleware
+from inference_runtime import recover_exclusively, run_inference
+from upload_limits import MAX_IMAGE_BYTES, MAX_REQUEST_BODY_BYTES, read_upload_limited
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,12 +49,12 @@ APP_VERSION = os.getenv("APP_VERSION", "5.1.0")
 APP_ENV = os.getenv("APP_ENV", "development")
 MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.70"))
-MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
 ENABLE_EMBEDDED_DERM_MODEL = os.getenv(
     "ENABLE_EMBEDDED_DERM_MODEL",
     "false" if APP_ENV == "production" else "true",
 ).lower() == "true"
 AI_ENABLED_IN_PRODUCTION = os.getenv("AI_ENABLED_IN_PRODUCTION", "false").lower() == "true"
+Image.MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", "25000000"))
 
 
 class PredictionResponse(BaseModel):
@@ -67,6 +71,7 @@ class PredictionResponse(BaseModel):
 
 
 app = FastAPI(title="DermCareAI Clinic Platform API", version=APP_VERSION)
+app.add_middleware(RequestBodyLimitMiddleware, max_body_bytes=MAX_REQUEST_BODY_BYTES)
 configured_origins = os.getenv("CORS_ORIGINS", "http://localhost:8081")
 if APP_ENV == "production" and configured_origins.strip() in {"", "*"}:
     raise RuntimeError("Production CORS_ORIGINS must explicitly list approved origins")
@@ -79,6 +84,16 @@ async def request_context_middleware(request: Request, call_next):
     request_id = new_request_id(request.headers.get("X-Request-ID"))
     token = set_request_id(request_id)
     started = time.perf_counter()
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body exceeds configured size limit"},
+                )
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
     try:
         response = await call_next(request)
         elapsed_ms = (time.perf_counter() - started) * 1000
@@ -170,8 +185,10 @@ class ModelService:
                 except Exception as embedded_exc:
                     self.embedded = None
                     self.last_error = f"Local models: {exc}; embedded model: {embedded_exc}"
+                    logger.exception("All model loading paths failed")
+            else:
+                logger.warning("AI model unavailable: %s", self.last_error)
             self.mode = "unavailable"
-            logger.exception("All model loading paths failed")
             return False
 
     def recover(self) -> bool:
@@ -196,7 +213,10 @@ class ModelService:
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":
             raise RuntimeError("AI model service is unavailable")
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.width * image.height > Image.MAX_IMAGE_PIXELS:
+            raise ValueError("Image dimensions exceed configured safety limit")
+        image = image.convert("RGB")
         quality = assess_image_quality(image)
         if not quality["usable"]:
             model_name = "quality-gate"
@@ -306,7 +326,13 @@ model_service = ModelService()
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    model_service.load()
+    await run_inference(model_service.load)
+    start_notification_worker()
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    await stop_notification_worker()
 
 
 def assess_image_quality(image: Image.Image) -> Dict[str, Any]:
@@ -447,20 +473,18 @@ def read_root() -> Dict[str, str]:
 
 @app.get("/health")
 def health_check() -> Dict[str, Any]:
-    status = model_service.status()
     return {
-        "status": "healthy" if status["loaded"] else "degraded",
+        "status": "ok",
         "version": APP_VERSION,
         "request_id": get_request_id(),
-        "service": status,
     }
 
 
 @app.post("/self-heal")
-def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
+async def self_heal(request: Request, user: dict[str, Any] = Depends(require_roles("admin"))) -> Dict[str, Any]:
     user_key = client_key(request, user["uid"])
     enforce_rate_limit(f"self-heal:{user_key}", limit=3, window_seconds=300)
-    recovered = model_service.recover()
+    recovered = await recover_exclusively(model_service.recover)
     return {"recovered": recovered, "status": model_service.status()}
 
 
@@ -475,17 +499,17 @@ async def predict(request: Request, file: UploadFile = File(...), user: dict[str
     enforce_rate_limit(f"predict:{user_key}", limit=30, window_seconds=60)
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
-    contents = await file.read()
+    contents = await read_upload_limited(file, MAX_IMAGE_BYTES)
     if not contents:
         raise HTTPException(status_code=400, detail="Empty image upload")
-    if len(contents) > MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=413, detail="Image exceeds configured size limit")
     try:
-        return model_service.process_image(contents)
+        return await run_inference(model_service.process_image, contents)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        if model_service.recover():
+        if await recover_exclusively(model_service.recover):
             try:
-                return model_service.process_image(contents)
+                return await run_inference(model_service.process_image, contents)
             except Exception as retry_exc:
                 raise HTTPException(status_code=503, detail="AI service temporarily unavailable") from retry_exc
         raise HTTPException(status_code=503, detail="AI service unavailable") from exc

@@ -52,7 +52,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_derm_procedures_patient
-              ON dermatology_procedures(clinic_id, patient_id, performed_at DESC);
+              ON dermatology_procedures(organization_id, clinic_id, patient_id, performed_at DESC);
             """
         )
 
