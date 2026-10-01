@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from typing import Any, Dict
 
@@ -110,7 +111,7 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
 
 
 async def _deliver(row: dict[str, Any]) -> None:
-    req = RegistrationNotification.model_validate(__import__("json").loads(row["payload_json"]))
+    req = RegistrationNotification.model_validate(json.loads(row["payload_json"]))
     try:
         if row["channel"] == "whatsapp":
             result = await send_whatsapp(req)
