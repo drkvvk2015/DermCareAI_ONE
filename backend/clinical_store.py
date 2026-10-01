@@ -458,16 +458,16 @@ def upsert_lesion(**payload: Any) -> dict[str, Any]:
     return _decode(row)
 
 
-def list_lesion_timeline(*, clinic_id: str, patient_id: str, lesion_code: str) -> list[dict[str, Any]]:
+def list_lesion_timeline(*, organization_id: str, clinic_id: str, patient_id: str, lesion_code: str) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT * FROM lesion_observations
-            WHERE clinic_id = ? AND patient_id = ? AND lesion_code = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND lesion_code = ?
             ORDER BY observed_at ASC
             """,
-            (clinic_id, patient_id, lesion_code),
+            (organization_id, clinic_id, patient_id, lesion_code),
         ).fetchall()
     result = []
     for row in rows:
@@ -486,9 +486,9 @@ def create_consent(**payload: Any) -> dict[str, Any]:
                 """
                 UPDATE consents
                 SET status = 'withdrawn', withdrawn_at = COALESCE(withdrawn_at, ?)
-                WHERE clinic_id = ? AND patient_id = ? AND purpose = ? AND status = 'granted'
+                WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND purpose = ? AND status = 'granted'
                 """,
-                (payload.get("withdrawn_at") or now, payload["clinic_id"], payload["patient_id"], payload["purpose"]),
+                (payload.get("withdrawn_at") or now, payload["organization_id"], payload["clinic_id"], payload["patient_id"], payload["purpose"]),
             )
         conn.execute(
             """
@@ -508,25 +508,26 @@ def create_consent(**payload: Any) -> dict[str, Any]:
     return dict(row)
 
 
-def has_active_consent(*, clinic_id: str, patient_id: str, purpose: str) -> bool:
+def has_active_consent(*, organization_id: str, clinic_id: str, patient_id: str, purpose: str) -> bool:
     init_store()
     with _connect() as conn:
         row = conn.execute(
             """
             SELECT 1 FROM consents
-            WHERE clinic_id = ? AND patient_id = ? AND purpose = ?
+            WHERE organization_id = ? AND clinic_id = ? AND patient_id = ? AND purpose = ?
               AND status = 'granted'
               AND (expires_at IS NULL OR expires_at > ?)
               AND withdrawn_at IS NULL
             ORDER BY created_at DESC LIMIT 1
             """,
-            (clinic_id, patient_id, purpose, _now()),
+            (organization_id, clinic_id, patient_id, purpose, _now()),
         ).fetchone()
     return row is not None
 
 
 def create_media(**payload: Any) -> dict[str, Any]:
     if not has_active_consent(
+        organization_id=payload["organization_id"],
         clinic_id=payload["clinic_id"],
         patient_id=payload["patient_id"],
         purpose=payload["consent_purpose"],
