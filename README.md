@@ -159,7 +159,7 @@ The final engineering swarm has now been integrated as three independently valid
 | CodeQL | ✅ Automated |
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
-| Dependency audit | ✅ Release-gated on high-severity findings; Python lock resolved in CI |
+| Dependency audit | ✅ Release-gated: npm high/critical findings block; any pip-audit finding blocks; full JSON reports retained as CI artifacts |
 | SBOM/provenance | ✅ Container workflow enabled |
 | Independent AI clinical validation | ✅ External clinical-validation gate, separate from repository engineering sign-off |
 | Prospective clinical validation | ✅ External prospective validation gate for intended clinical use |
@@ -197,7 +197,7 @@ Durable domains include clinical encounters/lesions/consents/media metadata, bil
 
 ## Release pipeline
 
-GitHub Actions provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit reporting, disaster-recovery drills, and container release with SBOM/provenance.
+GitHub Actions provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit enforcement with retained JSON reports, disaster-recovery drills, and container release with SBOM/provenance.
 
 The repository intentionally keeps the **software release gate** separate from the **clinical validation gate** and **regulatory/privacy gate**.
 
@@ -324,7 +324,7 @@ Production controls include Firebase authentication, server-side RBAC, tenant-aw
 
 ## Dependency security
 
-The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. Unresolved findings remain release evidence and are not hidden behind a false-green gate.
+The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. npm high/critical findings and any pip-audit finding fail the release-gating job; lower-severity npm findings remain visible in the artifact without being promoted to a blocking failure.
 
 ## Clinical / regulatory boundary
 
