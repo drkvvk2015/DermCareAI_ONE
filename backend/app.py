@@ -213,7 +213,10 @@ class ModelService:
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":
             raise RuntimeError("AI model service is unavailable")
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.width * image.height > Image.MAX_IMAGE_PIXELS:
+            raise ValueError("Image dimensions exceed configured safety limit")
+        image = image.convert("RGB")
         quality = assess_image_quality(image)
         if not quality["usable"]:
             model_name = "quality-gate"
@@ -502,6 +505,8 @@ async def predict(request: Request, file: UploadFile = File(...), user: dict[str
     try:
         async with INFERENCE_SEMAPHORE:
             return await asyncio.to_thread(model_service.process_image, contents)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         if await asyncio.to_thread(model_service.recover):
             try:
