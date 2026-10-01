@@ -1,7 +1,10 @@
+import asyncio
+
 from sqlalchemy import create_engine
 
 import clinical_store
 import notification_outbox
+import notifications
 from idempotency import IdempotencyConflict
 
 
@@ -85,3 +88,36 @@ def test_notification_outbox_rejects_reuse_with_different_payload(monkeypatch, t
     except IdempotencyConflict:
         return
     raise AssertionError("notification idempotency key reuse with different payload must fail")
+
+
+def test_notification_worker_marks_bad_persisted_payload_failed(monkeypatch, tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'outbox-malformed.db'}", future=True)
+    monkeypatch.setattr(notification_outbox, "_ENGINE", engine)
+    notification_outbox.enqueue_registration(
+        organization_id="org-a",
+        clinic_id="clinic-1",
+        event_key="notify-bad-payload-001",
+        payload={
+            "patient_name": "Synthetic Patient",
+            "phone": "9000000000",
+            "appointment_text": "Synthetic appointment",
+            "channels": ["sms"],
+        },
+        channels=["sms"],
+    )
+    row = notification_outbox.claim_batch(limit=1)[0]
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "UPDATE notification_outbox SET payload_json = ? WHERE id = ?",
+            ('{"not_a_registration": true}', row["id"]),
+        )
+
+    asyncio.run(notifications._deliver(row))
+
+    with engine.begin() as conn:
+        stored = conn.exec_driver_sql(
+            "SELECT status, last_error FROM notification_outbox WHERE id = ?",
+            (row["id"],),
+        ).fetchone()
+    assert stored[0] == "pending"
+    assert stored[1]
