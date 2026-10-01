@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from auth import require_roles
 from dermatology.vision_analysis import analyze_image
 from upload_limits import MAX_IMAGE_BYTES, read_upload_limited
+from inference_runtime import run_inference
 
 router = APIRouter(
     prefix="/api/v1/dermatology/vision",
@@ -25,7 +26,7 @@ async def analyze_dermatology_image(
         raise HTTPException(status_code=400, detail="Empty image upload")
 
     try:
-        result = analyze_image(content)
+        result = await run_inference(analyze_image, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
