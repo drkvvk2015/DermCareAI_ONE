@@ -54,7 +54,10 @@ jobs:
         run: npx tsc --noEmit
       - name: Expo web export smoke test
         run: npx expo export --platform web
-      - name: Validate Expo project
-        run: npx expo-doctor
+      # The repository intentionally keeps native Android/iOS folders checked in.
+      # Prebuild runs on the ephemeral CI workspace so app.json/native config is
+      # synchronized for validation without changing the branch's committed files.
       - name: Validate native project generation
         run: npx expo prebuild --no-install --non-interactive
+      - name: Validate Expo project
+        run: npx expo-doctor
