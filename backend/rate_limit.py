@@ -92,8 +92,14 @@ def _trusted_client_ip(request: Request) -> str:
     if not forwarded:
         return peer
 
-    # X-Forwarded-For is only honored from a configured trusted proxy.
-    return forwarded.split(",")[0].strip() or peer
+    # Walk right-to-left through the forwarded chain. The first hop that is
+    # not itself a configured proxy is the client address; caller-controlled
+    # left-side prefixes are therefore ignored.
+    hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        if hop not in trusted:
+            return hop
+    return peer
 
 
 def client_key(request: Request, identity: str | None = None) -> str:
