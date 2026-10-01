@@ -611,6 +611,7 @@ def get_lesion(lesion_id: str, *, organization_id: str, clinic_id: str, patient_
 
 def list_media(
     *,
+    organization_id: str,
     clinic_id: str,
     patient_id: str,
     encounter_id: str | None = None,
@@ -618,8 +619,8 @@ def list_media(
 ) -> list[dict[str, Any]]:
     """Return tenant-scoped clinical media metadata for longitudinal review."""
     init_store()
-    clauses = ["clinic_id = ?", "patient_id = ?"]
-    params: list[Any] = [clinic_id, patient_id]
+    clauses = ["organization_id = ?", "clinic_id = ?", "patient_id = ?"]
+    params: list[Any] = [organization_id, clinic_id, patient_id]
     if encounter_id:
         clauses.append("encounter_id = ?")
         params.append(encounter_id)
@@ -647,8 +648,8 @@ def create_signoff(
     now = _now()
     with transaction() as conn:
         existing = conn.execute(
-            "SELECT * FROM encounter_signoffs WHERE clinic_id = ? AND encounter_id = ?",
-            (clinic_id, encounter_id),
+            "SELECT * FROM encounter_signoffs WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?",
+            (organization_id, clinic_id, encounter_id),
         ).fetchone()
         if existing:
             return dict(existing)
@@ -665,20 +666,20 @@ def create_signoff(
             UPDATE encounters
             SET status = 'signed', closed_at = COALESCE(closed_at, ?),
                 version = version + 1, updated_at = ?
-            WHERE id = ? AND clinic_id = ?
+            WHERE id = ? AND organization_id = ? AND clinic_id = ?
             """,
-            (now, now, encounter_id, clinic_id),
+            (now, now, encounter_id, organization_id, clinic_id),
         )
         row = conn.execute("SELECT * FROM encounter_signoffs WHERE id = ?", (signoff_id,)).fetchone()
     return dict(row)
 
 
-def get_signoff(*, clinic_id: str, encounter_id: str) -> dict[str, Any] | None:
+def get_signoff(*, organization_id: str, clinic_id: str, encounter_id: str) -> dict[str, Any] | None:
     init_store()
     with _connect() as conn:
         row = conn.execute(
-            "SELECT * FROM encounter_signoffs WHERE clinic_id = ? AND encounter_id = ?",
-            (clinic_id, encounter_id),
+            "SELECT * FROM encounter_signoffs WHERE organization_id = ? AND clinic_id = ? AND encounter_id = ?",
+            (organization_id, clinic_id, encounter_id),
         ).fetchone()
     return dict(row) if row else None
 
@@ -708,26 +709,26 @@ def create_followup(
     return dict(row)
 
 
-def list_followups(*, clinic_id: str, patient_id: str | None = None) -> list[dict[str, Any]]:
+def list_followups(*, organization_id: str, clinic_id: str, patient_id: str | None = None) -> list[dict[str, Any]]:
     init_store()
     with _connect() as conn:
         if patient_id:
             rows = conn.execute(
                 """
                 SELECT * FROM encounter_followups
-                WHERE clinic_id = ? AND patient_id = ?
+                WHERE organization_id = ? AND clinic_id = ? AND patient_id = ?
                 ORDER BY due_at ASC
                 """,
-                (clinic_id, patient_id),
+                (organization_id, clinic_id, patient_id),
             ).fetchall()
         else:
             rows = conn.execute(
                 """
                 SELECT * FROM encounter_followups
-                WHERE clinic_id = ?
+                WHERE organization_id = ? AND clinic_id = ?
                 ORDER BY due_at ASC
                 """,
-                (clinic_id,),
+                (organization_id, clinic_id),
             ).fetchall()
     return [dict(row) for row in rows]
 
