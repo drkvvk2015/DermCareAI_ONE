@@ -1,7 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
+import os
 from PIL import Image, ImageStat
+
+MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", "25000000"))
 
 @dataclass(frozen=True)
 class ImageQualityResult:
@@ -15,10 +18,15 @@ class ImageQualityResult:
 
 def assess_image_quality(image_bytes: bytes, *, min_dimension: int = 256, min_luminance_variance: float = 40.0) -> ImageQualityResult:
     try:
-        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+        image = Image.open(BytesIO(image_bytes))
+        width, height = image.size
+        if width * height > MAX_IMAGE_PIXELS:
+            raise ValueError("Image dimensions exceed configured safety limit")
+        image = image.convert("RGB")
+    except ValueError:
+        raise
     except Exception as exc:
         raise ValueError("Unable to decode clinical image") from exc
-    width, height = image.size
     stat = ImageStat.Stat(image.convert("L"))
     mean = float(stat.mean[0])
     variance = float(stat.var[0])

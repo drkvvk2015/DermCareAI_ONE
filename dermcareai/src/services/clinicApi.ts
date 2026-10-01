@@ -1,3 +1,4 @@
+import SHA256 from 'crypto-js/sha256';
 import auth from '@react-native-firebase/auth';
 import { API_URL } from '@env';
 
@@ -32,8 +33,15 @@ export const clinicApi = {
   dispense(payload: { patient_id: string; prescription_id?: string; items: { medicine_id: string; quantity: number }[] }) {
     return request('/commerce/pharmacy/dispense', { method: 'POST', body: JSON.stringify(payload) });
   },
-  sendRegistrationNotification(payload: { patient_name: string; phone: string; appointment_text: string; channels: string[] }) {
-    return request('/notifications/registration', { method: 'POST', body: JSON.stringify(payload) });
+  sendRegistrationNotification(
+    payload: { patient_name: string; phone: string; appointment_text: string; channels: string[] },
+    idempotencyKey: string = `registration-${SHA256(JSON.stringify(payload)).toString()}`,
+  ) {
+    return request('/notifications/registration', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify(payload),
+    });
   },
   audit(payload: { action: string; resource_type: string; resource_id: string; metadata?: Record<string, unknown> }) {
     return request('/audit/events', { method: 'POST', body: JSON.stringify(payload) });

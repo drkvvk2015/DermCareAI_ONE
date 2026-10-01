@@ -8,7 +8,7 @@ from media import SignUploadRequest, sign_upload
 
 
 def _user():
-    return {"uid": "doctor1", "roles": {"doctor"}, "claims": {"clinic_id": "clinic1"}}
+    return {"uid": "doctor1", "roles": {"doctor"}, "claims": {"organization_id": "org1", "clinic_id": "clinic1"}}
 
 
 def test_profile_upload_does_not_require_patient_consent() -> None:
