@@ -40,12 +40,14 @@ def patient_followup_state(
     ),
 ):
     claims = user.get("claims", {})
+    organization_id = claims.get("organization_id") or claims.get("organizationId")
     clinic_id = claims.get("clinic_id") or claims.get("clinicId")
-    if not clinic_id:
+    if not organization_id or not clinic_id:
         raise HTTPException(status_code=403, detail="Clinical tenant context is missing")
     return {
         "patient_id": patient_id,
         "followups": list_followups(
+            organization_id=str(organization_id),
             clinic_id=str(clinic_id),
             patient_id=patient_id,
         ),
