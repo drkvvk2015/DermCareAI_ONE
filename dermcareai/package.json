@@ -66,6 +66,9 @@
           "crypto-js"
         ],
         "listUnknownPackages": false
+      },
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
       }
     }
   },

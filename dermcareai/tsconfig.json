@@ -10,7 +10,6 @@
     "isolatedModules": true,
     "strict": true,
     "moduleResolution": "node",
-    "ignoreDeprecations": "6.0",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
