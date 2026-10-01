@@ -1,0 +1,44 @@
+name: Diagnostic npm audit PR206
+
+on:
+  push:
+    branches: [diag/npm-audit-pr206-2026-10-01]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - name: Install
+        working-directory: dermcareai
+        run: npm ci
+      - name: Audit high and critical findings
+        working-directory: dermcareai
+        run: |
+          npm audit --audit-level=high --json > ../npm-audit.json || true
+          node <<'NODE'
+          const fs = require("fs");
+          const a = JSON.parse(fs.readFileSync("../npm-audit.json","utf8"));
+          const m = a.metadata?.vulnerabilities || {};
+          console.log("SUMMARY", JSON.stringify(m));
+          for (const [name, adv] of Object.entries(a.vulnerabilities || {})) {
+            if (["high","critical"].includes(adv.severity)) {
+              console.log(JSON.stringify({
+                name,
+                severity: adv.severity,
+                range: adv.range,
+                isDirect: adv.isDirect,
+                fixAvailable: adv.fixAvailable,
+                via: (adv.via || []).map(v => typeof v === "string" ? v : ({title:v.title,source:v.source,url:v.url,range:v.range,severity:v.severity}))
+              }));
+            }
+          }
+          NODE
