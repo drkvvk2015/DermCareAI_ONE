@@ -69,10 +69,10 @@ def init_store() -> None:
                 confirmed_diagnosis TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                UNIQUE(clinic_id, patient_id, lesion_code)
+                UNIQUE(organization_id, clinic_id, patient_id, lesion_code)
             );
             CREATE INDEX IF NOT EXISTS idx_lesions_patient
-              ON lesions(clinic_id, patient_id, created_at DESC);
+              ON lesions(organization_id, clinic_id, patient_id, created_at DESC);
 
             CREATE TABLE IF NOT EXISTS lesion_observations (
                 id TEXT PRIMARY KEY,
@@ -96,7 +96,7 @@ def init_store() -> None:
                 observed_by TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_lesion_observations_timeline
-              ON lesion_observations(clinic_id, patient_id, lesion_code, observed_at ASC);
+              ON lesion_observations(organization_id, clinic_id, patient_id, lesion_code, observed_at ASC);
 
             CREATE TABLE IF NOT EXISTS consents (
                 id TEXT PRIMARY KEY,
@@ -113,7 +113,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_consents_active
-              ON consents(clinic_id, patient_id, purpose, status);
+              ON consents(organization_id, clinic_id, patient_id, purpose, status);
 
             CREATE TABLE IF NOT EXISTS clinical_media (
                 id TEXT PRIMARY KEY,
@@ -134,7 +134,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_media_patient
-              ON clinical_media(clinic_id, patient_id, captured_at DESC);
+              ON clinical_media(organization_id, clinic_id, patient_id, captured_at DESC);
 
             CREATE TABLE IF NOT EXISTS encounter_signoffs (
                 id TEXT PRIMARY KEY,
@@ -147,7 +147,7 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff
-              ON encounter_signoffs(clinic_id, encounter_id);
+              ON encounter_signoffs(organization_id, clinic_id, encounter_id);
 
             CREATE TABLE IF NOT EXISTS encounter_followups (
                 id TEXT PRIMARY KEY,
@@ -164,7 +164,7 @@ def init_store() -> None:
                 updated_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_followups_clinic_due
-              ON encounter_followups(clinic_id, due_at, status);
+              ON encounter_followups(organization_id, clinic_id, due_at, status);
 
             CREATE TABLE IF NOT EXISTS encounter_ai_reviews (
                 id TEXT PRIMARY KEY,
@@ -186,9 +186,9 @@ def init_store() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_ai_reviews_encounter
-              ON encounter_ai_reviews(clinic_id, encounter_id, created_at DESC);
+              ON encounter_ai_reviews(organization_id, clinic_id, encounter_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_ai_reviews_media
-              ON encounter_ai_reviews(clinic_id, media_id, created_at DESC);
+              ON encounter_ai_reviews(organization_id, clinic_id, media_id, created_at DESC);
             """
         )
         # Compatibility migration for existing installations created before AI
@@ -201,6 +201,75 @@ def init_store() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_reviews_media ON encounter_ai_reviews(clinic_id, media_id, created_at DESC)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        migration = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?",
+            ("tenant-scope-v1",),
+        ).fetchone()
+        if not migration:
+            dialect = conn._conn.dialect.name
+            if dialect == "postgresql":
+                for uq in inspect(conn._conn).get_unique_constraints("lesions"):
+                    if tuple(uq.get("column_names") or ()) == ("clinic_id", "patient_id", "lesion_code"):
+                        name = str(uq["name"]).replace('"', '""')
+                        conn.execute(f'ALTER TABLE lesions DROP CONSTRAINT IF EXISTS "{name}"')
+                for uq in inspect(conn._conn).get_unique_constraints("encounter_signoffs"):
+                    if tuple(uq.get("column_names") or ()) == ("clinic_id", "encounter_id"):
+                        name = str(uq["name"]).replace('"', '""')
+                        conn.execute(f'ALTER TABLE encounter_signoffs DROP CONSTRAINT IF EXISTS "{name}"')
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_lesions_tenant "
+                    "ON lesions(organization_id, clinic_id, patient_id, lesion_code)"
+                )
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff_tenant "
+                    "ON encounter_signoffs(organization_id, clinic_id, encounter_id)"
+                )
+            elif dialect == "sqlite":
+                legacy = False
+                for idx in conn._conn.exec_driver_sql("PRAGMA index_list('lesions')").fetchall():
+                    idx_name = str(idx[1])
+                    is_unique = bool(idx[2])
+                    columns = [str(row[2]) for row in conn._conn.exec_driver_sql(
+                        f'PRAGMA index_info("{idx_name.replace(chr(34), chr(34)+chr(34))}")'
+                    ).fetchall()]
+                    if is_unique and columns == ["clinic_id", "patient_id", "lesion_code"]:
+                        legacy = True
+                        break
+                if legacy:
+                    conn.execute("PRAGMA foreign_keys=OFF")
+                    conn.execute("""CREATE TABLE lesions__tenant_v1 (
+                        id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, clinic_id TEXT NOT NULL,
+                        patient_id TEXT NOT NULL, encounter_id TEXT NOT NULL, lesion_code TEXT NOT NULL,
+                        body_site TEXT NOT NULL, laterality TEXT, morphology_json TEXT NOT NULL,
+                        size_mm REAL, duration_days INTEGER, evolution TEXT, symptoms_json TEXT NOT NULL,
+                        clinical_impression TEXT, differential_json TEXT NOT NULL, confirmed_diagnosis TEXT,
+                        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                        UNIQUE(organization_id, clinic_id, patient_id, lesion_code)
+                    )""")
+                    conn.execute("""INSERT INTO lesions__tenant_v1
+                        SELECT id, organization_id, clinic_id, patient_id, encounter_id, lesion_code,
+                               body_site, laterality, morphology_json, size_mm, duration_days, evolution,
+                               symptoms_json, clinical_impression, differential_json, confirmed_diagnosis,
+                               created_at, updated_at FROM lesions""")
+                    conn.execute("DROP TABLE lesions")
+                    conn.execute("ALTER TABLE lesions__tenant_v1 RENAME TO lesions")
+                    conn.execute("PRAGMA foreign_keys=ON")
+                conn.execute("DROP INDEX IF EXISTS uq_encounter_signoff")
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_lesions_tenant "
+                    "ON lesions(organization_id, clinic_id, patient_id, lesion_code)"
+                )
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_encounter_signoff_tenant "
+                    "ON encounter_signoffs(organization_id, clinic_id, encounter_id)"
+                )
+            conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                ("tenant-scope-v1", _now()),
+            )
 
 
 @contextmanager
