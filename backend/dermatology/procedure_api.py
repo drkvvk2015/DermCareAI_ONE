@@ -56,10 +56,11 @@ def post_procedure(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
     organization_id, clinic_id = _tenant(user)
-    encounter = get_encounter(req.encounter_id, clinic_id)
+    encounter = get_encounter(req.encounter_id, organization_id, clinic_id)
     if not encounter or encounter["patient_id"] != req.patient_id:
         raise HTTPException(status_code=404, detail="Encounter not found for patient")
     if not has_active_consent(
+        organization_id=organization_id,
         clinic_id=clinic_id,
         patient_id=req.patient_id,
         purpose="procedure",
@@ -114,5 +115,5 @@ def patient_procedures(
     patient_id: str,
     user: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor")),
 ):
-    _, clinic_id = _tenant(user)
+    organization_id, clinic_id = _tenant(user)
     return list_procedures(clinic_id=clinic_id, patient_id=patient_id)
