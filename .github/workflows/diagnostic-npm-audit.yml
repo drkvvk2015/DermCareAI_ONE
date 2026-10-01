@@ -24,6 +24,10 @@ jobs:
         working-directory: dermcareai
         run: |
           npm audit --audit-level=high --json > ../npm-audit.json || true
+          echo "--- production/runtime dependency audit ---"
+          npm audit --omit=dev --audit-level=high --json > ../npm-audit-runtime.json || true
+          node -e 'const a=require("../npm-audit-runtime.json"); console.log("RUNTIME", JSON.stringify(a.metadata?.vulnerabilities||{}));'
+          echo "--- development-inclusive audit ---"
           node <<'NODE'
           const fs = require("fs");
           const a = JSON.parse(fs.readFileSync("../npm-audit.json","utf8"));
