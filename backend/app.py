@@ -185,8 +185,10 @@ class ModelService:
                 except Exception as embedded_exc:
                     self.embedded = None
                     self.last_error = f"Local models: {exc}; embedded model: {embedded_exc}"
+                    logger.exception("All model loading paths failed")
+            else:
+                logger.warning("AI model unavailable: %s", self.last_error)
             self.mode = "unavailable"
-            logger.exception("All model loading paths failed")
             return False
 
     def recover(self) -> bool:
