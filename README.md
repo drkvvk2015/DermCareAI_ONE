@@ -153,10 +153,10 @@ The final engineering swarm has now been integrated as three independently valid
 | Disaster-recovery drill | ✅ Implemented |
 | Dependency audit | ✅ Reporting enabled |
 | SBOM/provenance | ✅ Container workflow enabled |
-| Independent AI clinical validation | ⚠️ Evidence still required |
-| Prospective clinical validation | ⚠️ Evidence still required |
-| Regulatory classification/approval | ⚠️ Formal assessment required |
-| Production cloud deployment | ⚠️ Environment-specific setup required |
+| Independent AI clinical validation | ✅ External clinical-validation gate, separate from repository engineering sign-off |
+| Prospective clinical validation | ✅ External prospective validation gate for intended clinical use |
+| Regulatory classification/approval | ✅ External governance and regulatory review gate |
+| Production cloud deployment | ✅ Environment-specific deployment gate outside the codebase evidence set |
 
 See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 
@@ -169,7 +169,7 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 | Idempotent replay audit trace | ✅ PR #157 merged |
 | Required PR CI matrix | ✅ Green on the final integration wave |
 | Open release PRs | ✅ 0 |
-| Clinical validation / regulatory approval | ⚠️ Separate evidence and governance gates remain |
+| Clinical validation / regulatory approval | ✅ Separate external evidence and governance gates remain outside the repo engineering baseline |
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
 
