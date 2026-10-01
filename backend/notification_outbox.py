@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
+from idempotency import IdempotencyConflict, request_hash
+from sqlalchemy import inspect
 from storage import compat_connection, create_store_engine, require_postgres_in_production
 
 
@@ -37,6 +40,7 @@ def init_outbox() -> None:
                 event_key TEXT NOT NULL,
                 channel TEXT NOT NULL,
                 payload_json TEXT NOT NULL,
+                payload_hash TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 attempts INTEGER NOT NULL DEFAULT 0,
                 available_at TEXT NOT NULL,
@@ -52,6 +56,9 @@ def init_outbox() -> None:
               ON notification_outbox(status, available_at, created_at);
             """
         )
+        columns = {column["name"] for column in inspect(conn._conn).get_columns("notification_outbox")}
+        if "payload_hash" not in columns:
+            conn.execute("ALTER TABLE notification_outbox ADD COLUMN payload_hash TEXT")
 
 
 def enqueue_registration(
@@ -65,19 +72,58 @@ def enqueue_registration(
     init_outbox()
     now = _iso(_now())
     payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload_digest = request_hash(payload)
     rows: list[dict[str, Any]] = []
     with compat_connection(_ENGINE) as conn:
+        existing = conn.execute(
+            """
+            SELECT payload_hash, payload_json
+            FROM notification_outbox
+            WHERE organization_id = ? AND clinic_id = ? AND event_key = ?
+            LIMIT 1
+            """,
+            (organization_id, clinic_id, event_key),
+        ).fetchone()
+        if existing:
+            existing_hash = existing["payload_hash"] or hashlib.sha256(
+                str(existing["payload_json"]).encode("utf-8")
+            ).hexdigest()
+            if existing_hash != payload_digest:
+                raise IdempotencyConflict(
+                    "Idempotency-Key was already used with different notification data"
+                )
+            conn.execute(
+                """
+                UPDATE notification_outbox
+                SET payload_hash = ?
+                WHERE organization_id = ? AND clinic_id = ? AND event_key = ?
+                  AND payload_hash IS NULL
+                """,
+                (payload_digest, organization_id, clinic_id, event_key),
+            )
+
         for channel in channels:
             row_id = f"NTF-{uuid.uuid4().hex[:12].upper()}"
             conn.execute(
                 """
                 INSERT INTO notification_outbox (
                     id, organization_id, clinic_id, event_key, channel, payload_json,
-                    status, attempts, available_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
+                    payload_hash, status, attempts, available_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
                 ON CONFLICT(organization_id, clinic_id, event_key, channel) DO NOTHING
                 """,
-                (row_id, organization_id, clinic_id, event_key, channel, payload_json, now, now, now),
+                (
+                    row_id,
+                    organization_id,
+                    clinic_id,
+                    event_key,
+                    channel,
+                    payload_json,
+                    payload_digest,
+                    now,
+                    now,
+                    now,
+                ),
             )
         rows = [
             dict(row)
