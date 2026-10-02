@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   dependency-audit:
@@ -118,6 +118,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: fix/pr211-review-findings-2026-10-01
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
@@ -163,6 +165,17 @@ jobs:
       - name: Run Expo Doctor
         working-directory: dermcareai
         run: npx expo-doctor
+      - name: Persist validated SDK 57 migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dermcareai/package.json dermcareai/package-lock.json dermcareai/app.json
+          if git diff --cached --quiet; then
+            echo "SDK 57 migration already synchronized"
+          else
+            git commit -m "fix(mobile): upgrade Expo SDK 57 and React Native 0.86"
+            git push origin HEAD:fix/pr211-review-findings-2026-10-01
+          fi
       - name: Generate runtime dependency audit
         working-directory: dermcareai
         run: npm audit --omit=dev --json > ../npm-audit-sdk57.json || true
