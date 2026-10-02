@@ -132,6 +132,7 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          packageJson.dependencies['@react-native-async-storage/async-storage'] = '2.2.0';
           packageJson.devDependencies['@react-native/babel-preset'] = '^0.86.3';
           packageJson.devDependencies['@types/react'] = '~19.2.4';
           packageJson.devDependencies['babel-preset-expo'] = '~57.0.0';
