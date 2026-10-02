@@ -34,6 +34,19 @@ Existing entries must never be silently rewritten or deleted.
 - Occurrences: 1
 - Confidence: low
 
+### LEARNING-0003
+
+- Date (UTC): 2026-10-02
+- Run ID: NOT_PROVIDED
+- Source stage: DEBUG
+- Pattern: The dependency audit release gate must remain evidence-producing and must distinguish repository dependency defects from unfixable upstream advisories.
+- Root cause: CI correctly parsed the `pip-audit` `dependencies` array and retained failed-audit artifacts, exposing two Python findings including `ecdsa` with no published fix; npm audit also reported high/critical findings across Expo, React Native, Firebase, and transitive tooling.
+- Evidence: Dependency Audit run 343 failed at the release gate and uploaded `dermcareai-dependency-audit` evidence; backend regression, mobile regression, CodeQL, PostgreSQL staging, Firestore rules, continuous evaluation, production preflight, and staging acceptance passed.
+- Action: Never weaken the release gate to obtain green CI. Remediate or explicitly govern each dependency exception, and retain machine-readable audit evidence on both pass and failure paths.
+- Affected area: dependency security / CI release gating
+- Occurrences: 1
+- Confidence: high
+
 ## Entry Format
 
 ```text
@@ -55,7 +68,7 @@ Existing entries must never be silently rewritten or deleted.
 
 - Append new entries only.
 - Do not rewrite historical evidence.
-- Do not fabricate run IDs, test results, root causes, or occurrence counts.
+- Do not fabricate run IDs, test/build results, root causes, or occurrence counts.
 - A retry or second attempt within the same CodeSwarm run is not an independent run.
 - Do not store patient-identifiable information, credentials, tokens, secrets, or unnecessary raw logs.
 - Historical lessons are advisory evidence; current repository evidence takes precedence.
