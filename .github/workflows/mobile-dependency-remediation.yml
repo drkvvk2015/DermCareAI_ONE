@@ -1,0 +1,37 @@
+name: DermCareAI Mobile Dependency Remediation Candidate
+
+on:
+  push:
+    branches:
+      - fix/pr211-review-findings-2026-10-01
+
+permissions:
+  contents: read
+
+jobs:
+  generate-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - name: Upgrade to stable Expo SDK 57
+        working-directory: dermcareai
+        run: npx expo install expo@^57.0.0 --fix
+      - name: Run Expo Doctor
+        working-directory: dermcareai
+        run: npx expo-doctor
+      - name: Generate dependency audit
+        working-directory: dermcareai
+        run: npm audit --omit=dev --json > ../npm-audit-s57.json || true
+      - name: Upload migration candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: expo-sdk-57-migration-candidate
+          path: |
+            dermcareai/package.json
+            dermcareai/package-lock.json
+            npm-audit-s57.json
