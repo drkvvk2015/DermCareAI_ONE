@@ -6,7 +6,7 @@ def _user(org="org-1", clinic="clinic-1"):
 
 
 def test_ai_review_rejects_cross_tenant_media(monkeypatch):
-    monkeypatch.setattr(clinical, "get_encounter", lambda encounter_id, clinic_id: {"id":encounter_id,"patient_id":"p1"})
+    monkeypatch.setattr(clinical, "get_encounter", lambda encounter_id, organization_id, clinic_id: {"id":encounter_id,"patient_id":"p1"})
     monkeypatch.setattr(clinical, "get_media", lambda *args, **kwargs: None)
     try:
         clinical.post_ai_review("e1", clinical.AIReviewCreate(media_id="m1", request_id="r1", model_name="m", predicted_label="uncertain", confidence=0.2), _user())
@@ -17,7 +17,7 @@ def test_ai_review_rejects_cross_tenant_media(monkeypatch):
 
 
 def test_ai_review_rejects_cross_tenant_lesion(monkeypatch):
-    monkeypatch.setattr(clinical, "get_encounter", lambda encounter_id, clinic_id: {"id":encounter_id,"patient_id":"p1"})
+    monkeypatch.setattr(clinical, "get_encounter", lambda encounter_id, organization_id, clinic_id: {"id":encounter_id,"patient_id":"p1"})
     monkeypatch.setattr(clinical, "get_lesion", lambda *args, **kwargs: None)
     try:
         clinical.post_ai_review("e1", clinical.AIReviewCreate(lesion_id="l1", request_id="r1", model_name="m", predicted_label="uncertain", confidence=0.2), _user())

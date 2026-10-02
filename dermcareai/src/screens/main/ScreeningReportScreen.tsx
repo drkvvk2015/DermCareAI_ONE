@@ -21,7 +21,7 @@ import { Appointment, NavigationProps } from '../../navigation/types';
 import { doc, updateDoc, getDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { format } from 'date-fns';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { auth } from '../../config/firebase';
@@ -487,4 +487,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ScreeningReportScreen; 
+export default ScreeningReportScreen;

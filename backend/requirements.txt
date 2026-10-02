@@ -21,7 +21,6 @@ huggingface-hub
 
 # Utilities
 python-dotenv
-python-jose
 typing-extensions
 
 # Optional but recommended

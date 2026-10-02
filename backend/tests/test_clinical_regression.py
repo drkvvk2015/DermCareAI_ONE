@@ -14,7 +14,7 @@ def test_followup_audit_path_has_no_undefined_provenance_names(monkeypatch):
     monkeypatch.setattr(
         clinical,
         "get_encounter",
-        lambda encounter_id, clinic_id: {"id": encounter_id, "patient_id": "patient-1", "status": "open"},
+        lambda encounter_id, organization_id, clinic_id: {"id": encounter_id, "patient_id": "patient-1", "status": "open"},
     )
     monkeypatch.setattr(
         clinical,
@@ -40,7 +40,7 @@ def test_ai_review_audit_preserves_media_and_lesion_provenance(monkeypatch):
     monkeypatch.setattr(
         clinical,
         "get_encounter",
-        lambda encounter_id, clinic_id: {"id": encounter_id, "patient_id": "patient-1", "status": "open"},
+        lambda encounter_id, organization_id, clinic_id: {"id": encounter_id, "patient_id": "patient-1", "status": "open"},
     )
     monkeypatch.setattr(
         clinical,

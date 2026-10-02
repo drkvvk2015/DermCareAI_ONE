@@ -16,7 +16,7 @@ def test_lesion_timeline_preserves_observations():
         evolution="enlarging", symptoms={"itch": True}, clinical_impression="review",
         differential=["nevus", "melanoma"], confirmed_diagnosis=None, observed_by="doctor-2",
     )
-    timeline = list_lesion_timeline(clinic_id="clinic-1", patient_id="p-1", lesion_code="L1")
+    timeline = list_lesion_timeline(organization_id="org-1", clinic_id="clinic-1", patient_id="p-1", lesion_code="L1")
     assert len(timeline) == 2
     assert timeline[0]["lesion_id"] == first["id"]
     assert timeline[0]["size_mm"] == 4
@@ -41,7 +41,7 @@ def test_longitudinal_workflow_keeps_encounter_and_observation_chain() -> None:
         differential=["nevus", "melanocytic lesion"], observed_by="doctor-2",
     )
     timeline = clinical_store.list_lesion_timeline(
-        clinic_id="clinic-e2e", patient_id="patient-e2e", lesion_code="L-E2E"
+        organization_id="org-e2e", clinic_id="clinic-e2e", patient_id="patient-e2e", lesion_code="L-E2E"
     )
     assert len(timeline) == 2
     assert timeline[0]["lesion_id"] == first["id"]
