@@ -123,6 +123,9 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: dermcareai/package-lock.json
+      - name: Install current mobile dependencies
+        working-directory: dermcareai
+        run: npm install --ignore-scripts
       - name: Upgrade to stable Expo SDK 57 candidate
         working-directory: dermcareai
         run: npx expo install expo@^57.0.0 --fix
