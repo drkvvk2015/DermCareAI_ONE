@@ -126,6 +126,18 @@ jobs:
       - name: Install current mobile dependencies
         working-directory: dermcareai
         run: npm install --ignore-scripts
+      - name: Align migration toolchain before SDK upgrade
+        working-directory: dermcareai
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          packageJson.devDependencies['@react-native/babel-preset'] = '^0.86.3';
+          packageJson.devDependencies['@types/react'] = '~19.2.4';
+          packageJson.devDependencies['babel-preset-expo'] = '~57.0.0';
+          packageJson.devDependencies.typescript = '~6.0.3';
+          fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
+          NODE
       - name: Upgrade to stable Expo SDK 57 candidate
         working-directory: dermcareai
         run: npx expo install expo@^57.0.0 --fix
