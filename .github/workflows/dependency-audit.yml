@@ -112,3 +112,32 @@ jobs:
             pip-audit.json
             pip-audit.exitcode
             dependency-audit-summary.txt
+
+  mobile-sdk-57-candidate:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dermcareai/package-lock.json
+      - name: Upgrade to stable Expo SDK 57 candidate
+        working-directory: dermcareai
+        run: npx expo install expo@^57.0.0 --fix
+      - name: Run Expo Doctor
+        working-directory: dermcareai
+        run: npx expo-doctor
+      - name: Generate runtime dependency audit
+        working-directory: dermcareai
+        run: npm audit --omit=dev --json > ../npm-audit-sdk57.json || true
+      - name: Upload SDK 57 candidate
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: expo-sdk-57-migration-candidate
+          path: |
+            dermcareai/package.json
+            dermcareai/package-lock.json
+            npm-audit-sdk57.json
