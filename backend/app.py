@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
+from PIL.Image import DecompressionBombError
 from pydantic import BaseModel, Field
 
 from dermatology.analytics_api import router as dermatology_analytics_router
@@ -221,7 +222,10 @@ class ModelService:
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":
             raise RuntimeError("AI model service is unavailable")
-        image = Image.open(io.BytesIO(image_bytes))
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+        except DecompressionBombError as exc:
+            raise ValueError("Image dimensions exceed configured safety limit") from exc
         if image.width * image.height > Image.MAX_IMAGE_PIXELS:
             raise ValueError("Image dimensions exceed configured safety limit")
         image = image.convert("RGB")
