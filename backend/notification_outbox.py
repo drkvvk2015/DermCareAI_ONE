@@ -263,11 +263,17 @@ def mark_sent(*, row_id: str, provider_message_id: str | None = None) -> None:
                 last_error = NULL,
                 locked_until = NULL,
                 sent_at = ?,
-                retention_until = ?,
+                retention_until = COALESCE(retention_until, ?),
                 updated_at = ?
             WHERE id = ?
             """,
-            (provider_message_id, now, now, now, row_id),
+            (
+                provider_message_id,
+                now,
+                _iso(_now() + timedelta(days=NOTIFICATION_RETENTION_DAYS)),
+                now,
+                row_id,
+            ),
         )
 
 
