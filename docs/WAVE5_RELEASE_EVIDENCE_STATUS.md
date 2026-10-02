@@ -1,6 +1,6 @@
 # Wave 5 — Release Evidence Status
 
-Updated: 2026-09-23
+Updated: 2026-10-02
 
 This document separates automated software evidence from clinical, regulatory and deployment evidence that requires real-world data, environments or accountable human review.
 
@@ -18,7 +18,9 @@ This document separates automated software evidence from clinical, regulatory an
 | Tenant isolation | PASS | Clinical E2E tests |
 | Backup/restore automation | READY | Monthly DR workflow |
 | Staging acceptance | PASS in current release gating | Docker staging workflow; current hotfix gate passed build, schema init and clinical acceptance |
-| Dependency audit | PASS / INVENTORY ENABLED | Current release gate + machine-readable audit artifact |
+| Dependency audit | RELEASE BLOCKED UNTIL CURRENT NPM FINDINGS ARE RESOLVED OR FORMALLY EXCEPTED | Current release gate + machine-readable audit artifact |
+| Python dependency audit | PASS | pip-audit reports no known vulnerabilities after removal of unused python-jose |
+| Mobile toolchain | HARDENED | Expo SDK 57 / React Native 0.86.3 migration candidate passed Expo Doctor and generated a synchronized lockfile |
 | SBOM/provenance | ENABLED | Container release workflow |
 | Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation |
 | Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence |
