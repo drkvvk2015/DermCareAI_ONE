@@ -21,6 +21,7 @@ This document separates automated software evidence from clinical, regulatory an
 | Dependency audit | RELEASE BLOCKED UNTIL CURRENT NPM FINDINGS ARE RESOLVED OR FORMALLY EXCEPTED | Current release gate + machine-readable audit artifact |
 | Python dependency audit | PASS | pip-audit reports no known vulnerabilities after removal of unused python-jose |
 | Mobile toolchain | HARDENED | Expo SDK 57 / React Native 0.86.3 migration candidate passed Expo Doctor and generated a synchronized lockfile |
+| Mobile lockfile synchronization | PASS | CI-generated package-lock is synchronized with package.json after SDK 57 migration |
 | SBOM/provenance | ENABLED | Container release workflow |
 | Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation |
 | Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence |
