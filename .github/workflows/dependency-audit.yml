@@ -71,9 +71,17 @@ jobs:
           if pip_path.exists():
               try:
                   pip = json.loads(pip_path.read_text())
-                  total = sum(len(item.get("vulns", [])) for item in pip if isinstance(item, dict))
-                  if total:
-                      failures.append(f"pip-audit findings: {total}")
+                  dependencies = pip.get("dependencies")
+                  if not isinstance(dependencies, list):
+                      failures.append("pip-audit JSON did not contain a dependencies array")
+                  else:
+                      total = sum(
+                          len(item.get("vulns", []))
+                          for item in dependencies
+                          if isinstance(item, dict)
+                      )
+                      if total:
+                          failures.append(f"pip-audit findings: {total}")
               except (json.JSONDecodeError, TypeError) as exc:
                   failures.append(f"pip-audit JSON could not be parsed: {exc}")
           else:
@@ -93,7 +101,9 @@ jobs:
           Path("dependency-audit-summary.txt").write_text("\n".join(summary) + "\n")
           print("\n".join(summary))
           PY
-      - uses: actions/upload-artifact@v7
+      - name: Upload dependency audit evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
         with:
           name: dermcareai-dependency-audit
           path: |
