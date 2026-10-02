@@ -34,7 +34,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "firebase": "^12.19.0",
-    "metro-react-native-babel-transformer": "^0.82.4",
+    "metro-react-native-babel-transformer": "0.77.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
