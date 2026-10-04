@@ -19,24 +19,28 @@ def _package(value: Any) -> str:
     return re.sub(r"[-_.]+", "-", str(value).strip().lower())
 
 
-def _npm_advisories(vulnerabilities: dict[str, Any], package: str, seen: set[str] | None = None) -> list[str]:
+def _npm_advisory_sources(
+    vulnerabilities: dict[str, Any],
+    package: str,
+    seen: set[str] | None = None,
+) -> list[tuple[str, str]]:
     visited = set() if seen is None else seen
     if package in visited:
         return []
     visited.add(package)
     finding = vulnerabilities.get(package, {})
-    advisories: list[str] = []
+    sources: list[tuple[str, str]] = []
     for item in finding.get("via", []) if isinstance(finding, dict) else []:
         if isinstance(item, str) and item in vulnerabilities:
-            advisories.extend(_npm_advisories(vulnerabilities, item, visited))
+            sources.extend(_npm_advisory_sources(vulnerabilities, item, visited))
         elif isinstance(item, dict):
             url = str(item.get("url") or "")
             stable_ids = re.findall(r"(?:GHSA-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}|CVE-\d{4}-\d+)", url, re.IGNORECASE)
             if stable_ids:
-                advisories.extend(stable_ids)
+                sources.extend((package, advisory) for advisory in stable_ids)
             elif item.get("source") is not None:
-                advisories.append(str(item["source"]))
-    return sorted(set(advisories), key=str.upper)
+                sources.append((package, str(item["source"])))
+    return sorted(set(sources), key=lambda source: (source[0].casefold(), source[1].upper()))
 
 
 def _exceptions(payload: Any) -> tuple[dict[tuple[str, str, str], dict[str, str]], list[str]]:
@@ -88,6 +92,17 @@ def _matching_exception(
     return bool(keys) and all(key in active for key in keys)
 
 
+def _matching_npm_exceptions(
+    active: dict[tuple[str, str, str], dict[str, str]],
+    sources: list[tuple[str, str]],
+) -> bool:
+    """Match npm exceptions against the affected package at the end of each via chain."""
+    return bool(sources) and all(
+        ("npm", _package(package), advisory.strip().upper()) in active
+        for package, advisory in sources
+    )
+
+
 def enforce(npm_mobile: Any, npm_web: Any, python_reports: list[tuple[str, Any]], exception_payload: Any) -> list[str]:
     active, problems = _exceptions(exception_payload)
 
@@ -98,8 +113,9 @@ def enforce(npm_mobile: Any, npm_web: Any, python_reports: list[tuple[str, Any]]
         for package, finding in report["vulnerabilities"].items():
             if not isinstance(finding, dict) or finding.get("severity") not in {"high", "critical"}:
                 continue
-            advisories = _npm_advisories(report["vulnerabilities"], package)
-            if not _matching_exception(active, "npm", package, advisories):
+            sources = _npm_advisory_sources(report["vulnerabilities"], package)
+            if not _matching_npm_exceptions(active, sources):
+                advisories = sorted({advisory for _, advisory in sources}, key=str.upper)
                 problems.append(f"{label}: {package} has an unexcepted high/critical advisory ({', '.join(advisories) or 'advisory ID unavailable'})")
 
     for label, python in python_reports:
