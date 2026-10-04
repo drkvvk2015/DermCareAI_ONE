@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import io
+from functools import lru_cache
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from PIL import Image
 from PIL.Image import DecompressionBombError, UnidentifiedImageError
@@ -82,6 +83,20 @@ def _suggestion_only_metadata() -> dict[str, Any]:
     }
 
 
+def _tenant_metadata(user: dict[str, Any]) -> dict[str, str]:
+    claims = user.get("claims", {})
+    organization_id = claims.get("organization_id") or claims.get("organizationId")
+    clinic_id = claims.get("clinic_id") or claims.get("clinicId")
+    if not organization_id or not clinic_id:
+        raise HTTPException(status_code=403, detail="Clinical tenant context is missing")
+    return {"organization_id": str(organization_id), "clinic_id": str(clinic_id)}
+
+
+@lru_cache(maxsize=1)
+def _medgemma_adapter() -> MedGemmaAdapter:
+    return MedGemmaAdapter()
+
+
 @router.get("/capabilities")
 def get_capabilities(_: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor"))):
     state = capabilities()
@@ -111,13 +126,8 @@ def differential_assist(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    claims = user.get("claims", {})
-    organization_id = claims.get("organization_id") or claims.get("organizationId")
-    clinic_id = claims.get("clinic_id") or claims.get("clinicId")
-    if not organization_id or not clinic_id:
-        raise HTTPException(status_code=403, detail="Clinical tenant context is missing")
-
-    encounter = get_encounter(req.encounter_id, str(organization_id), str(clinic_id))
+    tenant = _tenant_metadata(user)
+    encounter = get_encounter(req.encounter_id, tenant["organization_id"], tenant["clinic_id"])
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
 
@@ -177,6 +187,7 @@ def differential_assist(
                 "urgent_review": result.safety.urgent_review,
                 "candidate_labels": [item.label for item in result.candidates],
                 "decision_authority": "treating_physician",
+                **tenant,
             },
         ),
         user,
@@ -195,18 +206,13 @@ async def image_quality_assist(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    claims = user.get("claims", {})
-    organization_id = claims.get("organization_id") or claims.get("organizationId")
-    clinic_id = claims.get("clinic_id") or claims.get("clinicId")
-    if not organization_id or not clinic_id:
-        raise HTTPException(status_code=403, detail="Clinical tenant context is missing")
-
-    encounter = get_encounter(encounter_id, str(organization_id), str(clinic_id))
+    tenant = _tenant_metadata(user)
+    encounter = get_encounter(encounter_id, tenant["organization_id"], tenant["clinic_id"])
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     if not has_active_consent(
-        organization_id=str(organization_id),
-        clinic_id=str(clinic_id),
+        organization_id=tenant["organization_id"],
+        clinic_id=tenant["clinic_id"],
         patient_id=encounter["patient_id"],
         purpose="clinical-image",
     ):
@@ -254,6 +260,7 @@ async def image_quality_assist(
                 "quality_usable": result.quality.usable,
                 "region_detected": result.region_detected,
                 "decision_authority": "treating_physician",
+                **tenant,
             },
         ),
         user,
@@ -264,7 +271,7 @@ async def image_quality_assist(
 @router.post("/generative-image-review/{encounter_id}")
 async def generative_image_review(
     encounter_id: str,
-    clinical_context: str = "",
+    clinical_context: str = Form(default="", max_length=4000),
     file: UploadFile = File(...),
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
@@ -272,39 +279,31 @@ async def generative_image_review(
     if not state.clinical_assist_enabled or not state.generative_assist_enabled:
         raise HTTPException(status_code=409, detail="Generative clinical assist is disabled by production configuration")
 
-    claims = user.get("claims", {})
-    organization_id = claims.get("organization_id") or claims.get("organizationId")
-    clinic_id = claims.get("clinic_id") or claims.get("clinicId")
-    if not organization_id or not clinic_id:
-        raise HTTPException(status_code=403, detail="Clinical tenant context is missing")
-
-    encounter = get_encounter(encounter_id, str(organization_id), str(clinic_id))
+    tenant = _tenant_metadata(user)
+    encounter = get_encounter(encounter_id, tenant["organization_id"], tenant["clinic_id"])
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
     if not has_active_consent(
-        organization_id=str(organization_id),
-        clinic_id=str(clinic_id),
+        organization_id=tenant["organization_id"],
+        clinic_id=tenant["clinic_id"],
         patient_id=encounter["patient_id"],
         purpose="clinical-image",
     ):
         raise HTTPException(status_code=409, detail="Active clinical-image consent is required")
 
     content = await _read_validated_clinical_image(file)
-
-    adapter = MedGemmaAdapter()
-    if not adapter.load():
+    adapter = _medgemma_adapter()
+    loaded = await run_inference(adapter.load)
+    if not loaded:
         raise HTTPException(status_code=503, detail="Generative clinical assist model is unavailable")
     try:
         result = await run_inference(adapter.review, content, clinical_context)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Generative clinical assist model failed safely") from exc
 
-    result.update(
-        {
-            "capability": "generative_image_review",
-            **_suggestion_only_metadata(),
-        }
-    )
+    result.update({"capability": "generative_image_review", **_suggestion_only_metadata()})
     record_event(
         AuditEvent(
             action="clinical_ai_assist_generative_image_review",
@@ -318,6 +317,7 @@ async def generative_image_review(
                 "revision": result.get("revision"),
                 "image_sha256": result.get("image_sha256"),
                 "decision_authority": "treating_physician",
+                **tenant,
             },
         ),
         user,
