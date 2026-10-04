@@ -1,0 +1,38 @@
+name: ONE TIME Web Lock Sync
+
+on:
+  push:
+    branches: [fix/pr211-review-findings-2026-10-01]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/pr211-review-findings-2026-10-01
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+      - name: Regenerate web dashboard lockfile
+        working-directory: webapp
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit synchronized lockfile
+        run: |
+          if git diff --quiet -- webapp/package-lock.json; then
+            echo "Lockfile already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add webapp/package-lock.json
+          git commit -m "chore: synchronize web dashboard lockfile"
+          git push origin HEAD:fix/pr211-review-findings-2026-10-01
