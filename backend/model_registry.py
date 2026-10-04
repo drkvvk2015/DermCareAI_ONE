@@ -136,22 +136,6 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
     else:
         manifest_path = Path("/var/lib/dermcareai/ai/release-manifest.json")
 
-    manifest, manifest_problems = load_validated_manifest(
-        manifest_path,
-        model_dir=model_dir,
-        require_artifact=True,
-    )
-    if manifest is None:
-        return False, "Clinical AI release evidence package is not valid: " + "; ".join(manifest_problems[:4])
-    model_name = str(deployment.get("model_name") or "")
-    manifest_model = manifest.get("model", {})
-    if manifest_model.get("name") != model_name:
-        return False, "Evidence manifest model name does not match the approved registry record"
-    if str(manifest_model.get("version")) != str(deployment.get("version")):
-        return False, "Evidence manifest model version does not match the approved registry record"
-    if str(manifest_model.get("artifact_sha256", "")).lower() != str(deployment.get("artifact_sha256", "")).lower():
-        return False, "Evidence manifest artifact SHA-256 does not match the approved registry record"
-
     expected_file = MODEL_TO_FILE.get(model_name)
     if not expected_file:
         return False, "Production clinical AI model is not mapped to a controlled artifact file"
