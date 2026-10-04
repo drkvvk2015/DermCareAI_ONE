@@ -17,9 +17,18 @@ async function authorizedRequest<T>(path: string, init?: RequestInit): Promise<T
   const body = await response.text();
   if (!response.ok) {
     let detail: unknown = body;
-    try { detail = body ? JSON.parse(body).detail ?? body : body; } catch { /* preserve raw body */ }
+    try {
+      detail = body ? JSON.parse(body).detail ?? body : body;
+    } catch {
+      // Preserve raw response body when it is not JSON.
+    }
     const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
-    throw new ClinicalApiError(message, response.status, message, response.headers.get('X-Request-ID') ?? undefined);
+    throw new ClinicalApiError(
+      message,
+      response.status,
+      message,
+      response.headers.get('X-Request-ID') ?? undefined,
+    );
   }
   return body ? (JSON.parse(body) as T) : (undefined as T);
 }
@@ -28,6 +37,84 @@ export type ActiveConsent = {
   patient_id: string;
   purpose: string;
   active: boolean;
+};
+
+export type ClinicalEncounter = {
+  id: string;
+  patient_id: string;
+  appointment_id?: string | null;
+  doctor_id: string;
+  status: string;
+  complaints: Record<string, unknown>;
+  examination: Record<string, unknown>;
+  assessment: Record<string, unknown>;
+  plan: Record<string, unknown>;
+  version: number;
+  opened_at: string;
+  closed_at?: string | null;
+};
+
+export type ClinicalFollowup = {
+  id: string;
+  encounter_id: string;
+  patient_id: string;
+  due_at: string;
+  instructions: string;
+  status: string;
+};
+
+export type ClinicalPatientSummary = {
+  patient_id: string;
+  encounters: ClinicalEncounter[];
+  lesions: Array<Record<string, unknown>>;
+  followups: ClinicalFollowup[];
+  signoffs: Array<Record<string, unknown>>;
+};
+
+export type ClinicalAIReview = {
+  media_id?: string | null;
+  lesion_id?: string | null;
+  id: string;
+  request_id: string;
+  model_name: string;
+  model_provenance?: string | null;
+  predicted_label: string;
+  confidence: number;
+  accepted: boolean;
+  clinician_decision?: string | null;
+  clinician_override_label?: string | null;
+};
+
+export type DermatologyTemplate = {
+  condition: string;
+  required_sections: string[];
+  scoring_tools: string[];
+};
+
+export type ClinicalDifferentialSuggestion = {
+  capability: 'differential_support';
+  clinical_use: 'suggestion_only';
+  diagnostic_status: 'not_a_diagnosis';
+  decision_authority: 'treating_physician';
+  requires_clinician_verification: true;
+  can_sign_diagnosis: false;
+  can_prescribe: false;
+  can_order: false;
+  can_modify_signed_record: false;
+  abstained: boolean;
+  safety: {
+    urgent_review: boolean;
+    reason: string | null;
+    matched_flags: string[];
+  };
+  candidates: Array<{
+    label: string;
+    support_score: number;
+    support_score_is_probability: boolean;
+    evidence: Array<{ feature: string; contribution: number; rationale: string }>;
+    missing_information: string[];
+  }>;
+  disclaimer: string;
 };
 
 export const clinicalApi = {
@@ -90,54 +177,6 @@ export const clinicalApi = {
   },
 };
 
-
-
-export type ClinicalEncounter = {
-  id: string;
-  patient_id: string;
-  appointment_id?: string | null;
-  doctor_id: string;
-  status: string;
-  complaints: Record<string, unknown>;
-  examination: Record<string, unknown>;
-  assessment: Record<string, unknown>;
-  plan: Record<string, unknown>;
-  version: number;
-  opened_at: string;
-  closed_at?: string | null;
-};
-
-export type ClinicalFollowup = {
-  id: string;
-  encounter_id: string;
-  patient_id: string;
-  due_at: string;
-  instructions: string;
-  status: string;
-};
-
-export type ClinicalPatientSummary = {
-  patient_id: string;
-  encounters: ClinicalEncounter[];
-  lesions: Array<Record<string, unknown>>;
-  followups: ClinicalFollowup[];
-  signoffs: Array<Record<string, unknown>>;
-};
-
-export type ClinicalAIReview = {
-  media_id?: string | null;
-  lesion_id?: string | null;
-  id: string;
-  request_id: string;
-  model_name: string;
-  model_provenance?: string | null;
-  predicted_label: string;
-  confidence: number;
-  accepted: boolean;
-  clinician_decision?: string | null;
-  clinician_override_label?: string | null;
-};
-
 export const patientClinicalApi = {
   getSummary(patientId: string) {
     return authorizedRequest<ClinicalPatientSummary>(
@@ -146,18 +185,13 @@ export const patientClinicalApi = {
   },
 };
 
-export type DermatologyTemplate = {
-  condition: string;
-  required_sections: string[];
-  scoring_tools: string[];
-};
-
 export const dermatologyTemplateApi = {
   list() {
     return authorizedRequest<{ templates: DermatologyTemplate[] }>('/api/v1/clinical/templates');
   },
 };
 
+export const clinicalAssistApi = {
   clinicalAssistDifferential(encounterId: string, payload: {
     primaryMorphology: string;
     secondaryChanges?: string[];
@@ -172,45 +206,30 @@ export const dermatologyTemplateApi = {
     pruritus?: boolean;
     systemicRedFlags?: string[];
   }) {
-    return authorizedRequest<{
-      capability: 'differential_support';
-      clinical_use: 'preliminary_assistive_only';
-      diagnostic_status: 'not_a_diagnosis';
-      requires_clinician_verification: boolean;
-      abstained: boolean;
-      safety: {
-        urgent_review: boolean;
-        reason: string | null;
-        matched_flags: string[];
-      };
-      candidates: Array<{
-        label: string;
-        support_score: number;
-        support_score_is_probability: boolean;
-        evidence: Array<{ feature: string; contribution: number; rationale: string }>;
-        missing_information: string[];
-      }>;
-      disclaimer: string;
-    }>(`/api/v1/clinical-ai/differential`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        encounter_id: encounterId,
-        primary_morphology: payload.primaryMorphology,
-        secondary_changes: payload.secondaryChanges || [],
-        color: payload.color || '',
-        border: payload.border || '',
-        surface: payload.surface || '',
-        distribution: payload.distribution || '',
-        symptoms: payload.symptoms || [],
-        duration_days: payload.durationDays,
-        fever: payload.fever || false,
-        pain: payload.pain || false,
-        pruritus: payload.pruritus || false,
-        systemic_red_flags: payload.systemicRedFlags || [],
-      }),
-    });
+    return authorizedRequest<ClinicalDifferentialSuggestion>(
+      '/api/v1/clinical-ai/differential',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          encounter_id: encounterId,
+          primary_morphology: payload.primaryMorphology,
+          secondary_changes: payload.secondaryChanges || [],
+          color: payload.color || '',
+          border: payload.border || '',
+          surface: payload.surface || '',
+          distribution: payload.distribution || '',
+          symptoms: payload.symptoms || [],
+          duration_days: payload.durationDays,
+          fever: payload.fever || false,
+          pain: payload.pain || false,
+          pruritus: payload.pruritus || false,
+          systemic_red_flags: payload.systemicRedFlags || [],
+        }),
+      },
+    );
   },
+};
 
 export const encounterApi = {
   create(patientId: string, payload?: {
@@ -309,8 +328,6 @@ export const encounterApi = {
     );
   },
 
-
-
   recordMedia(payload: {
     patientId: string;
     encounterId?: string;
@@ -366,6 +383,7 @@ export const encounterApi = {
       `/api/v1/clinical/patients/${encodeURIComponent(patientId)}/lesions/${encodeURIComponent(lesionCode)}/timeline`,
     );
   },
+
   saveLesion(payload: {
     patientId: string;
     encounterId: string;
@@ -402,5 +420,4 @@ export const encounterApi = {
       },
     );
   },
-
 };
