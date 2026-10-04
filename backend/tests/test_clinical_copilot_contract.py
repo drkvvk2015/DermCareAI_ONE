@@ -54,6 +54,27 @@ def test_copilot_abstains_without_governed_evidence():
     assert result.to_dict()["human_authority"]["ai_can_prescribe"] is False
 
 
+def test_copilot_abstains_on_non_current_evidence():
+    record = current_evidence()
+    for status in ("superseded", "conflicting", "insufficient", "unable_to_verify"):
+        non_current = EvidenceRecord(**{**record.__dict__, "status": status})
+        result = build_copilot_recommendation(
+            context=PatientContext(pregnancy_status="not_pregnant"),
+            differential=("eczema",),
+            supporting_features=("itch",),
+            missing_information=(),
+            investigations=(),
+            treatment_options=("consider topical therapy",),
+            contraindication_checks=(),
+            monitoring=(),
+            referral_or_escalation=(),
+            counselling=(),
+            evidence=(non_current,),
+        )
+        assert result.abstained is True
+        assert "current governed evidence" in (result.abstention_reason or "")
+
+
 def test_copilot_abstains_on_red_flags_even_with_current_evidence():
     result = build_copilot_recommendation(
         context=PatientContext(pregnancy_status="not_pregnant", red_flags=("mucosal involvement",)),
