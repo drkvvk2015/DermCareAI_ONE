@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from enum import Enum
 
 
-class DiagnosticMode(str, Enum):
-    """Clinical AI diagnostic execution is intentionally unavailable.
+_IMMUTABLE_REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.IGNORECASE)
 
-    DermCareAI Clinical AI is a physician decision-support copilot only. Any
-    future diagnostic-model evaluation must use a separately governed release
-    and must not be enabled by a routine application environment toggle.
-    """
+
+class DiagnosticMode(str, Enum):
+    """Clinical AI diagnostic execution is intentionally unavailable."""
 
     DISABLED = "disabled"
 
@@ -27,17 +26,19 @@ def _bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default).lower()).strip().lower() == "true"
 
 
+def is_immutable_model_revision(value: str | None) -> bool:
+    return bool(value and _IMMUTABLE_REVISION_RE.fullmatch(value.strip()))
+
+
 def capabilities() -> ClinicalAICapabilities:
     clinical_assist = _bool("ENABLE_CLINICAL_ASSIST_AI", False)
     generative_requested = _bool("ENABLE_GENERATIVE_CLINICAL_ASSIST", False) and _bool("ENABLE_MEDGEMMA", False)
-    revision_pinned = bool(os.getenv("MEDGEMMA_REVISION", "").strip())
+    revision_pinned = is_immutable_model_revision(os.getenv("MEDGEMMA_REVISION"))
     if os.getenv("APP_ENV", "development").lower() == "production":
         generative_assist = clinical_assist and generative_requested and revision_pinned
     else:
         generative_assist = clinical_assist and generative_requested
 
-    # There is deliberately no application-level switch for autonomous or
-    # diagnostic clinical execution. Clinical AI remains suggestion-only.
     return ClinicalAICapabilities(
         clinical_assist_enabled=clinical_assist,
         generative_assist_enabled=generative_assist,
@@ -53,6 +54,4 @@ def require_clinical_assist_enabled() -> ClinicalAICapabilities:
 
 
 def diagnostic_clinical_activation_allowed() -> bool:
-    # Kept as an explicit policy hook so callers fail closed rather than
-    # interpreting configuration as permission for autonomous diagnosis.
     return False
