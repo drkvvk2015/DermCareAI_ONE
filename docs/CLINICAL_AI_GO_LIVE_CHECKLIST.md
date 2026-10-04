@@ -19,9 +19,10 @@ Verify:
 - PostgreSQL is the production persistence layer.
 - patient-linked clinical-image review requires active consent.
 - audit logging is enabled.
-- Clinical Assist UI displays "not a diagnosis" and "clinician verification required".
-- diagnostic AI remains unavailable.
+- Clinical AI Copilot visibly states: **Suggestions only. Verify all information and make the final clinical decision.**
+- diagnostic AI is unavailable through the production application.
 - no research model is exposed through the diagnostic endpoint.
+- `/predict` cannot execute clinical diagnostic inference.
 
 ## Optional generative assist
 
@@ -35,28 +36,25 @@ MEDGEMMA_MODEL_ID=<approved-model-id>
 MEDGEMMA_REVISION=<immutable-pinned-revision>
 ```
 
-The production adapter rejects an unpinned revision. Patient-linked image review requires clinical-image consent.
+The production adapter rejects an unpinned revision. Patient-linked image review requires clinical-image consent. Generative output remains suggestion-only and requires clinician verification.
 
-## Diagnostic activation
+## Diagnostic development/evaluation boundary
 
-Do not set:
+Do **not** attempt to activate diagnostic inference with:
 
 ```text
 AI_DIAGNOSTIC_MODE=clinical
 ```
 
-until the completed schema-v2 evidence manifest is mounted at:
+The application policy intentionally keeps diagnostic mode disabled and does not expose an executable production switch for autonomous or diagnostic clinical inference.
 
-```text
-/var/lib/dermcareai/ai/release-manifest.json
-```
-
-or an explicitly configured controlled path, and the exact model artifact hash matches the approved evidence package and model-governance record.
+A future diagnostic evaluation must use a separate governed deployment and complete the schema-v2 evidence manifest, exact model-artifact identity, validation evidence, accountable approvals, privacy/security review, staging/rollback evidence, and applicable regulatory/governance requirements before any patient-facing use.
 
 ## Clinical safety
 
 - No autonomous diagnosis.
-- No autonomous prescribing.
+- No autonomous prescribing or treatment execution.
+- No autonomous orders.
 - No automatic modification of signed encounters.
 - No silent model or policy promotion.
 - Clinician remains the final decision-maker.
