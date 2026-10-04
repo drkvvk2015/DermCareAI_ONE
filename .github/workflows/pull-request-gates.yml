@@ -12,7 +12,43 @@ env:
   PYTHONPATH: .
 
 jobs:
+  synchronize-lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Generate authoritative web lockfile
+        working-directory: webapp
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Restore authoritative backend lockfile from main when absent
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          if [ ! -f backend/requirements-ci.lock ]; then
+            git fetch origin main --depth=1
+            git show origin/main:backend/requirements-ci.lock > backend/requirements-ci.lock
+          fi
+      - name: Commit synchronized lockfiles
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          if git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
+            echo 'All authoritative lockfiles are synchronized.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add webapp/package-lock.json backend/requirements-ci.lock
+          git commit -m 'build: synchronize authoritative CI lockfiles [skip ci]'
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+
   backend-regression:
+    needs: synchronize-lockfiles
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -20,24 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Restore authoritative backend lockfile from main when absent
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        working-directory: ${{ github.workspace }}
-        shell: bash
-        run: |
-          if [ ! -f backend/requirements-ci.lock ]; then
-            git fetch origin main --depth=1
-            git show origin/main:backend/requirements-ci.lock > backend/requirements-ci.lock
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add backend/requirements-ci.lock
-            git commit -m 'build: restore pinned backend CI lockfile [skip ci]'
-            git push origin "HEAD:${GITHUB_HEAD_REF}"
-          fi
       - name: Install locked test dependencies
         run: python -m pip install --require-hashes -r requirements-ci.lock
       - name: Compile backend
@@ -53,6 +75,7 @@ jobs:
           fi
 
   pwa-capacitor-regression:
+    needs: synchronize-lockfiles
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,28 +84,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref || github.ref_name }}
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: webapp/package-lock.json
-      - name: Install web/PWA dependencies and refresh lockfile
-        run: npm install --no-audit --no-fund
-      - name: Commit authoritative generated lockfile to PR branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        working-directory: ${{ github.workspace }}
-        shell: bash
-        run: |
-          if git diff --quiet -- webapp/package-lock.json; then
-            echo 'package-lock.json is already synchronized.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add webapp/package-lock.json
-          git commit -m 'build: synchronize PWA Capacitor lockfile [skip ci]'
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+      - name: Install locked web/PWA dependencies
+        run: npm ci --no-audit --no-fund
       - name: TypeScript check
         run: npx tsc -b
       - name: Web lint
@@ -105,6 +113,7 @@ jobs:
           fi
 
   capacitor-ios-regression:
+    needs: synchronize-lockfiles
     runs-on: macos-14
     defaults:
       run:
@@ -118,8 +127,8 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: webapp/package-lock.json
-      - name: Install web/PWA dependencies
-        run: npm ci
+      - name: Install locked web/PWA dependencies
+        run: npm ci --no-audit --no-fund
       - name: Production PWA build
         run: npm run build
       - name: Generate Capacitor iOS project
@@ -128,6 +137,7 @@ jobs:
         run: npx cap sync ios
 
   web-dashboard:
+    needs: synchronize-lockfiles
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -141,8 +151,8 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: webapp/package-lock.json
-      - name: Install dashboard dependencies
-        run: npm ci
+      - name: Install locked dashboard dependencies
+        run: npm ci --no-audit --no-fund
       - name: Dashboard lint
         run: npm run lint
       - name: Dashboard build
