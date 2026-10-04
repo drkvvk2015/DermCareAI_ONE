@@ -1,0 +1,1 @@
+Decision: `webapp/` is the canonical DermCareAI clinical application. It is delivered as a PWA first and wrapped with Capacitor for native Android/iOS. Expo/React Native is being retired from active development and CI.
