@@ -27,10 +27,14 @@ class MedGemmaAdapter:
     """
 
     def __init__(self) -> None:
+        revision = os.getenv("MEDGEMMA_REVISION") or None
+        enabled = os.getenv("ENABLE_MEDGEMMA", "false").lower() == "true"
+        if os.getenv("APP_ENV", "development").lower() == "production" and enabled and not revision:
+            enabled = False
         self.config = MedGemmaConfig(
             model_id=os.getenv("MEDGEMMA_MODEL_ID", "google/medgemma-1.5-4b-it"),
-            revision=os.getenv("MEDGEMMA_REVISION") or None,
-            enabled=os.getenv("ENABLE_MEDGEMMA", "false").lower() == "true",
+            revision=revision,
+            enabled=enabled,
             max_new_tokens=max(64, min(int(os.getenv("MEDGEMMA_MAX_NEW_TOKENS", "256")), 1024)),
             temperature=max(0.0, min(float(os.getenv("MEDGEMMA_TEMPERATURE", "0.0")), 1.0)),
         )
