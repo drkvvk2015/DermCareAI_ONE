@@ -1,9 +1,12 @@
 """Structural checks for the evidence package required to enable clinical AI."""
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -200,3 +203,94 @@ def validate_ai_release_manifest(
     _evidence_ref(approval.get("evidence"), "approval.evidence", problems)
 
     return problems
+
+
+MODEL_FILES = {
+    "melanoma_binary": "melanoma_classifier.pth",
+    "skin_lesion_7class": "FinetunedNasNetMobile.keras",
+}
+
+
+def validate_manifest_data(
+    data: Any,
+    *,
+    expected_model_name: str | None = None,
+    expected_model_version: str | None = None,
+    expected_artifact_sha256: str | None = None,
+) -> list[str]:
+    return validate_ai_release_manifest(
+        data,
+        expected_model_name=expected_model_name,
+        expected_model_version=expected_model_version,
+        expected_artifact_sha256=expected_artifact_sha256,
+    )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_validated_manifest(
+    path: str | Path,
+    *,
+    model_dir: str | Path | None = None,
+    require_artifact: bool = False,
+    expected_model_name: str | None = None,
+    expected_model_version: str | None = None,
+    expected_artifact_sha256: str | None = None,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    manifest_path = Path(path)
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return None, [f"evidence manifest is unreadable: {exc}"]
+    if not isinstance(data, dict):
+        return None, ["evidence manifest root must be a JSON object"]
+
+    problems = validate_ai_release_manifest(
+        data,
+        expected_model_name=expected_model_name,
+        expected_model_version=expected_model_version,
+        expected_artifact_sha256=expected_artifact_sha256,
+    )
+    if model_dir is not None:
+        model = data.get("model")
+        model_name = model.get("name") if isinstance(model, dict) else None
+        file_name = MODEL_FILES.get(model_name) if isinstance(model_name, str) else None
+        if file_name:
+            artifact_path = Path(model_dir) / file_name
+            if not artifact_path.is_file():
+                if require_artifact:
+                    problems.append(f"model artifact is missing at {artifact_path}")
+            else:
+                try:
+                    actual_sha256 = _sha256_file(artifact_path)
+                except OSError:
+                    problems.append("model artifact cannot be read")
+                else:
+                    if actual_sha256.lower() != str(model.get("artifact_sha256", "")).lower():
+                        problems.append("model artifact SHA-256 does not match manifest")
+        elif require_artifact:
+            problems.append("model is not mapped to a controlled artifact file")
+
+    if problems:
+        return None, problems
+    return data, []
+
+
+def validate_manifest_file(
+    path: str | Path,
+    *,
+    model_dir: str | Path | None = None,
+    require_artifact: bool = False,
+) -> tuple[bool, list[str]]:
+    data, problems = load_validated_manifest(
+        path,
+        model_dir=model_dir,
+        require_artifact=require_artifact,
+    )
+    return data is not None, problems

@@ -54,6 +54,21 @@ The Android build path has also been aligned with Expo's Babel preset so clean n
 
 
 
+
+
+## Tiered clinical AI activation — 4 October 2026
+
+DermCareAI now separates **Clinical AI Assist** from high-consequence diagnostic AI. The production assistive lane can be enabled independently for clinician-reviewed differential support and consent-bound image-quality assistance. The mobile encounter workflow labels the output as **not a diagnosis**, does not auto-write it into the assessment, and does not permit AI to sign or prescribe.
+
+Production configuration:
+
+```text
+ENABLE_CLINICAL_ASSIST_AI=true
+AI_DIAGNOSTIC_MODE=disabled
+```
+
+The optional generative-assist lane is separately controlled and requires an immutable MedGemma revision in production. Diagnostic clinical mode remains protected by the complete evidence-manifest/artifact gate described in [Clinical AI Production Activation](docs/CLINICAL_AI_PRODUCTION_ACTIVATION.md).
+
 ## Mainline release checkpoint — 4 October 2026
 
 - **Latest merged hardening:** PR #212 → main (production commerce/pharmacy/clinical-upload hardening)

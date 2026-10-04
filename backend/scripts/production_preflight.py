@@ -106,9 +106,9 @@ def evaluate_environment(env: Mapping[str, str] | None = None) -> list[CheckResu
     )
 
     if values.get("AI_ENABLED_IN_PRODUCTION", "false").lower() == "true":
-        manifest_path = values.get("AI_VALIDATION_MANIFEST_PATH", "").strip()
+        manifest_path = values.get("AI_RELEASE_MANIFEST_PATH", "").strip()
         if not manifest_path:
-            results.append(CheckResult("AI release evidence", "FAIL", "AI_VALIDATION_MANIFEST_PATH is required when production AI is enabled."))
+            results.append(CheckResult("AI release evidence", "FAIL", "AI_RELEASE_MANIFEST_PATH is required when production AI is enabled."))
         else:
             try:
                 manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))

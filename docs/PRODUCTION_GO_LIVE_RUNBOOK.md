@@ -18,7 +18,7 @@ Set these values in the deployment secret manager; never commit them to Git:
 - Firebase credentials through service-account JSON, workload identity/ADC, or equivalent Google Cloud identity.
 - `ENABLE_EMBEDDED_DERM_MODEL=false`
 - `AI_ENABLED_IN_PRODUCTION=false` unless all independent clinical evidence and accountable approvals are complete.
-- `AI_VALIDATION_MANIFEST_PATH=<read-only mounted approved evidence manifest>` when production AI is explicitly enabled.
+- `AI_RELEASE_MANIFEST_PATH=<read-only mounted approved evidence manifest>` when a governed production AI release is explicitly authorized.
 - `MIN_CONFIDENCE` within `[0,1]`.
 - `MAX_IMAGE_BYTES` within the approved operational limit.
 

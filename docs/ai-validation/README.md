@@ -18,6 +18,6 @@ The validator checks completeness, formats, timestamp zones, numeric intervals, 
 
 ## Production enforcement
 
-AI remains disabled by default through `AI_ENABLED_IN_PRODUCTION=false`. If an accountable organization later considers enabling it, configure `AI_VALIDATION_MANIFEST_PATH` to a read-only mounted manifest from the approved evidence store, run the production preflight, and use the model registry to deploy the exact matching artifact. Production startup rechecks the manifest's approval state and model name, version, and SHA-256 against the active deployment. Missing, incomplete, research-only, or mismatched evidence blocks inference.
+Diagnostic AI remains disabled by policy; the physician-final Clinical AI Copilot may provide suggestions but cannot make or sign diagnoses, prescribe, or modify signed records. The evidence gate is an additional safeguard, not an activation path. If a future governed deployment is explicitly authorized, mount its approved manifest read-only at `/var/lib/dermcareai/ai/release-manifest.json` or configure `AI_RELEASE_MANIFEST_PATH`. Production startup revalidates the evidence against the active model identity and controlled artifact hash; missing, incomplete, research-only, or mismatched evidence blocks inference.
 
 Passing these structural checks is not proof of safety, effectiveness, regulatory approval, or fitness for clinical use. Human clinical, regulatory, privacy, and deployment approvals remain separate requirements.

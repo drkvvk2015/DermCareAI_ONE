@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from ai_release_evidence import validate_ai_release_manifest
+from ai_release_evidence import load_validated_manifest
 
 MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", "models/registry.json"))
 
@@ -40,13 +40,12 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
     },
 }
 
-
 MODEL_TO_FILE = {
     "melanoma_binary": "melanoma_classifier.pth",
     "skin_lesion_7class": "FinetunedNasNetMobile.keras",
 }
- 
- 
+
+
 def load_registry() -> Dict[str, Any]:
     if not MODEL_REGISTRY_PATH.exists():
         return DEFAULT_REGISTRY
@@ -66,8 +65,6 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
     root = Path(model_dir)
     results: Dict[str, Any] = {}
     for key, spec in registry.get("models", {}).items():
-        # Repository-backed models are metadata-only entries until their
-        # local cache is explicitly materialized and checksum-pinned.
         if not spec.get("file"):
             results[key] = {
                 "repository": spec.get("repository"),
@@ -99,9 +96,16 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
 
 
 def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "development") -> tuple[bool, str]:
-    """Require an approved, active, non-research AI deployment in production."""
+    """Check diagnostic-artifact eligibility while honoring the physician-final policy."""
     if app_env.lower() != "production":
         return True, "non-production"
+
+    # This application is a suggestion-only Clinical AI Copilot. The same
+    # policy that disables diagnostic execution must therefore gate the model
+    # loader, so an approved artifact can never be activated through /predict.
+    from clinical_ai_policy import diagnostic_clinical_activation_allowed
+    if not diagnostic_clinical_activation_allowed():
+        return False, "Production diagnostic inference is disabled by the physician-final Clinical AI policy"
 
     try:
         from ai_registry import get_active_production_model
@@ -111,7 +115,6 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
 
     if not deployment:
         return False, "No active production AI deployment is approved"
-
     if int(deployment.get("research_only", 1)):
         return False, "Active production model is marked research-only"
     if not int(deployment.get("validated", 0)):
@@ -121,26 +124,47 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
     if deployment.get("deployment_status") != "active":
         return False, "Production model deployment is not active"
 
-    model_name = str(deployment.get("model_name") or "")
-    expected_file = MODEL_TO_FILE.get(model_name)
-    if expected_file:
-        actual = sha256(Path(model_dir) / expected_file) if (Path(model_dir) / expected_file).is_file() else None
-        if not actual or actual.lower() != str(deployment.get("artifact_sha256") or "").lower():
-            return False, "Active production model artifact hash does not match the approved registry record"
+    model_name = str(deployment.get("model_name") or "").strip()
+    model_version = str(deployment.get("version") or "").strip()
+    artifact_sha256 = str(deployment.get("artifact_sha256") or "").strip()
+    if not model_name or not model_version or not artifact_sha256:
+        return False, "Active production model identity is incomplete"
 
-    manifest_path = os.getenv("AI_VALIDATION_MANIFEST_PATH", "").strip()
-    if not manifest_path:
-        return False, "AI_VALIDATION_MANIFEST_PATH must point to the approved clinical evidence package"
-    try:
-        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return False, f"Clinical AI evidence package cannot be read: {exc}"
-    evidence_problems = validate_ai_release_manifest(
-        manifest,
-        expected_model_name=str(deployment.get("model_name") or ""),
-        expected_model_version=str(deployment.get("version") or ""),
-        expected_artifact_sha256=str(deployment.get("artifact_sha256") or ""),
+    configured_manifest = os.getenv("AI_RELEASE_MANIFEST_PATH")
+    if configured_manifest:
+        manifest_path = Path(configured_manifest)
+    else:
+        manifest_path = Path("/var/lib/dermcareai/ai/release-manifest.json")
+
+    manifest, manifest_problems = load_validated_manifest(
+        manifest_path,
+        model_dir=model_dir,
+        require_artifact=True,
     )
-    if evidence_problems:
-        return False, "Clinical AI evidence package is incomplete or does not match the active model: " + "; ".join(evidence_problems[:4])
+    if manifest is None:
+        return False, "Clinical AI release evidence package is not valid: " + "; ".join(manifest_problems[:4])
+    model_name = str(deployment.get("model_name") or "")
+    manifest_model = manifest.get("model", {})
+    if manifest_model.get("name") != model_name:
+        return False, "Evidence manifest model name does not match the approved registry record"
+    if str(manifest_model.get("version")) != str(deployment.get("version")):
+        return False, "Evidence manifest model version does not match the approved registry record"
+    if str(manifest_model.get("artifact_sha256", "")).lower() != str(deployment.get("artifact_sha256", "")).lower():
+        return False, "Evidence manifest artifact SHA-256 does not match the approved registry record"
+
+    expected_file = MODEL_TO_FILE.get(model_name)
+    if not expected_file:
+        return False, "Production clinical AI model is not mapped to a controlled artifact file"
+
+    manifest, manifest_problems = load_validated_manifest(
+        manifest_path,
+        model_dir=model_dir,
+        require_artifact=True,
+        expected_model_name=model_name,
+        expected_model_version=model_version,
+        expected_artifact_sha256=artifact_sha256,
+    )
+    if manifest is None:
+        return False, "Clinical AI release evidence package is not valid: " + "; ".join(manifest_problems[:4])
+
     return True, "approved"
