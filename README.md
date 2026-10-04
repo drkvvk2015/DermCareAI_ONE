@@ -5,7 +5,7 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 > ⚠️ **Clinical boundary:** AI output is decision support, not a diagnosis. The current embedded HAM10000 model is a research fallback and is **not clinically validated for routine patient care**. Clinical deployment requires intended-use review, independent validation and applicable regulatory/privacy approvals.
 > ✅ **Engineering baseline:** v5 production hardening + Wave 4 clinical workflow are merged into `main`. Automated backend, mobile, PostgreSQL, CodeQL and clinical workflow gates are in place.
 > **Dermatology Completion:** v5.1 Wave 1 + Wave 2 are integrated into `main` through the validated `develop` release path. `main` is the stable engineering baseline; clinical validation and regulatory/privacy approval remain separate gates.
-> **Current swarm hardening:** the final mainline wave adds durable prescription-dispense idempotency, concurrent dispense ownership protection with bounded recovery, and explicit audit events for idempotent replay. CI remains the final technical evidence gate for each merge.
+> **Current mainline hardening:** PR #212 is merged into `main` (4 October 2026) and adds payment event/status enforcement, canonical pharmacy expiry + FEFO validation, prescription/patient linkage enforcement, decoded clinical-image validation, dashboard CI, and release-gated dependency auditing. CI remains the technical evidence gate; clinical validation and regulatory/privacy approval remain separate gates.
 
 ## Visual overview
 
@@ -42,13 +42,24 @@ AI output remains **traceable and reviewable**. An attached AI assessment cannot
 
 The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
 
-## Production hardening — 1 October 2026
+## Production hardening — mainline checkpoint, 4 October 2026
 
-PR #212 contains the current security/reliability hardening wave and supersedes PR #211. It addresses the ten-item audit set covering composite tenant isolation, bounded image uploads, trusted-proxy rate limiting, redacted public health checks, dependency-audit release gating, a real vulnerability-reporting process, bounded/off-event-loop AI inference, durable notification outbox processing, regression tests, and staging network/runtime hardening.
+PR #212, merged as commit 8f1a5451c3d25c7210ed980e4667e11e6157310f, is the current security/reliability hardening baseline and supersedes PR #211. It covers the earlier ten-item production audit plus the final commerce, pharmacy, clinical-upload, dashboard-CI, and dependency-gating findings: payment events must be captured and authorized, pharmacy expiry values are canonical real dates, dispensing is tenant/patient/prescription scoped, clinical images are decoded and MIME-verified, the web dashboard has blocking lint/test/build gates, and remediable high/critical dependency findings block release.
 
 The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI.
 
 The Android build path has also been aligned with Expo's Babel preset so clean native prebuilds link Expo native modules consistently.
+
+
+
+## Mainline release checkpoint — 4 October 2026
+
+- **Latest merged hardening:** PR #212 → main
+- **Merge commit:** 8f1a5451c3d25c7210ed980e4667e11e6157310f
+- **PR #212 head before merge:** 9b4935534345e97016c77a868a501758d460554f
+- **Required engineering gates:** ✅ green on the final PR #212 head, including CodeQL, backend/mobile regression, PostgreSQL integration, staging acceptance, production-preflight contract, Firestore rules, dependency audit, and dashboard lint/test/build
+- **Dashboard dependency audit:** ✅ 0 reported vulnerabilities in the final npm audit
+- **Clinical boundary:** software CI is green, but independent clinical validation, regulatory/privacy approval, and real-production operational evidence remain separate release gates
 
 ## System at a glance
 
@@ -90,7 +101,7 @@ The final engineering swarm has now been integrated as three independently valid
 | Deployment readiness contract | ✅ PR #161 merged; readiness evaluates production PostgreSQL, explicit CORS and Firebase-auth requirements for clinical + commerce stores |
 | Tenant regression matrix | ✅ PR #161 merged; cross-clinic clinical record access is covered by automated E2E tests |
 | Full required CI matrix | ✅ All eight release workflows passed on PR #159, #160 and #161 heads before merge |
-| Open pull requests | ✅ 0 after stale dependency PR cleanup |
+| Open pull requests | ℹ️ Remaining open PRs are reviewed individually; no unapproved/stale PR is claimed as merged by this README |
 
 **Offline synchronization scope:** the persistent queue intentionally covers mutations with deterministic replay/concurrency semantics (PATCH encounter updates and POST lesion upserts). Image uploads, prescriptions and other non-idempotent workflows remain online-first rather than being retried blindly.
 
@@ -159,7 +170,7 @@ The final engineering swarm has now been integrated as three independently valid
 | CodeQL | ✅ Automated |
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
-| Dependency audit | ✅ Release-gated: remediable npm high/critical findings block; the documented upstream-unfixed node-forge build-tooling advisory is tracked but non-blocking; any pip-audit finding blocks; full JSON reports retained as CI artifacts |
+| Dependency audit | ✅ Release-gated across mobile npm, web dashboard npm, and backend pip-audit; remediable high/critical findings block; the documented upstream-unfixed Expo build-tooling advisory is tracked as an exception; full JSON reports retained as CI artifacts |
 | SBOM/provenance | ✅ Container workflow enabled |
 | Independent AI clinical validation | ✅ External clinical-validation gate, separate from repository engineering sign-off |
 | Prospective clinical validation | ✅ External prospective validation gate for intended clinical use |
@@ -176,7 +187,8 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
 | Required PR CI matrix | ✅ Green on the final integration wave |
-| Open release PRs | ✅ 0 |
+| Latest merged hardening | ✅ PR #212 merged to `main` on 4 October 2026 |
+| Open release PRs | ℹ️ Remaining PRs are not represented as approved simply because they are mergeable |
 | Clinical validation / regulatory approval | ✅ Separate external evidence and governance gates remain outside the repo engineering baseline |
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
@@ -320,11 +332,11 @@ An automated disaster-recovery drill is also included in GitHub Actions.
 
 ## Security
 
-Production controls include Firebase authentication, server-side RBAC, tenant-aware authorization, consent enforcement for clinical media, signed server-mediated object uploads, no client-side Cloudinary secret, rate limiting on privileged/high-cost endpoints, payment idempotency/signature validation, hash-chained audit records, fail-closed production CORS, PostgreSQL production enforcement, CodeQL, dependency audit reporting, and SBOM/provenance-enabled container releases.
+Production controls include Firebase authentication, server-side RBAC, tenant-aware authorization, consent enforcement for clinical media, decoded/MIME-verified clinical image uploads, signed server-mediated object uploads, no client-side Cloudinary secret, rate limiting on privileged/high-cost endpoints, captured-event/payment-status validation plus idempotent settlement, canonical pharmacy expiry + FEFO ordering, prescription/patient linkage enforcement, hash-chained audit records, fail-closed production CORS, PostgreSQL production enforcement, CodeQL, dashboard/backend/mobile dependency gates, and SBOM/provenance-enabled container releases.
 
 ## Dependency security
 
-The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. Remediable npm high/critical findings and any pip-audit finding fail the release-gating job. The current node-forge RSA verification advisory is explicitly tracked as upstream-unfixed and limited to Expo CLI/code-signing build tooling; it does not block the clinical runtime release gate. Lower-severity npm findings remain visible in the artifact without being promoted to a blocking failure.
+The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts for the mobile app, web dashboard, and backend. Remediable npm high/critical findings and any pip-audit finding fail the release-gating job. The current Expo/node-forge build-tooling advisory is explicitly tracked as upstream-unfixed and limited to CLI/code-signing tooling; it is the documented exception to the mobile gate and does not represent a dashboard runtime vulnerability. The final dashboard audit in the PR #212 release wave reported zero vulnerabilities.
 
 ## Clinical / regulatory boundary
 
