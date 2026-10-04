@@ -1,32 +1,32 @@
 # PWA + Capacitor migration status
 
-## Completed
+## Completed in the migration branch
 
 - `webapp/` is the canonical clinical application and PWA core.
 - PWA manifest/service-worker generation is enabled through `vite-plugin-pwa`.
 - Capacitor 8 core, Android, iOS, and CLI dependencies are declared.
 - `webapp/capacitor.config.ts` uses `dist` as the single web asset directory.
-- Pull-request CI no longer runs Expo web export, Expo Doctor, Expo prebuild, or React Native TypeScript gates.
-- CI validates the PWA build and generates/synchronizes the Capacitor Android project.
-- The legacy `dermcareai/` Expo/React-Native application tree has been removed from the migration branch.
-- Web-first platform documentation has been updated for PWA + Capacitor delivery.
+- The legacy root `dermcareai/` Expo/React-Native application tree has been removed.
+- Pull-request CI no longer uses Expo web export, Expo Doctor, Expo prebuild, or React Native TypeScript gates.
+- CI now installs the PWA dependencies from the branch and can commit the authoritative generated `webapp/package-lock.json` back to the PR branch.
+- CI generates and synchronizes a Capacitor Android project on Linux.
+- CI generates and synchronizes a Capacitor iOS project on macOS.
+- CI checks the web application package graph for active Expo/React-Native dependencies.
+- Clinical AI remains suggestion-only with treating-physician decision authority.
 
-## Remaining hardening
+## Explicit production-safety boundary
 
-- Regenerate and commit `webapp/package-lock.json` after the Capacitor iOS dependency addition.
-- Generate and commit native Capacitor projects when native packaging is enabled (`npx cap add android` / `npx cap add ios`).
-- Verify feature parity for any legacy mobile workflow not yet represented in the PWA.
-- Complete offline clinical synchronization and conflict-replay acceptance tests.
-- Update any remaining release/dependency documentation that describes Expo as an active client.
+- PWA offline shell caching is enabled.
+- Clinical writes must not be queued or replayed optimistically until the repository has an explicit conflict-safe clinical synchronization protocol with idempotency keys, version/ETag handling, audit events, and deterministic conflict resolution.
+- This prevents an offline client from silently overwriting a newer clinical record or creating duplicate clinical actions.
 
-## Acceptance criteria
+## Acceptance gates
 
 1. PWA lint/tests/build pass.
 2. Capacitor Android generation/sync pass.
-3. Capacitor iOS generation/sync pass on macOS/Xcode.
-4. Clinical workflows have equivalent PWA routes or explicit scope decisions.
-5. Offline clinical synchronization remains replay-safe and conflict-aware.
-6. Clinical AI remains suggestion-only with treating-physician decision authority.
-7. No CI/deployment script references Expo or React Native.
-8. Dependency audit contains no newly introduced unreviewed mobile runtime risk.
-9. Main branch receives this migration only through the protected PR/review path.
+3. Capacitor iOS generation/sync pass on macOS/Xcode-capable CI.
+4. No active Expo/React-Native runtime dependencies or deployment gates remain.
+5. Clinical AI remains suggestion-only; the treating physician is the final decision-maker.
+6. Clinical offline writes remain fail-safe until replay/conflict semantics are implemented and tested.
+7. Dependency/security checks must pass before protected-main merge.
+8. Main receives the migration only through the protected PR/review path.
