@@ -9,6 +9,8 @@ from typing import Any
 
 from PIL import Image
 
+from clinical_ai_policy import is_immutable_model_revision
+
 
 @dataclass(frozen=True)
 class MedGemmaConfig:
@@ -17,18 +19,6 @@ class MedGemmaConfig:
     enabled: bool
     max_new_tokens: int
     temperature: float
-
-
-_IMMUTABLE_REVISION_RE = __import__("re").compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
-
-
-def _validated_revision(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.strip()
-    if not normalized or not _IMMUTABLE_REVISION_RE.fullmatch(normalized.lower()):
-        return None
-    return normalized
 
 
 class MedGemmaAdapter:
@@ -41,7 +31,7 @@ class MedGemmaAdapter:
 
     def __init__(self) -> None:
         requested_revision = os.getenv("MEDGEMMA_REVISION") or None
-        revision = _validated_revision(requested_revision)
+        revision = requested_revision.strip() if is_immutable_model_revision(requested_revision) else None
         enabled = os.getenv("ENABLE_MEDGEMMA", "false").lower() == "true"
         production = os.getenv("APP_ENV", "development").lower() == "production"
         if production and enabled and revision is None:
