@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { theme } from './src/theme';
 import AppNavigator from './src/navigation/AppNavigator';
 import { api } from './src/services/api';
+import ClinicalAISafetyBanner from './src/components/ClinicalAISafetyBanner';
 
 export default function App() {
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export default function App() {
     };
     void flush();
     const subscription = AppState.addEventListener('change', state => {
-      if (state === 'active') flush();
+      if (state === 'active') void flush();
     });
     return () => subscription.remove();
   }, []);
@@ -30,6 +31,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <PaperProvider theme={theme}>
+        <ClinicalAISafetyBanner />
         <AppNavigator />
         <Snackbar visible={Boolean(syncNotice)} onDismiss={() => setSyncNotice(null)} duration={7000}>
           {syncNotice || ''}
@@ -37,4 +39,4 @@ export default function App() {
       </PaperProvider>
     </SafeAreaProvider>
   );
-} 
+}
