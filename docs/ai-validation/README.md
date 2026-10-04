@@ -21,3 +21,8 @@ Validate with:
 python backend/scripts/validate_ai_release_manifest.py docs/ai-validation/release-manifest.json
 
 Production inference also re-validates this manifest and requires it to match the active model-governance record and controlled artifact hash. A missing or invalid package keeps clinical AI disabled.
+
+
+## Production runtime location
+
+The released backend does not invent or fetch a production approval package at runtime. In a production container, the approved evidence manifest is mounted read-only at `/var/lib/dermcareai/ai/release-manifest.json` by default. Set `AI_RELEASE_MANIFEST_PATH` only for an explicitly controlled alternative mount. The validator used during release CI may validate a repository-supplied evidence package, but the production runtime still re-validates the mounted snapshot and exact model artifact hash.
