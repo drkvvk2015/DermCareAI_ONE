@@ -1,6 +1,6 @@
 # Wave 5 — Release Evidence Status
 
-Updated: 2026-09-23
+Updated: 2026-10-04
 
 This document separates automated software evidence from clinical, regulatory and deployment evidence that requires real-world data, environments or accountable human review.
 
@@ -18,7 +18,11 @@ This document separates automated software evidence from clinical, regulatory an
 | Tenant isolation | PASS | Clinical E2E tests |
 | Backup/restore automation | READY | Monthly DR workflow |
 | Staging acceptance | PASS in current release gating | Docker staging workflow; current hotfix gate passed build, schema init and clinical acceptance |
-| Dependency audit | PASS / INVENTORY ENABLED | Current release gate + machine-readable audit artifact |
+| Dependency audit | GATED | Mobile + dashboard npm audits and pip-audit; remediable high/critical findings block release, with exact documented upstream-unfixed build-tooling exceptions only where applicable |
+| Python dependency audit | PASS | pip-audit reports no known vulnerabilities after removal of unused python-jose |
+| Mobile toolchain | HARDENED | Expo SDK 57 / React Native 0.86.3 migration candidate passed Expo Doctor and generated a synchronized lockfile |
+| Mobile lockfile synchronization | PASS | CI-generated package-lock is synchronized with package.json after SDK 57 migration |
+| Mobile CI toolchain | PASS | Node 24 / npm 11.19.0 successfully performs clean `npm ci` |
 | SBOM/provenance | ENABLED | Container release workflow |
 | Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation |
 | Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence |
@@ -78,7 +82,7 @@ The CDSCO site currently lists a guidance document on Medical Device Software un
 
 A build can be technically deployable while still being clinically or regulatorily unapproved. Keep these gates separate.
 
-**Software release gate:** automated CI + staging + DR + security evidence. The current v5.1 engineering promotion is complete in `main`; environment-specific production deployment remains separate.
+**Software release gate:** automated CI + staging + DR + security evidence, including backend, mobile, dashboard, payment/FEFO/prescription safety tests and dependency audit enforcement. The current v5.1 engineering promotion is complete in `main`; environment-specific production deployment remains separate.
 
 **Clinical release gate:** independent clinical/AI evidence + intended-use review + accountable clinician approval.
 

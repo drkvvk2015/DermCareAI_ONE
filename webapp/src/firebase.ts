@@ -1,6 +1,8 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
+const isTest = import.meta.env.MODE === 'test';
+
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -8,5 +10,6 @@ const config = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = getApps().length ? getApp() : initializeApp(config);
-export const auth = getAuth(app);
+export const auth = isTest
+  ? ({} as ReturnType<typeof getAuth>)
+  : getAuth(getApps().length ? getApp() : initializeApp(config));

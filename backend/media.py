@@ -48,12 +48,13 @@ def sign_upload(
 ) -> SignUploadResponse:
     enforce_rate_limit(f"media-sign:{user['uid']}", limit=30, window_seconds=60)
     claims = user.get('claims', {})
+    organization_id = claims.get('organization_id') or claims.get('organizationId')
     clinic_id = claims.get('clinic_id') or claims.get('clinicId')
-    if not clinic_id:
+    if not organization_id or not clinic_id:
         raise HTTPException(status_code=403, detail='Clinic context is missing')
     safe_non_clinical = {'profile-avatar', 'staff-avatar', 'clinic-logo'}
     if req.purpose not in safe_non_clinical and not has_active_consent(
-        clinic_id=str(clinic_id), patient_id=req.subject_id, purpose=req.purpose
+        organization_id=str(organization_id), clinic_id=str(clinic_id), patient_id=req.subject_id, purpose=req.purpose
     ):
         raise HTTPException(status_code=409, detail='Active consent is required before clinical image upload authorization')
 

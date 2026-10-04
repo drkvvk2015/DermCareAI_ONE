@@ -42,6 +42,14 @@ AI output remains **traceable and reviewable**. An attached AI assessment cannot
 
 The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
 
+## Production hardening — 1 October 2026
+
+PR #212 contains the current security/reliability hardening wave and supersedes PR #211. It addresses the ten-item audit set covering composite tenant isolation, bounded image uploads, trusted-proxy rate limiting, redacted public health checks, dependency-audit release gating, a real vulnerability-reporting process, bounded/off-event-loop AI inference, durable notification outbox processing, regression tests, and staging network/runtime hardening.
+
+The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI.
+
+The Android build path has also been aligned with Expo's Babel preset so clean native prebuilds link Expo native modules consistently.
+
 ## System at a glance
 
 ```text
@@ -151,7 +159,7 @@ The final engineering swarm has now been integrated as three independently valid
 | CodeQL | ✅ Automated |
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
-| Dependency audit | ✅ Reporting enabled |
+| Dependency audit | ✅ Release-gated: remediable npm high/critical findings block; the documented upstream-unfixed node-forge build-tooling advisory is tracked but non-blocking; any pip-audit finding blocks; full JSON reports retained as CI artifacts |
 | SBOM/provenance | ✅ Container workflow enabled |
 | Independent AI clinical validation | ✅ External clinical-validation gate, separate from repository engineering sign-off |
 | Prospective clinical validation | ✅ External prospective validation gate for intended clinical use |
@@ -189,7 +197,7 @@ Durable domains include clinical encounters/lesions/consents/media metadata, bil
 
 ## Release pipeline
 
-GitHub Actions provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit reporting, disaster-recovery drills, and container release with SBOM/provenance.
+GitHub Actions provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit enforcement with retained JSON reports, disaster-recovery drills, and container release with SBOM/provenance.
 
 The repository intentionally keeps the **software release gate** separate from the **clinical validation gate** and **regulatory/privacy gate**.
 
@@ -316,7 +324,7 @@ Production controls include Firebase authentication, server-side RBAC, tenant-aw
 
 ## Dependency security
 
-The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. Unresolved findings remain release evidence and are not hidden behind a false-green gate.
+The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. Remediable npm high/critical findings and any pip-audit finding fail the release-gating job. The current node-forge RSA verification advisory is explicitly tracked as upstream-unfixed and limited to Expo CLI/code-signing build tooling; it does not block the clinical runtime release gate. Lower-severity npm findings remain visible in the artifact without being promoted to a blocking failure.
 
 ## Clinical / regulatory boundary
 

@@ -4,13 +4,13 @@ import hashlib
 import hmac
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from auth import require_roles
 from audit import AuditEvent, record_event
@@ -18,6 +18,7 @@ from idempotency import IdempotencyConflict, IdempotencyInProgress, begin_operat
 from billing_math import BillLine, invoice_total, money
 from commerce_store import atomic_dispense, atomic_fefo_dispense, get_invoice as store_get_invoice, list_stock as store_list_stock, list_batches as store_list_batches, upsert_batch as store_upsert_batch
 from commerce_store import record_payment_event, save_invoice, upsert_stock, update_invoice
+from prescription_store import get_prescription
 
 router = APIRouter(prefix="/commerce", tags=["commerce"])
 
@@ -40,6 +41,49 @@ def verify_razorpay_signature(raw_body: bytes, secret: str, signature: str | Non
         return False
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+def canonical_expiry(value: str) -> str:
+    candidate = str(value).strip()
+    if len(candidate) != 10 or candidate[4] != "-" or candidate[7] != "-" or not candidate.replace("-", "").isdigit():
+        raise ValueError("expiry must use canonical YYYY-MM-DD format")
+    try:
+        parsed = date.fromisoformat(candidate)
+    except ValueError as exc:
+        raise ValueError("expiry must be a valid calendar date") from exc
+    return parsed.isoformat()
+
+
+def validate_prescription_link(
+    *, req: "DispenseRequest", organization_id: str, clinic_id: str
+) -> dict[str, Any] | None:
+    if not req.prescription_id:
+        return None
+    prescription = get_prescription(
+        req.prescription_id,
+        organization_id=organization_id,
+        clinic_id=clinic_id,
+    )
+    if prescription is None or prescription.get("patient_id") != req.patient_id:
+        raise HTTPException(status_code=404, detail="Prescription not found for patient and tenant")
+    if prescription.get("status") != "active":
+        raise HTTPException(status_code=409, detail="Only active prescriptions can be linked to a dispense")
+    if prescription.get("dispense_status") == "dispensed":
+        raise HTTPException(status_code=409, detail="Prescription has already been dispensed")
+    return prescription
+
+
+def validate_razorpay_payment_event(payload: dict[str, Any]) -> dict[str, Any]:
+    event_type = str(payload.get("event") or "").strip().lower()
+    if event_type != "payment.captured":
+        raise HTTPException(status_code=409, detail="Only payment.captured webhooks can settle an invoice")
+    entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    status = str(entity.get("status") or "").strip().lower()
+    if status != "captured":
+        raise HTTPException(status_code=409, detail="Payment entity is not in captured state")
+    if not str(entity.get("id") or "").strip():
+        raise HTTPException(status_code=409, detail="Payment entity id is missing")
+    return entity
+
 
 
 class InvoiceItem(BaseModel):
@@ -78,10 +122,15 @@ class DispenseRequest(BaseModel):
 class PharmacyBatchRequest(BaseModel):
     batch_id: str = Field(min_length=1, max_length=120)
     medicine_id: str = Field(min_length=1, max_length=120)
-    expiry: str = Field(min_length=10, max_length=40)
+    expiry: str = Field(min_length=10, max_length=10)
     quantity: float = Field(ge=0)
     blocked: bool = False
     supplier_id: str | None = Field(default=None, max_length=120)
+
+    @field_validator("expiry")
+    @classmethod
+    def validate_expiry(cls, value: str) -> str:
+        return canonical_expiry(value)
 
 
 @router.post("/pharmacy/batches")
@@ -119,9 +168,10 @@ def get_pharmacy_batches(
 def dispense_fefo(
     req: DispenseRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    user: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor")),
+    user: dict[str, Any] = Depends(require_roles("admin", "pharmacist")),
 ):
     organization_id, clinic_id = _tenant(user)
+    validate_prescription_link(req=req, organization_id=organization_id, clinic_id=clinic_id)
     actor_id = str(user["uid"])
     if idempotency_key:
         try:
@@ -330,7 +380,7 @@ async def payment_webhook(request: Request, x_razorpay_signature: str | None = H
         raise HTTPException(status_code=400, detail="Invalid webhook JSON") from exc
 
     event_id = str(payload.get("id") or hashlib.sha256(raw_body).hexdigest())
-    entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    entity = validate_razorpay_payment_event(payload)
     notes = entity.get("notes") or {}
     reference_id = notes.get("invoice_id") or entity.get("order_id") or entity.get("reference_id")
     invoice = INVOICES.get(reference_id) if reference_id else None
@@ -387,8 +437,9 @@ def list_stock(_: dict[str, Any] = Depends(require_roles("admin", "pharmacist", 
 
 
 @router.post("/pharmacy/dispense")
-def dispense(req: DispenseRequest, _: dict[str, Any] = Depends(require_roles("admin", "pharmacist", "doctor"))):
+def dispense(req: DispenseRequest, _: dict[str, Any] = Depends(require_roles("admin", "pharmacist"))):
     organization_id, clinic_id = _tenant(_)
+    validate_prescription_link(req=req, organization_id=organization_id, clinic_id=clinic_id)
     required: Dict[str, float] = {}
     for item in req.items:
         required[item.medicine_id] = required.get(item.medicine_id, 0.0) + float(item.quantity)
