@@ -49,7 +49,7 @@ jobs:
           # node-forge RSA verification advisory. It currently enters only through
           # Expo CLI/code-signing build tooling, so it remains documented but does
           # not block the release gate until upstream publishes a fixed npm release.
-          allowed_upstream_unfixed = {"GHSA-86w9-cpqp-85rv"}
+          allowed_upstream_unfixed = {\n              "GHSA-86w9-cpqp-85rv",  # node-forge, no released npm fix\n              "GHSA-vfj7-8cjw-p6xm",  # braces, no released npm fix\n          }
 
           def root_advisory_urls(vulnerabilities, name, seen=None):
               seen = set() if seen is None else seen
