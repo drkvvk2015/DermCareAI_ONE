@@ -163,6 +163,7 @@ The final engineering swarm has now been integrated as three independently valid
 | Backend regression | ✅ Automated |
 | Mobile TypeScript | ✅ Automated |
 | Expo export smoke test | ✅ Automated |
+| Web dashboard lint/tests/build | ✅ Configured in pull request CI |
 | PostgreSQL integration | ✅ Automated |
 | Clinical API E2E | ✅ Automated |
 | Tenant isolation | ✅ Automated |
@@ -171,11 +172,12 @@ The final engineering swarm has now been integrated as three independently valid
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
 | Dependency audit | ✅ Release-gated across mobile npm, web dashboard npm, and backend pip-audit; remediable high/critical findings block; the documented upstream-unfixed Expo build-tooling advisory is tracked as an exception; full JSON reports retained as CI artifacts |
+| Privacy operations | 🟡 Runbook added; clinic owners and complete export/deletion/retention automation remain outstanding |
 | SBOM/provenance | ✅ Container workflow enabled |
-| Independent AI clinical validation | ✅ External clinical-validation gate, separate from repository engineering sign-off |
-| Prospective clinical validation | ✅ External prospective validation gate for intended clinical use |
-| Regulatory classification/approval | ✅ External governance and regulatory review gate |
-| Production cloud deployment | ✅ Environment-specific deployment gate outside the codebase evidence set |
+| Independent AI clinical validation | ⏳ Not established; requires external evaluation evidence |
+| Prospective clinical validation | ⏳ Not established; requires an approved protocol and real-world evidence |
+| Regulatory classification/approval | ⏳ Formal assessment remains pending |
+| Production cloud deployment | ⏳ Not deployed; environment setup and accountable approval remain |
 
 See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 
@@ -189,7 +191,7 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 | Required PR CI matrix | ✅ Green on the final integration wave |
 | Latest merged hardening | ✅ PR #212 merged to `main` on 4 October 2026 |
 | Open release PRs | ℹ️ Remaining PRs are not represented as approved simply because they are mergeable |
-| Clinical validation / regulatory approval | ✅ Separate external evidence and governance gates remain outside the repo engineering baseline |
+| Clinical validation / regulatory approval | ⏳ Separate external evidence and governance gates remain incomplete |
 
 The pharmacy lifecycle is therefore retry-safe at the application ledger boundary: an already allocated or completed prescription is not re-allocated on a retry, and completed replays are explicitly auditable. This does not claim cross-database transactional atomicity between every persistence subsystem.
 
@@ -209,7 +211,7 @@ Durable domains include clinical encounters/lesions/consents/media metadata, bil
 
 ## Release pipeline
 
-GitHub Actions provide backend regression, mobile regression, PostgreSQL integration, CodeQL, staging acceptance, dependency audit enforcement with retained JSON reports, disaster-recovery drills, and container release with SBOM/provenance.
+GitHub Actions provide backend regression, mobile regression, web dashboard lint/tests/build, PostgreSQL integration, CodeQL, staging acceptance, blocking dependency audits, disaster-recovery drills, and container release with SBOM/provenance. High/critical npm advisories and any Python advisory block the audit job unless a narrow, reviewed, expiring exception exists.
 
 The repository intentionally keeps the **software release gate** separate from the **clinical validation gate** and **regulatory/privacy gate**.
 
@@ -231,9 +233,13 @@ The repository intentionally keeps the **software release gate** separate from t
 │   └── tests/
 ├── dermcareai/
 │   └── src/
+├── webapp/
+│   └── src/
 ├── docs/
 │   ├── assets/
 │   ├── ai-validation/
+│   ├── DEPENDENCY_SECURITY.md
+│   ├── PRIVACY_OPERATIONS.md
 │   ├── WAVE3_PRODUCTION_RELEASE.md
 │   ├── WAVE4_CLINICAL_WORKFLOW.md
 │   └── WAVE5_RELEASE_EVIDENCE_STATUS.md
@@ -256,8 +262,8 @@ powershell -ExecutionPolicy Bypass -File .\setup-dev.ps1
 
 This script will:
 
-- create `backend/.venv` if it does not exist;
-- install the Python requirements from `backend/requirements.txt`;
+- create `backend/.venv` with Python 3.12 if it does not exist;
+- install the hash-locked Python 3.12 backend requirements from `backend/requirements.lock`;
 - copy `webapp/.env.example` to `webapp/.env` when needed;
 - install the frontend dependencies from `webapp/package.json` with `npm ci` when a lockfile is present.
 
@@ -293,6 +299,8 @@ npm run lint
 npm test -- --run
 npm run build
 ```
+
+Backend runtime dependencies install from the committed, hash-pinned Python 3.12 lock. Refresh both backend locks with the commands in [Dependency security](docs/DEPENDENCY_SECURITY.md) when updating dependencies.
 
 ### Local PostgreSQL staging
 
@@ -332,11 +340,11 @@ An automated disaster-recovery drill is also included in GitHub Actions.
 
 ## Security
 
-Production controls include Firebase authentication, server-side RBAC, tenant-aware authorization, consent enforcement for clinical media, decoded/MIME-verified clinical image uploads, signed server-mediated object uploads, no client-side Cloudinary secret, rate limiting on privileged/high-cost endpoints, captured-event/payment-status validation plus idempotent settlement, canonical pharmacy expiry + FEFO ordering, prescription/patient linkage enforcement, hash-chained audit records, fail-closed production CORS, PostgreSQL production enforcement, CodeQL, dashboard/backend/mobile dependency gates, and SBOM/provenance-enabled container releases.
+Production controls include Firebase authentication, server-side RBAC, tenant-aware authorization, consent enforcement for clinical media, decoded/MIME-verified clinical image uploads, signed server-mediated object uploads, no client-side Cloudinary secret, rate limiting on privileged/high-cost endpoints, captured-event/payment-status validation plus idempotent settlement, canonical pharmacy expiry + FEFO ordering, prescription/patient linkage enforcement, hash-chained audit records, fail-closed production CORS, PostgreSQL production enforcement, a privacy-policy readiness gate, CodeQL, dashboard/backend/mobile dependency gates, and SBOM/provenance-enabled container releases. See [SECURITY.md](SECURITY.md) for private vulnerability reporting and [Privacy operations](docs/PRIVACY_OPERATIONS.md) for patient-data request and incident procedures.
 
 ## Dependency security
 
-The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts for the mobile app, web dashboard, and backend. Remediable npm high/critical findings and any pip-audit finding fail the release-gating job. The current Expo/node-forge build-tooling advisory is explicitly tracked as upstream-unfixed and limited to CLI/code-signing tooling; it is the documented exception to the mobile gate and does not represent a dashboard runtime vulnerability. The final dashboard audit in the PR #212 release wave reported zero vulnerabilities.
+The dependency audit workflow produces machine-readable reports for mobile, web dashboard, runtime Python, and CI Python dependencies. High/critical npm findings and all Python findings block the audit workflow unless covered by an owner-assigned exception with an expiry date. The currently documented Expo build-tooling exceptions are advisory-specific, time-limited, and do not represent dashboard runtime vulnerabilities. See [Dependency security](docs/DEPENDENCY_SECURITY.md) and [production dependency findings](docs/PRODUCTION_DEPENDENCY_SECURITY.md).
 
 ## Clinical / regulatory boundary
 
@@ -355,10 +363,10 @@ Official references:
 Use `docs/ai-validation/release-manifest.template.json` and validate a completed evidence package with:
 
 ```bash
-python backend/scripts/validate_ai_release_manifest.py docs/ai-validation/release-manifest.json
+python backend/scripts/validate_ai_release_manifest.py path/to/release-manifest.json
 ```
 
-Do **not** enter estimated or invented clinical performance values.
+Do **not** enter estimated or invented clinical performance values. Structural validation is not proof of scientific validity. Production AI stays disabled by default and requires an approved evidence manifest whose model name, version, and artifact digest match the active deployment.
 
 Minimum evidence includes frozen model artifact, locked test set, sensitivity/specificity, PPV/NPV where appropriate, ROC-AUC/PR-AUC where appropriate, calibration, subgroup analysis, OOD behavior, abstention performance, clinician override analysis, independent/external validation and accountable approval.
 

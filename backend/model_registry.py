@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
+from ai_release_evidence import validate_ai_release_manifest
+
 MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", "models/registry.json"))
 
 DEFAULT_REGISTRY: Dict[str, Any] = {
@@ -125,4 +127,20 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
         actual = sha256(Path(model_dir) / expected_file) if (Path(model_dir) / expected_file).is_file() else None
         if not actual or actual.lower() != str(deployment.get("artifact_sha256") or "").lower():
             return False, "Active production model artifact hash does not match the approved registry record"
+
+    manifest_path = os.getenv("AI_VALIDATION_MANIFEST_PATH", "").strip()
+    if not manifest_path:
+        return False, "AI_VALIDATION_MANIFEST_PATH must point to the approved clinical evidence package"
+    try:
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return False, f"Clinical AI evidence package cannot be read: {exc}"
+    evidence_problems = validate_ai_release_manifest(
+        manifest,
+        expected_model_name=str(deployment.get("model_name") or ""),
+        expected_model_version=str(deployment.get("version") or ""),
+        expected_artifact_sha256=str(deployment.get("artifact_sha256") or ""),
+    )
+    if evidence_problems:
+        return False, "Clinical AI evidence package is incomplete or does not match the active model: " + "; ".join(evidence_problems[:4])
     return True, "approved"

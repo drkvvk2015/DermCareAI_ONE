@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: 24
           cache: npm
           cache-dependency-path: |
             dermcareai/package-lock.json
@@ -25,147 +25,30 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install Python audit tool
-        run: python -m pip install --upgrade pip pip-audit
-      - name: Generate npm audit report
-        working-directory: dermcareai
+      - name: Install locked Python audit tools
+        run: python -m pip install --require-hashes -r backend/requirements-ci.lock
+      - name: Audit locked application dependencies
+        shell: bash
         run: |
           set +e
-          npm audit --json > ../npm-audit.json
-          echo "$?" > ../npm-audit.exitcode
-      - name: Generate web dashboard npm audit report
-        working-directory: webapp
-        run: |
-          set +e
-          npm audit --json > ../webapp-npm-audit.json
-          echo "$?" > ../webapp-npm-audit.exitcode
-      - name: Generate Python audit report
-        working-directory: backend
-        run: |
-          set +e
-          pip-audit -r requirements.txt --format json > ../pip-audit.json
-          echo "$?" > ../pip-audit.exitcode
-      - name: Enforce dependency release gate
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          failures = []
-
-          # GHSA-86w9-cpqp-85rv (CVE-2026-85393) is an upstream-unfixed
-          # node-forge RSA verification advisory. It currently enters only through
-          # Expo CLI/code-signing build tooling, so it remains documented but does
-          # not block the release gate until upstream publishes a fixed npm release.
-          allowed_upstream_unfixed = {"GHSA-86w9-cpqp-85rv", "GHSA-vfj7-8cjw-p6xm"}
-
-          def root_advisory_urls(vulnerabilities, name, seen=None):
-              seen = set() if seen is None else seen
-              if name in seen:
-                  return set()
-              seen.add(name)
-              item = vulnerabilities.get(name, {})
-              urls = set()
-              for via in item.get("via", []) or []:
-                  if isinstance(via, dict):
-                      if via.get("url"):
-                          urls.add(via["url"])
-                  elif isinstance(via, str) and via in vulnerabilities:
-                      urls.update(root_advisory_urls(vulnerabilities, via, seen))
-              return urls
-
-          def check_npm_report(label, report_path, allowed_ids):
-              path = Path(report_path)
-              if not path.exists():
-                  failures.append("{} npm audit report is missing".format(label))
-                  return
-              try:
-                  report = json.loads(path.read_text())
-              except json.JSONDecodeError as exc:
-                  failures.append("{} npm audit JSON could not be parsed: {}".format(label, exc))
-                  return
-              vulnerabilities = report.get("vulnerabilities")
-              if not isinstance(vulnerabilities, dict):
-                  failures.append("{} npm audit did not return a vulnerability map".format(label))
-                  return
-              blocking = []
-              documented = []
-              for name, item in vulnerabilities.items():
-                  severity = str(item.get("severity", "")).lower()
-                  if severity not in {"high", "critical"}:
-                      continue
-                  advisories = root_advisory_urls(vulnerabilities, name)
-                  ids = {
-                      advisory_id
-                      for advisory_id in allowed_ids
-                      if any(advisory_id in url for url in advisories)
-                  }
-                  if advisories and ids and all(
-                      any(advisory_id in url for advisory_id in ids)
-                      for url in advisories
-                  ):
-                      documented.append(name)
-                  else:
-                      blocking.append("{}:{}".format(name, severity))
-              if blocking:
-                  failures.append(
-                      "{} npm high/critical findings: {}".format(label, ", ".join(sorted(blocking)))
-                  )
-              if documented:
-                  print(
-                      "{} non-blocking upstream-unfixed build-tooling advisories: {}".format(
-                          label, ", ".join(sorted(documented))
-                      )
-                  )
-
-          check_npm_report("mobile", "npm-audit.json", allowed_upstream_unfixed)
-          check_npm_report("web-dashboard", "webapp-npm-audit.json", set())
-
-          pip_path = Path("pip-audit.json")
-          if pip_path.exists():
-              try:
-                  pip = json.loads(pip_path.read_text())
-                  dependencies = pip.get("dependencies")
-                  if not isinstance(dependencies, list):
-                      failures.append("pip-audit JSON did not contain a dependencies array")
-                  else:
-                      total = sum(
-                          len(item.get("vulns", []))
-                          for item in dependencies
-                          if isinstance(item, dict)
-                      )
-                      if total:
-                          failures.append(f"pip-audit findings: {total}")
-              except (json.JSONDecodeError, TypeError) as exc:
-                  failures.append(f"pip-audit JSON could not be parsed: {exc}")
-          else:
-              failures.append("pip-audit report is missing")
-
-          summary = [
-              "mobile npm audit exit code: {}".format(Path("npm-audit.exitcode").read_text().strip() if Path("npm-audit.exitcode").exists() else "missing"),
-              "web-dashboard npm audit exit code: {}".format(Path("webapp-npm-audit.exitcode").read_text().strip() if Path("webapp-npm-audit.exitcode").exists() else "missing"),
-              "pip-audit exit code: {}".format(Path("pip-audit.exitcode").read_text().strip() if Path("pip-audit.exitcode").exists() else "missing"),
-          ]
-          if failures:
-              summary.extend(f"BLOCKING: {failure}" for failure in failures)
-              Path("dependency-audit-summary.txt").write_text("\n".join(summary) + "\n")
-              print("\n".join(summary))
-              raise SystemExit(1)
-
-          summary.append("Dependency release gate passed: no remediable high/critical findings detected; documented upstream-unfixed build-tooling advisories remain non-blocking.")
-          Path("dependency-audit-summary.txt").write_text("\n".join(summary) + "\n")
-          print("\n".join(summary))
-          PY
-      - name: Upload dependency audit evidence
-        if: ${{ always() }}
+          (cd dermcareai && npm audit --json > ../npm-audit-mobile.json)
+          (cd webapp && npm audit --json > ../npm-audit-webapp.json)
+          pip-audit -r backend/requirements.lock --format=json > pip-audit-runtime.json
+          pip-audit -r backend/requirements-ci.lock --format=json > pip-audit-ci.json
+          set -e
+          python backend/scripts/enforce_dependency_audit.py \
+            --mobile npm-audit-mobile.json \
+            --webapp npm-audit-webapp.json \
+            --python-runtime pip-audit-runtime.json \
+            --python-ci pip-audit-ci.json
+      - name: Upload dependency audit reports
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: dermcareai-dependency-audit
+          if-no-files-found: warn
           path: |
-            npm-audit.json
-            npm-audit.exitcode
-            webapp-npm-audit.json
-            webapp-npm-audit.exitcode
-            pip-audit.json
-            pip-audit.exitcode
-            dependency-audit-summary.txt
+            npm-audit-mobile.json
+            npm-audit-webapp.json
+            pip-audit-runtime.json
+            pip-audit-ci.json

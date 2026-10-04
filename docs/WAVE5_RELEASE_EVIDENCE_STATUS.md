@@ -8,6 +8,7 @@ This document separates automated software evidence from clinical, regulatory an
 |---|---|---|
 | Backend regression | PASS | GitHub Actions |
 | Mobile TypeScript/export | PASS | GitHub Actions |
+| Web dashboard lint/tests/build | GATE CONFIGURED | Pull request workflow includes the independent Vite dashboard |
 | CodeQL | PASS | GitHub Actions |
 | PostgreSQL integration | PASS | PostgreSQL staging gate |
 | Clinical API workflow | PASS | Clinical E2E tests |
@@ -18,18 +19,18 @@ This document separates automated software evidence from clinical, regulatory an
 | Tenant isolation | PASS | Clinical E2E tests |
 | Backup/restore automation | READY | Monthly DR workflow |
 | Staging acceptance | PASS in current release gating | Docker staging workflow; current hotfix gate passed build, schema init and clinical acceptance |
-| Dependency audit | GATED | Mobile + dashboard npm audits and pip-audit; remediable high/critical findings block release, with exact documented upstream-unfixed build-tooling exceptions only where applicable |
-| Python dependency audit | PASS | pip-audit reports no known vulnerabilities after removal of unused python-jose |
+| Dependency audit | GATED | Locked mobile + dashboard npm and Python audits; high/critical npm and any Python findings block unless a narrow, reviewed, expiring exception exists |
+| Python dependency resolution | LOCKED | Python 3.12 runtime and CI graphs now pin transitive versions and hashes; branch CI/audit will report current findings |
 | Mobile toolchain | HARDENED | Expo SDK 57 / React Native 0.86.3 migration candidate passed Expo Doctor and generated a synchronized lockfile |
 | Mobile lockfile synchronization | PASS | CI-generated package-lock is synchronized with package.json after SDK 57 migration |
 | Mobile CI toolchain | PASS | Node 24 / npm 11.19.0 successfully performs clean `npm ci` |
 | SBOM/provenance | ENABLED | Container release workflow |
-| Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation |
-| Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence |
-| AI calibration/subgroup/OOD evidence | NOT ESTABLISHED | Evidence manifest required |
+| Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation; no results are recorded here |
+| Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence; no results are recorded here |
+| AI calibration/subgroup/OOD evidence | NOT ESTABLISHED | Evidence manifest and actual evaluation results required |
 | Regulatory classification | PENDING FORMAL ASSESSMENT | Depends on intended use, claims and deployment |
-| Production cloud deployment | READY FOR ENVIRONMENT SETUP | Requires organization secrets, infrastructure and accountable release approval |
-| Privacy operational program | PARTIAL | Technical controls exist; organizational policies and rights workflows still require implementation |
+| Production cloud deployment | NOT DEPLOYED | Requires organization secrets, infrastructure and accountable release approval |
+| Privacy operational program | PARTIAL | [Operational runbook](PRIVACY_OPERATIONS.md) added; clinic owners must approve retention, export, deletion, and incident processes. Automated full export/deletion/retention remains unimplemented |
 | Guardrailed CI auto-repair proposals | ENABLED | Failure classification + repair evidence; human-reviewed merge required |
 
 ## Clinical / AI release evidence that must not be fabricated

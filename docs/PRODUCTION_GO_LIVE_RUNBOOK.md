@@ -11,10 +11,14 @@ Set these values in the deployment secret manager; never commit them to Git:
 - `APP_ENV=production`
 - `APP_VERSION=<release-version>`
 - `FIREBASE_AUTH_REQUIRED=true`
+- `PRIVACY_OPERATIONS_APPROVED=true` only after the accountable clinic privacy lead completes the [privacy operations readiness checklist](PRIVACY_OPERATIONS.md).
+- `PRIVACY_POLICY_VERSION=<approved clinic policy revision>` matching the policy used for the deployment.
 - `DATABASE_URL=postgresql+psycopg://...`
 - `CORS_ORIGINS=https://approved-clinic-origin,...`
 - Firebase credentials through service-account JSON, workload identity/ADC, or equivalent Google Cloud identity.
 - `ENABLE_EMBEDDED_DERM_MODEL=false`
+- `AI_ENABLED_IN_PRODUCTION=false` unless all independent clinical evidence and accountable approvals are complete.
+- `AI_VALIDATION_MANIFEST_PATH=<read-only mounted approved evidence manifest>` when production AI is explicitly enabled.
 - `MIN_CONFIDENCE` within `[0,1]`.
 - `MAX_IMAGE_BYTES` within the approved operational limit.
 
@@ -29,7 +33,7 @@ python scripts/production_preflight.py
 python scripts/production_preflight.py --json
 ```
 
-The preflight fails closed on production CORS wildcard use, SQLite persistence, disabled Firebase enforcement, placeholder database credentials, invalid confidence/image limits, or the embedded research model being enabled.
+The preflight fails closed on production CORS wildcard use, SQLite persistence, disabled Firebase enforcement, placeholder database credentials, invalid confidence/image limits, or the embedded research model being enabled. If production AI is enabled, it also requires a structurally complete approved evidence manifest; application startup checks that its model name, version, and artifact digest match the active model-registry deployment.
 
 The check never prints secret values.
 
@@ -83,7 +87,7 @@ Do not enable a channel merely because its environment variables exist; confirm 
 
 ## 7. AI boundary
 
-The embedded HAM10000 research fallback is not a clinically validated diagnostic model. Production clinical use therefore requires the independent AI evidence package documented in `docs/WAVE5_RELEASE_EVIDENCE_STATUS.md`.
+The embedded HAM10000 research fallback is not a clinically validated diagnostic model. Production clinical use therefore requires the independent AI evidence package documented in `docs/WAVE5_RELEASE_EVIDENCE_STATUS.md`. The evidence manifest is a structural release control; a valid manifest alone does not establish clinical validity or regulatory approval.
 
 The application must retain clinician review and sign-off controls, including abstention for unsafe/low-quality inputs.
 
