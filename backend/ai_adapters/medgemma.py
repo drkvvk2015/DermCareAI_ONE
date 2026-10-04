@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,18 +19,32 @@ class MedGemmaConfig:
     temperature: float
 
 
-class MedGemmaAdapter:
-    """Opt-in adapter for MedGemma 1.5 4B.
+_IMMUTABLE_REVISION_RE = __import__("re").compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
-    This adapter is deliberately disabled unless explicitly enabled. It produces
-    preliminary assistive output only; it never marks an assessment as a
-    diagnosis, treatment recommendation, or clinician-approved result.
+
+def _validated_revision(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized or not _IMMUTABLE_REVISION_RE.fullmatch(normalized.lower()):
+        return None
+    return normalized
+
+
+class MedGemmaAdapter:
+    """Opt-in physician-decision-support adapter for MedGemma.
+
+    The adapter is fail-closed in production unless the model revision is an
+    immutable commit/digest. It produces suggestions only and never signs a
+    diagnosis, prescribes, orders care, or edits signed records.
     """
 
     def __init__(self) -> None:
-        revision = os.getenv("MEDGEMMA_REVISION") or None
+        requested_revision = os.getenv("MEDGEMMA_REVISION") or None
+        revision = _validated_revision(requested_revision)
         enabled = os.getenv("ENABLE_MEDGEMMA", "false").lower() == "true"
-        if os.getenv("APP_ENV", "development").lower() == "production" and enabled and not revision:
+        production = os.getenv("APP_ENV", "development").lower() == "production"
+        if production and enabled and revision is None:
             enabled = False
         self.config = MedGemmaConfig(
             model_id=os.getenv("MEDGEMMA_MODEL_ID", "google/medgemma-1.5-4b-it"),
@@ -41,6 +56,7 @@ class MedGemmaAdapter:
         self._processor: Any | None = None
         self._model: Any | None = None
         self._error: str | None = None
+        self._load_lock = threading.Lock()
         if not self.config.enabled:
             self._error = "disabled_by_configuration"
 
@@ -58,24 +74,27 @@ class MedGemmaAdapter:
         }
 
     def load(self) -> bool:
-        if not self.config.enabled:
-            self._error = "disabled_by_configuration"
-            return False
-        try:
-            from transformers import AutoModelForImageTextToText, AutoProcessor
-
-            kwargs: dict[str, Any] = {}
-            if self.config.revision:
-                kwargs["revision"] = self.config.revision
-            self._processor = AutoProcessor.from_pretrained(self.config.model_id, **kwargs)
-            self._model = AutoModelForImageTextToText.from_pretrained(self.config.model_id, **kwargs)
-            self._error = None
+        if self.available:
             return True
-        except Exception as exc:
-            self._processor = None
-            self._model = None
-            self._error = str(exc)
+        if not self.config.enabled or self.config.revision is None:
+            self._error = "disabled_or_unpinned_revision"
             return False
+        with self._load_lock:
+            if self.available:
+                return True
+            try:
+                from transformers import AutoModelForImageTextToText, AutoProcessor
+
+                kwargs: dict[str, Any] = {"revision": self.config.revision}
+                self._processor = AutoProcessor.from_pretrained(self.config.model_id, **kwargs)
+                self._model = AutoModelForImageTextToText.from_pretrained(self.config.model_id, **kwargs)
+                self._error = None
+                return True
+            except Exception as exc:
+                self._processor = None
+                self._model = None
+                self._error = str(exc)
+                return False
 
     def review(self, image_bytes: bytes, clinical_context: str) -> dict[str, Any]:
         if not self.available:
@@ -93,7 +112,7 @@ class MedGemmaAdapter:
             f"Clinical context: {clinical_context.strip()[:4000]}"
         )
         messages = [{"role": "user", "content": [
-            {"type": "image"},
+            {"type": "image", "image": image},
             {"type": "text", "text": prompt},
         ]}]
         inputs = self._processor.apply_chat_template(
@@ -119,8 +138,12 @@ class MedGemmaAdapter:
             "artifact_sha256": None,
             "image_sha256": image_sha256,
             "output": text,
-            "clinical_use": "preliminary_assistive_only",
+            "clinical_use": "suggestion_only",
+            "diagnostic_status": "not_a_diagnosis",
+            "decision_authority": "treating_physician",
             "requires_clinician_verification": True,
             "can_sign_diagnosis": False,
             "can_prescribe": False,
+            "can_order": False,
+            "can_modify_signed_record": False,
         }
