@@ -40,6 +40,8 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
   const [aiReviews, setAIReviews] = useState<ClinicalAIReview[]>([]);
   const [aiOverrideLabel, setAIOverrideLabel] = useState('');
   const [aiReviewingId, setAIReviewingId] = useState<string | null>(null);
+  const [assistResult, setAssistResult] = useState<Awaited<ReturnType<typeof encounterApi.clinicalAssistDifferential>> | null>(null);
+  const [assistLoading, setAssistLoading] = useState(false);
   const [lesionHistory, setLesionHistory] = useState<Array<Record<string, unknown>>>([]);
 
   const readForm = (record: ClinicalEncounter) => {
@@ -162,6 +164,33 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
     }
   };
 
+  const runClinicalAssist = async () => {
+    if (!encounter || signed) return;
+    setAssistLoading(true);
+    try {
+      const result = await encounterApi.clinicalAssistDifferential(encounter.id, {
+        primaryMorphology,
+        secondaryChanges: surface ? [surface] : [],
+        color,
+        border,
+        surface,
+        distribution,
+        symptoms: [pruritus, pain].filter(Boolean),
+        durationDays: Number.isFinite(Number(onsetDuration)) ? Number(onsetDuration) : undefined,
+        fever: /fever/i.test(systemicSymptoms),
+        pain: /pain/i.test(pain),
+        pruritus: /itch|pruritus/i.test(pruritus),
+        systemicRedFlags: systemicSymptoms.split(',').map(item => item.trim()).filter(Boolean),
+      });
+      setAssistResult(result);
+      setSnack(result.abstained ? 'Clinical assist abstained; review manually.' : 'Clinical assist generated suggestions for review.');
+    } catch (err) {
+      setSnack(err instanceof Error ? err.message : 'Clinical assist unavailable');
+    } finally {
+      setAssistLoading(false);
+    }
+  };
+
   const openAIScreening = () => {
     if (!encounter) return;
     navigation.navigate('Screening', { patient, encounterId: encounter.id });
@@ -245,7 +274,47 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
         </Card>
 
         <Card>
-          <Card.Title title="AI decision-support" subtitle="Attach results to this encounter for human review" />
+          <Card.Title title="Clinical AI Assist" subtitle="Assistive suggestions only — not a diagnosis" />
+          <Card.Content>
+            <Text style={styles.meta}>
+              The assistive engine never signs, diagnoses, prescribes, or silently changes the clinical record.
+              Review the suggestions clinically before entering anything into the assessment.
+            </Text>
+            <Button
+              mode="contained-tonal"
+              icon="brain"
+              onPress={() => void runClinicalAssist()}
+              loading={assistLoading}
+              disabled={signed || assistLoading || !primaryMorphology.trim()}
+              style={styles.button}
+            >
+              Generate Clinical Assist
+            </Button>
+            {assistResult ? (
+              <View style={styles.assistBox}>
+                <Chip icon={assistResult.abstained ? 'alert-circle' : 'information'}>
+                  {assistResult.abstained ? 'Abstained' : 'Assistive output'}
+                </Chip>
+                {assistResult.safety.urgent_review ? (
+                  <Text style={styles.warningText}>Urgent review flag: {assistResult.safety.reason}</Text>
+                ) : null}
+                {assistResult.candidates.map(candidate => (
+                  <View key={candidate.label} style={styles.assistItem}>
+                    <Text variant="titleSmall">{candidate.label}</Text>
+                    <Text style={styles.meta}>Support score: {candidate.support_score} (not a probability)</Text>
+                    {candidate.missing_information.length ? (
+                      <Text style={styles.meta}>Consider documenting: {candidate.missing_information.join(', ')}</Text>
+                    ) : null}
+                  </View>
+                ))}
+                <Text style={styles.meta}>{assistResult.disclaimer}</Text>
+              </View>
+            ) : null}
+          </Card.Content>
+        </Card>
+
+        <Card>
+          <Card.Title title="AI decision-support" subtitle="Attach diagnostic-model results to this encounter for human review" />
           <Card.Content>
             <Button mode="outlined" icon="camera" onPress={openAIScreening} disabled={signed || aiAttaching}>
               Open Clinical Image Screening
@@ -326,6 +395,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10, marginTop: 10 },
   half: { flex: 1 },
   aiBlock: { paddingVertical: 4 },
+  assistBox: { marginTop: 12, padding: 12, borderRadius: 8 },
+  assistItem: { marginTop: 10 },
+  warningText: { marginTop: 10, fontWeight: '600' },
   historyBox: { marginTop: 12, padding: 12, borderRadius: 8 },
   historyItem: { marginTop: 8, opacity: 0.8 },
   actions: { paddingBottom: 32, gap: 10 },
