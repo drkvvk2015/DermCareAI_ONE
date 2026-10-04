@@ -44,7 +44,7 @@ The release model deliberately separates **software validation**, **clinical/AI 
 
 ## Production hardening — 1 October 2026
 
-PR #206 contains the current security/reliability hardening wave. It addresses the ten-item audit set covering composite tenant isolation, bounded image uploads, trusted-proxy rate limiting, redacted public health checks, dependency-audit release gating, a real vulnerability-reporting process, bounded/off-event-loop AI inference, durable notification outbox processing, regression tests, and staging network/runtime hardening.
+PR #212 contains the current security/reliability hardening wave and supersedes PR #211. It addresses the ten-item audit set covering composite tenant isolation, bounded image uploads, trusted-proxy rate limiting, redacted public health checks, dependency-audit release gating, a real vulnerability-reporting process, bounded/off-event-loop AI inference, durable notification outbox processing, regression tests, and staging network/runtime hardening.
 
 The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI.
 
@@ -159,7 +159,7 @@ The final engineering swarm has now been integrated as three independently valid
 | CodeQL | ✅ Automated |
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
-| Dependency audit | ✅ Release-gated: npm high/critical findings block; any pip-audit finding blocks; full JSON reports retained as CI artifacts |
+| Dependency audit | ✅ Release-gated: remediable npm high/critical findings block; the documented upstream-unfixed node-forge build-tooling advisory is tracked but non-blocking; any pip-audit finding blocks; full JSON reports retained as CI artifacts |
 | SBOM/provenance | ✅ Container workflow enabled |
 | Independent AI clinical validation | ✅ External clinical-validation gate, separate from repository engineering sign-off |
 | Prospective clinical validation | ✅ External prospective validation gate for intended clinical use |
@@ -324,7 +324,7 @@ Production controls include Firebase authentication, server-side RBAC, tenant-aw
 
 ## Dependency security
 
-The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. npm high/critical findings and any pip-audit finding fail the release-gating job; lower-severity npm findings remain visible in the artifact without being promoted to a blocking failure.
+The dependency audit workflow produces machine-readable npm and Python vulnerability reports as CI artifacts. Remediable npm high/critical findings and any pip-audit finding fail the release-gating job. The current node-forge RSA verification advisory is explicitly tracked as upstream-unfixed and limited to Expo CLI/code-signing build tooling; it does not block the clinical runtime release gate. Lower-severity npm findings remain visible in the artifact without being promoted to a blocking failure.
 
 ## Clinical / regulatory boundary
 

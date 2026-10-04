@@ -1,4 +1,3 @@
-import SHA256 from 'crypto-js/sha256';
 import { getAuth } from '@react-native-firebase/auth';
 import { API_URL } from '@env';
 
@@ -35,7 +34,7 @@ export const clinicApi = {
   },
   sendRegistrationNotification(
     payload: { patient_name: string; phone: string; appointment_text: string; channels: string[] },
-    idempotencyKey: string = `registration-${SHA256(JSON.stringify(payload)).toString()}`,
+    idempotencyKey: string,
   ) {
     return request('/notifications/registration', {
       method: 'POST',

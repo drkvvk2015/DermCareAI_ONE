@@ -13,7 +13,7 @@
     "@expo/metro-runtime": "~57.0.16",
     "@firebase/auth": "^1.13.6",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-community/datetimepicker": "9.1.0",
+    "@react-native-community/datetimepicker": "9.2.1",
     "@react-native-firebase/app": "26.4.0",
     "@react-native-firebase/auth": "26.4.0",
     "@react-native-firebase/firestore": "26.4.0",
@@ -70,6 +70,11 @@
       "appConfigFieldsNotSyncedCheck": {
         "enabled": false
       }
+    }
+  },
+  "overrides": {
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.14.5"
     }
   }
 }
