@@ -7,7 +7,6 @@ from enum import Enum
 
 class DiagnosticMode(str, Enum):
     DISABLED = "disabled"
-    SHADOW = "shadow"
     CLINICAL = "clinical"
 
 
