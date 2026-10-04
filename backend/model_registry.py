@@ -40,13 +40,12 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
     },
 }
 
-
 MODEL_TO_FILE = {
     "melanoma_binary": "melanoma_classifier.pth",
     "skin_lesion_7class": "FinetunedNasNetMobile.keras",
 }
- 
- 
+
+
 def load_registry() -> Dict[str, Any]:
     if not MODEL_REGISTRY_PATH.exists():
         return DEFAULT_REGISTRY
@@ -66,8 +65,6 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
     root = Path(model_dir)
     results: Dict[str, Any] = {}
     for key, spec in registry.get("models", {}).items():
-        # Repository-backed models are metadata-only entries until their
-        # local cache is explicitly materialized and checksum-pinned.
         if not spec.get("file"):
             results[key] = {
                 "repository": spec.get("repository"),
@@ -99,9 +96,16 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
 
 
 def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "development") -> tuple[bool, str]:
-    """Require an approved, active, non-research AI deployment in production."""
+    """Check diagnostic-artifact eligibility while honoring the physician-final policy."""
     if app_env.lower() != "production":
         return True, "non-production"
+
+    # This application is a suggestion-only Clinical AI Copilot. The same
+    # policy that disables diagnostic execution must therefore gate the model
+    # loader, so an approved artifact can never be activated through /predict.
+    from clinical_ai_policy import diagnostic_clinical_activation_allowed
+    if not diagnostic_clinical_activation_allowed():
+        return False, "Production diagnostic inference is disabled by the physician-final Clinical AI policy"
 
     try:
         from ai_registry import get_active_production_model
@@ -111,7 +115,6 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
 
     if not deployment:
         return False, "No active production AI deployment is approved"
-
     if int(deployment.get("research_only", 1)):
         return False, "Active production model is marked research-only"
     if not int(deployment.get("validated", 0)):
@@ -124,10 +127,8 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
     configured_manifest = os.getenv("AI_RELEASE_MANIFEST_PATH")
     if configured_manifest:
         manifest_path = Path(configured_manifest)
-    elif app_env.lower() == "production":
-        manifest_path = Path("/var/lib/dermcareai/ai/release-manifest.json")
     else:
-        manifest_path = Path(__file__).resolve().parents[1] / "docs" / "ai-validation" / "release-manifest.json"
+        manifest_path = Path("/var/lib/dermcareai/ai/release-manifest.json")
 
     manifest, manifest_problems = load_validated_manifest(
         manifest_path,
