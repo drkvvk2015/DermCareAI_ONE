@@ -7,7 +7,7 @@ checks and treatment considerations, but it cannot sign a diagnosis, prescribe,
 or modify a signed record.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from clinical_evidence_registry import EvidenceRecord
@@ -69,8 +69,7 @@ class CopilotRecommendation:
 
 def safety_gate(context: PatientContext) -> tuple[bool, str | None, tuple[str, ...]]:
     flags: list[str] = []
-    if context.red_flags:
-        flags.extend(context.red_flags)
+    flags.extend(context.red_flags)
     if context.pregnancy_status is None:
         flags.append("pregnancy status not documented when medication safety may depend on it")
     if context.allergies is None:
@@ -95,7 +94,8 @@ def build_copilot_recommendation(
     evidence: tuple[EvidenceRecord, ...],
 ) -> CopilotRecommendation:
     safe, reason, safety_flags = safety_gate(context)
-    if not safe or not evidence:
+    evidence_current = bool(evidence) and all(item.status == "current" for item in evidence)
+    if not safe or not evidence_current:
         return CopilotRecommendation(
             diagnosis_differential=differential,
             supporting_features=supporting_features,
@@ -103,7 +103,11 @@ def build_copilot_recommendation(
             safety_flags=safety_flags,
             evidence=evidence,
             abstained=True,
-            abstention_reason=reason or "No governed current evidence is available for this recommendation",
+            abstention_reason=reason or (
+                "No governed current evidence is available for this recommendation"
+                if not evidence
+                else "Only current governed evidence may support a clinical recommendation"
+            ),
         )
 
     return CopilotRecommendation(
