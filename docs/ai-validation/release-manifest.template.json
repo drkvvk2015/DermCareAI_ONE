@@ -17,12 +17,12 @@
     "inclusion_exclusion_ref": "EVIDENCE_REFERENCE"
   },
   "metrics": {
-    "sensitivity": {"value": 0.0, "ci95": [0.0, 0.0]},
-    "specificity": {"value": 0.0, "ci95": [0.0, 0.0]},
-    "ppv": {"value": 0.0, "ci95": [0.0, 0.0]},
-    "npv": {"value": 0.0, "ci95": [0.0, 0.0]},
-    "roc_auc": {"value": 0.0, "ci95": [0.0, 0.0]},
-    "pr_auc": {"value": 0.0, "ci95": [0.0, 0.0]}
+    "sensitivity": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
+    "specificity": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
+    "ppv": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
+    "npv": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
+    "roc_auc": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
+    "pr_auc": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]}
   },
   "calibration": {
     "status": "not_started",
@@ -30,26 +30,11 @@
     "result": "RESULT",
     "evidence_ref": "EVIDENCE_REFERENCE"
   },
-  "subgroups": {
-    "status": "not_started",
-    "evidence_ref": "EVIDENCE_REFERENCE"
-  },
-  "ood": {
-    "status": "not_started",
-    "evidence_ref": "EVIDENCE_REFERENCE"
-  },
-  "abstention": {
-    "status": "not_started",
-    "evidence_ref": "EVIDENCE_REFERENCE"
-  },
-  "clinician_review": {
-    "status": "not_started",
-    "evidence_ref": "EVIDENCE_REFERENCE"
-  },
-  "external_validation": {
-    "status": "not_started",
-    "evidence_ref": "EVIDENCE_REFERENCE"
-  },
+  "subgroups": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
+  "ood": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
+  "abstention": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
+  "clinician_review": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
+  "external_validation": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
   "approval": {
     "status": "not_started",
     "approvers": [
