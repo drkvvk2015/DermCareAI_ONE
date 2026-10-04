@@ -20,7 +20,6 @@ from upload_limits import MAX_IMAGE_BYTES, read_upload_limited
 
 router = APIRouter(prefix="/api/v1/clinical-ai", tags=["clinical-ai-assist"])
 
-
 _ALLOWED_IMAGE_FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
 
 
@@ -65,6 +64,24 @@ class DifferentialAssistRequest(BaseModel):
     systemic_red_flags: list[str] = Field(default_factory=list, max_length=20)
 
 
+_SUGGESTION_ONLY_CAPABILITIES = {
+    "requires_clinician_verification": True,
+    "can_sign_diagnosis": False,
+    "can_prescribe": False,
+    "can_order": False,
+    "can_modify_signed_record": False,
+}
+
+
+def _suggestion_only_metadata() -> dict[str, Any]:
+    return {
+        "clinical_use": "suggestion_only",
+        "diagnostic_status": "not_a_diagnosis",
+        "decision_authority": "treating_physician",
+        **_SUGGESTION_ONLY_CAPABILITIES,
+    }
+
+
 @router.get("/capabilities")
 def get_capabilities(_: dict[str, Any] = Depends(require_roles("doctor", "admin", "auditor"))):
     state = capabilities()
@@ -73,10 +90,13 @@ def get_capabilities(_: dict[str, Any] = Depends(require_roles("doctor", "admin"
         "generative_assist_enabled": state.generative_assist_enabled,
         "diagnostic_mode": state.diagnostic_mode.value,
         "production_boundary": {
-            "clinical_assist": "assistive_only",
-            "diagnostic_inference": state.diagnostic_mode.value,
+            "clinical_assist": "suggestion_only",
+            "diagnostic_inference": "disabled",
             "autonomous_diagnosis": False,
             "autonomous_prescribing": False,
+            "autonomous_orders": False,
+            "automatic_signed_record_changes": False,
+            "decision_authority": "treating_physician",
         },
     }
 
@@ -120,13 +140,9 @@ def differential_assist(
 
     payload = {
         "capability": "differential_support",
-        "clinical_use": "preliminary_assistive_only",
-        "diagnostic_status": "not_a_diagnosis",
+        **_suggestion_only_metadata(),
         "model_name": "DermCareAI deterministic clinical-support rules v1",
         "research_model": False,
-        "requires_clinician_verification": True,
-        "can_sign_diagnosis": False,
-        "can_prescribe": False,
         "abstained": result.abstained,
         "safety": {
             "urgent_review": result.safety.urgent_review,
@@ -160,6 +176,7 @@ def differential_assist(
                 "abstained": result.abstained,
                 "urgent_review": result.safety.urgent_review,
                 "candidate_labels": [item.label for item in result.candidates],
+                "decision_authority": "treating_physician",
             },
         ),
         user,
@@ -203,9 +220,7 @@ async def image_quality_assist(
 
     response = {
         "capability": "clinical_image_quality",
-        "clinical_use": "assistive_only",
-        "diagnostic_status": "not_a_diagnosis",
-        "requires_clinician_verification": True,
+        **_suggestion_only_metadata(),
         "quality": {
             "usable": result.quality.usable,
             "reason": result.quality.reason,
@@ -238,6 +253,7 @@ async def image_quality_assist(
                 "capability": "clinical_image_quality",
                 "quality_usable": result.quality.usable,
                 "region_detected": result.region_detected,
+                "decision_authority": "treating_physician",
             },
         ),
         user,
@@ -286,11 +302,7 @@ async def generative_image_review(
     result.update(
         {
             "capability": "generative_image_review",
-            "clinical_use": "preliminary_assistive_only",
-            "diagnostic_status": "not_a_diagnosis",
-            "requires_clinician_verification": True,
-            "can_sign_diagnosis": False,
-            "can_prescribe": False,
+            **_suggestion_only_metadata(),
         }
     )
     record_event(
@@ -305,6 +317,7 @@ async def generative_image_review(
                 "model_id": result.get("model_id"),
                 "revision": result.get("revision"),
                 "image_sha256": result.get("image_sha256"),
+                "decision_authority": "treating_physician",
             },
         ),
         user,
