@@ -6,7 +6,7 @@ import { auth } from '../firebase';
 
 export function useResource<T>(loader: (user: NonNullable<ReturnType<typeof useSession>['user']>) => Promise<T>, key: string) {
   const { user } = useSession();
-  const [data, setData] = useState<T | null>(null);
+  const [resource, setResource] = useState<{ userId: string; key: string; data: T } | null>(null);
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const loaderRef = useRef(loader);
@@ -20,7 +20,7 @@ export function useResource<T>(loader: (user: NonNullable<ReturnType<typeof useS
     setError(undefined);
     try {
       const result = await loaderRef.current(user);
-      if (requestId === requestIdRef.current) setData(result);
+      if (requestId === requestIdRef.current) setResource({ userId: user.uid, key, data: result });
     } catch (reason) {
       if (requestId === requestIdRef.current) {
         setError(reason);
@@ -29,11 +29,16 @@ export function useResource<T>(loader: (user: NonNullable<ReturnType<typeof useS
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [user]);
+  }, [user, key]);
 
   useEffect(() => {
     void reload();
     return () => { requestIdRef.current += 1; };
   }, [reload, key]);
-  return { data, error, loading, reload };
+  return {
+    data: user && resource?.userId === user.uid && resource.key === key ? resource.data : null,
+    error,
+    loading,
+    reload,
+  };
 }
