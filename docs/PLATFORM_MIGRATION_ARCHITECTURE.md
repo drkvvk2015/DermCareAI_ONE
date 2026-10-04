@@ -1,0 +1,1 @@
+DermCareAI platform direction: PWA is the core application; Capacitor is the native runtime for Android/iOS; FastAPI remains the backend. No new Expo/React-Native development is permitted during migration.
