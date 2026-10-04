@@ -32,6 +32,14 @@ This document separates automated software evidence from clinical, regulatory an
 | Privacy operational program | PARTIAL | Technical controls exist; organizational policies and rights workflows still require implementation |
 | Guardrailed CI auto-repair proposals | ENABLED | Failure classification + repair evidence; human-reviewed merge required |
 
+## Clinical AI evidence-gate hardening — 4 October 2026
+
+The repository now enforces the 15-item clinical-AI activation contract in software: production eligibility requires a schema-v2 evidence manifest, exact model/version/SHA-256 binding, locked-dataset provenance, quantitative metrics with confidence intervals, completed calibration/subgroup/OOD/abstention/clinician-review/external-validation evidence, traceable accountable approvals, governance review records, and staging/rollback evidence. The gate is deliberately fail-closed when the evidence package is absent or incomplete.
+
+This does **not** create clinical evidence. The current repository still has no completed production evidence manifest, and clinical AI remains disabled until the real artifact, validation dataset/results, accountable approvals, and applicable regulatory/privacy reviews exist.
+
+For India, the compliance review should use the current CDSCO Medical Device Software guidance and applicable MDR-2017 framework, plus the notified DPDP Rules 2025 and their staged commencement timeline. See the official references linked in this document and the production evidence checklist.
+
 ## Clinical / AI release evidence that must not be fabricated
 
 The repository intentionally does **not** claim:
