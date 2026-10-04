@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from ai_release_evidence import validate_manifest_file
+from ai_release_evidence import load_validated_manifest
 
 MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", "models/registry.json"))
 
@@ -121,16 +121,21 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
     if deployment.get("deployment_status") != "active":
         return False, "Production model deployment is not active"
 
-    manifest_path = Path(os.getenv("AI_RELEASE_MANIFEST_PATH", "docs/ai-validation/release-manifest.json"))
-    manifest_ok, manifest_problems = validate_manifest_file(
+    configured_manifest = os.getenv("AI_RELEASE_MANIFEST_PATH")
+    if configured_manifest:
+        manifest_path = Path(configured_manifest)
+    elif app_env.lower() == "production":
+        manifest_path = Path("/var/lib/dermcareai/ai/release-manifest.json")
+    else:
+        manifest_path = Path(__file__).resolve().parents[1] / "docs" / "ai-validation" / "release-manifest.json"
+
+    manifest, manifest_problems = load_validated_manifest(
         manifest_path,
         model_dir=model_dir,
         require_artifact=True,
     )
-    if not manifest_ok:
+    if manifest is None:
         return False, "Clinical AI release evidence package is not valid: " + "; ".join(manifest_problems[:4])
-
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     model_name = str(deployment.get("model_name") or "")
     manifest_model = manifest.get("model", {})
     if manifest_model.get("name") != model_name:
