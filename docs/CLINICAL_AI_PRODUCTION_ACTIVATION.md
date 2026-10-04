@@ -2,11 +2,11 @@
 
 ## Production strategy
 
-DermCareAI uses tiered clinical-AI activation.
+DermCareAI uses a strict physician-final Clinical AI Copilot boundary. The production application exposes assistive suggestions only; diagnostic inference is not an application-level production capability.
 
 ### Lane A — Clinical Assist
 
-This lane is intended for clinician-support functions that do not autonomously diagnose, prescribe, or sign an encounter.
+This lane is intended for clinician-support functions that do not autonomously diagnose, prescribe, order, sign, or modify a signed encounter.
 
 Available capabilities:
 
@@ -25,19 +25,15 @@ ENABLE_CLINICAL_ASSIST_AI=true
 AI_DIAGNOSTIC_MODE=disabled
 ```
 
-### Lane B — Controlled evaluation (not a production clinical switch)
+### Lane B — Controlled evaluation
 
-The repository does not expose a live-patient diagnostic shadow switch in production. A shadow evaluation should be run as a separate, approved evaluation deployment with explicit data-governance, privacy and reference-label controls. This avoids accidentally treating live patient inference as clinical validation merely by changing an environment variable.
+The repository does not expose a live-patient diagnostic shadow switch. Diagnostic evaluation must be a separate, approved evaluation deployment with explicit data-governance, privacy, reference-label, clinical-validation, and rollback controls. It must not be activated by changing a production application environment variable.
 
-### Lane C — Diagnostic clinical mode
+### Lane C — Governed diagnostic development/evaluation boundary
 
-Use:
+The application policy deliberately has **no executable diagnostic activation switch**. `AI_DIAGNOSTIC_MODE=clinical` is not a supported production activation path and cannot enable diagnostic inference.
 
-```text
-AI_DIAGNOSTIC_MODE=clinical
-```
-
-only after the strict evidence manifest, exact artifact binding, independent validation, accountable approvals, staging/rollback evidence, and applicable regulatory/privacy review all pass. The backend independently re-checks the completed evidence package and artifact hash.
+If a future diagnostic capability is developed, it must be delivered as a separately governed deployment artifact outside this application-level Clinical AI Assist lane. That deployment must independently satisfy the complete evidence package, exact artifact binding, external/clinical validation, accountable clinical approvals, privacy/security review, staging/rollback evidence, applicable regulatory requirements, and documented release decision before any patient-facing use.
 
 ## Generative assist
 
@@ -51,15 +47,15 @@ MEDGEMMA_MODEL_ID=...
 MEDGEMMA_REVISION=<immutable-pinned-revision>
 ```
 
-In production, an unpinned MedGemma revision is rejected. Generative output is preliminary assistive content only and cannot sign a diagnosis or prescribe treatment.
+In production, an unpinned MedGemma revision is rejected. Generative output is assistive content only and cannot sign a diagnosis, prescribe treatment, place orders, or modify a signed record.
 
 Clinical-image consent is required before patient-linked image review.
 
 ## UI / workflow requirements
 
-Present assistive output with a visible safety label:
+Present assistive output with the visible safety label:
 
-> AI Clinical Assist — not a diagnosis. Clinician verification required.
+> **Clinical AI Copilot — Suggestions only. Verify all information and make the final clinical decision.**
 
 The clinician must be able to accept, modify, or reject AI-supported content. AI-supported review remains subject to the existing encounter sign-off gate.
 
@@ -68,9 +64,11 @@ The clinician must be able to accept, modify, or reject AI-supported content. AI
 The following are not enabled merely by turning on Clinical Assist:
 
 - autonomous diagnosis;
-- autonomous treatment recommendations;
-- autonomous prescribing;
+- autonomous treatment execution or prescribing;
+- autonomous orders;
+- automatic changes to signed records;
 - silent model promotion;
-- production use of an unvalidated diagnostic artifact.
+- production use of an unvalidated diagnostic artifact;
+- patient-facing diagnostic inference through `/predict`.
 
-The diagnostic evidence gate remains authoritative.
+The physician-final safety boundary is authoritative for the production application.
