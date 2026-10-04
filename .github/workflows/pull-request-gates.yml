@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   PYTHONPATH: .
@@ -43,17 +43,27 @@ jobs:
         working-directory: webapp
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: Install web/PWA dependencies and refresh lockfile
         run: npm install --no-audit --no-fund
-      - name: Upload generated lockfile for migration validation
-        uses: actions/upload-artifact@v7
-        with:
-          name: pwa-capacitor-package-lock
-          path: webapp/package-lock.json
-          if-no-files-found: error
+      - name: Commit authoritative generated lockfile to PR branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: .
+        shell: bash
+        run: |
+          if git diff --quiet -- webapp/package-lock.json; then
+            echo 'package-lock.json is already synchronized.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add webapp/package-lock.json
+          git commit -m 'build: synchronize PWA Capacitor lockfile [skip ci]'
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
       - name: TypeScript check
         run: npx tsc -b
       - name: Web lint
@@ -66,6 +76,33 @@ jobs:
         run: npx cap add android
       - name: Validate Capacitor Android sync
         run: npx cap sync android
+      - name: Validate no active Expo or React Native deployment references
+        working-directory: .
+        shell: bash
+        run: |
+          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- .github webapp package.json package-lock.json 2>/dev/null; then
+            echo 'Active Expo/React Native references remain in application or CI configuration.'
+            exit 1
+          fi
+
+  capacitor-ios-regression:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install web/PWA dependencies
+        run: npm install --no-audit --no-fund
+      - name: Production PWA build
+        run: npm run build
+      - name: Generate Capacitor iOS project
+        run: npx cap add ios
+      - name: Validate Capacitor iOS sync
+        run: npx cap sync ios
 
   web-dashboard:
     runs-on: ubuntu-latest
