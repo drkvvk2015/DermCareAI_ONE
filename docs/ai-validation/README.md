@@ -1,28 +1,23 @@
-# AI Validation Release Manifest
+# AI validation release evidence
 
-The clinical AI release manifest is the authoritative evidence gate for production model activation.
+Independent clinical and prospective evidence is external to software CI. Do not enter estimated, synthetic, or invented performance numbers. The current repository does not contain a completed clinical evidence package, and the research model must remain unavailable for production clinical use.
 
-Copy release-manifest.template.json to release-manifest.json only when real evidence exists. Replace every placeholder with evidence tied to the exact frozen model artifact and locked evaluation dataset. Do not enter estimated, synthetic, or invented clinical performance values.
+## Evidence package
 
-The validator now requires:
+1. Copy `release-manifest.template.json` into the deployment's controlled evidence store. Do not put PHI, images, patient-level records, or restricted datasets in GitHub.
+2. Freeze the intended-use statement, exact model artifact and SHA-256, locked test-set manifest and SHA-256, protocol, cohort, analysis methods, and reviewer roles before evaluation.
+3. Record sensitivity, specificity, PPV, NPV, ROC-AUC, and PR-AUC with sample counts and 95% confidence intervals. Attach calibration, subgroup, out-of-distribution, abstention, clinician review/override, independent external validation, and prospective evaluation evidence by secure URI and SHA-256.
+4. Obtain approval from an accountable reviewer who is distinct from the independent external reviewer. Keep the approval record traceable to the exact model version and artifact digest.
+5. Validate the completed manifest:
 
-- schema version 2;
-- approved release status and research_only=false;
-- exact model identity and SHA-256;
-- locked dataset manifest, provenance and inclusion/exclusion evidence;
-- sensitivity/specificity/PPV/NPV/ROC-AUC/PR-AUC with confidence intervals;
-- completed calibration, subgroup, OOD, abstention, clinician-review and external-validation evidence;
-- two distinct accountable approvers with traceable approval records;
-- completed clinical intended-use, regulatory and privacy reviews; and
-- staging plus rollback evidence.
+   ```bash
+   python backend/scripts/validate_ai_release_manifest.py path/to/release-manifest.json
+   ```
 
-Validate with:
+The validator checks completeness, formats, timestamp zones, numeric intervals, digest formatting, and model identity when expected values are supplied. It does not fetch evidence URIs, verify their contents, establish that an evaluation is scientifically valid, or verify reviewer independence.
 
-python backend/scripts/validate_ai_release_manifest.py docs/ai-validation/release-manifest.json
+## Production enforcement
 
-Production inference also re-validates this manifest and requires it to match the active model-governance record and controlled artifact hash. A missing or invalid package keeps clinical AI disabled.
+AI remains disabled by default through `AI_ENABLED_IN_PRODUCTION=false`. If an accountable organization later considers enabling it, configure `AI_VALIDATION_MANIFEST_PATH` to a read-only mounted manifest from the approved evidence store, run the production preflight, and use the model registry to deploy the exact matching artifact. Production startup rechecks the manifest's approval state and model name, version, and SHA-256 against the active deployment. Missing, incomplete, research-only, or mismatched evidence blocks inference.
 
-
-## Production runtime location
-
-The released backend does not invent or fetch a production approval package at runtime. In a production container, the approved evidence manifest is mounted read-only at `/var/lib/dermcareai/ai/release-manifest.json` by default. Set `AI_RELEASE_MANIFEST_PATH` only for an explicitly controlled alternative mount. The validator used during release CI may validate a repository-supplied evidence package, but the production runtime still re-validates the mounted snapshot and exact model artifact hash.
+Passing these structural checks is not proof of safety, effectiveness, regulatory approval, or fitness for clinical use. Human clinical, regulatory, privacy, and deployment approvals remain separate requirements.

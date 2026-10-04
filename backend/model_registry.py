@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from ai_release_evidence import load_validated_manifest
+from ai_release_evidence import validate_ai_release_manifest
 
 MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", "models/registry.json"))
 
@@ -124,32 +124,26 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
     if deployment.get("deployment_status") != "active":
         return False, "Production model deployment is not active"
 
-    configured_manifest = os.getenv("AI_RELEASE_MANIFEST_PATH")
-    if configured_manifest:
-        manifest_path = Path(configured_manifest)
-    else:
-        manifest_path = Path("/var/lib/dermcareai/ai/release-manifest.json")
-
-    manifest, manifest_problems = load_validated_manifest(
-        manifest_path,
-        model_dir=model_dir,
-        require_artifact=True,
-    )
-    if manifest is None:
-        return False, "Clinical AI release evidence package is not valid: " + "; ".join(manifest_problems[:4])
     model_name = str(deployment.get("model_name") or "")
-    manifest_model = manifest.get("model", {})
-    if manifest_model.get("name") != model_name:
-        return False, "Evidence manifest model name does not match the approved registry record"
-    if str(manifest_model.get("version")) != str(deployment.get("version")):
-        return False, "Evidence manifest model version does not match the approved registry record"
-    if str(manifest_model.get("artifact_sha256", "")).lower() != str(deployment.get("artifact_sha256", "")).lower():
-        return False, "Evidence manifest artifact SHA-256 does not match the approved registry record"
-
     expected_file = MODEL_TO_FILE.get(model_name)
     if not expected_file:
         return False, "Production clinical AI model is not mapped to a controlled artifact file"
     actual = sha256(Path(model_dir) / expected_file) if (Path(model_dir) / expected_file).is_file() else None
     if not actual or actual.lower() != str(deployment.get("artifact_sha256") or "").lower():
         return False, "Active production model artifact hash does not match the approved registry record"
+    manifest_path = os.getenv("AI_VALIDATION_MANIFEST_PATH", "").strip()
+    if not manifest_path:
+        return False, "AI_VALIDATION_MANIFEST_PATH must point to the approved clinical evidence package"
+    try:
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return False, f"Clinical AI evidence package cannot be read: {exc}"
+    evidence_problems = validate_ai_release_manifest(
+        manifest,
+        expected_model_name=model_name,
+        expected_model_version=str(deployment.get("version") or ""),
+        expected_artifact_sha256=str(deployment.get("artifact_sha256") or ""),
+    )
+    if evidence_problems:
+        return False, "Clinical AI evidence package is incomplete or does not match the active model: " + "; ".join(evidence_problems[:4])
     return True, "approved"

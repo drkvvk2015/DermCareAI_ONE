@@ -20,9 +20,9 @@ if (-not $SkipBackend) {
     $venvPath = Join-Path $backendDir '.venv'
     if (-not (Test-Path $venvPath)) {
         Write-Host 'Creating backend virtual environment...'
-        py -3 -m venv $venvPath
+        py -3.12 -m venv $venvPath
         if (-not $?) {
-            throw 'Unable to create the Python virtual environment in backend/.venv.'
+            throw 'Unable to create the Python 3.12 virtual environment in backend/.venv. Install Python 3.12 and try again.'
         }
     }
 
@@ -33,7 +33,7 @@ if (-not $SkipBackend) {
 
     Write-Host 'Installing backend requirements...'
     & $pythonExe -m pip install --upgrade pip
-    & $pythonExe -m pip install -r (Join-Path $backendDir 'requirements.txt')
+    & $pythonExe -m pip install --require-hashes -r (Join-Path $backendDir 'requirements.lock')
 }
 
 if (-not $SkipFrontend) {

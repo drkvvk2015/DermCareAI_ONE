@@ -3,9 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ai_release_evidence import validate_ai_release_manifest
 
 
 @dataclass(frozen=True)
@@ -68,6 +73,16 @@ def evaluate_environment(env: Mapping[str, str] | None = None) -> list[CheckResu
     results.append(_check_database_url(values.get("DATABASE_URL", "")))
     results.append(_check_cors(values.get("CORS_ORIGINS", "")))
 
+    privacy_approved = values.get("PRIVACY_OPERATIONS_APPROVED", "false").lower() == "true"
+    policy_version = values.get("PRIVACY_POLICY_VERSION", "").strip()
+    results.append(
+        CheckResult(
+            "PRIVACY_OPERATIONS_APPROVED",
+            "PASS" if privacy_approved and bool(policy_version) and not _looks_like_placeholder(policy_version) else "FAIL",
+            "A clinic-approved privacy operations runbook and version must be recorded before production use.",
+        )
+    )
+
     firebase_configured = bool(
         values.get("FIREBASE_SERVICE_ACCOUNT_JSON")
         or values.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -89,6 +104,23 @@ def evaluate_environment(env: Mapping[str, str] | None = None) -> list[CheckResu
             "The embedded research model must not be enabled in production.",
         )
     )
+
+    if values.get("AI_ENABLED_IN_PRODUCTION", "false").lower() == "true":
+        manifest_path = values.get("AI_VALIDATION_MANIFEST_PATH", "").strip()
+        if not manifest_path:
+            results.append(CheckResult("AI release evidence", "FAIL", "AI_VALIDATION_MANIFEST_PATH is required when production AI is enabled."))
+        else:
+            try:
+                manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+                problems = validate_ai_release_manifest(manifest)
+            except (OSError, json.JSONDecodeError) as exc:
+                problems = [f"Evidence manifest cannot be read: {exc}"]
+            if problems:
+                results.append(CheckResult("AI release evidence", "FAIL", "Evidence package is incomplete: " + "; ".join(problems[:4])))
+            else:
+                results.append(CheckResult("AI release evidence", "PASS", "Approved evidence package is structurally complete; model identity is checked at runtime."))
+    else:
+        results.append(CheckResult("AI release evidence", "PASS", "Production AI is disabled; no clinical evidence package is required."))
 
     try:
         confidence = float(values.get("MIN_CONFIDENCE", "0.70"))
