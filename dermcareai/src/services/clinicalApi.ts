@@ -158,6 +158,60 @@ export const dermatologyTemplateApi = {
   },
 };
 
+  clinicalAssistDifferential(encounterId: string, payload: {
+    primaryMorphology: string;
+    secondaryChanges?: string[];
+    color?: string;
+    border?: string;
+    surface?: string;
+    distribution?: string;
+    symptoms?: string[];
+    durationDays?: number;
+    fever?: boolean;
+    pain?: boolean;
+    pruritus?: boolean;
+    systemicRedFlags?: string[];
+  }) {
+    return authorizedRequest<{
+      capability: 'differential_support';
+      clinical_use: 'preliminary_assistive_only';
+      diagnostic_status: 'not_a_diagnosis';
+      requires_clinician_verification: boolean;
+      abstained: boolean;
+      safety: {
+        urgent_review: boolean;
+        reason: string | null;
+        matched_flags: string[];
+      };
+      candidates: Array<{
+        label: string;
+        support_score: number;
+        support_score_is_probability: boolean;
+        evidence: Array<{ feature: string; contribution: number; rationale: string }>;
+        missing_information: string[];
+      }>;
+      disclaimer: string;
+    }>(`/api/v1/clinical-ai/differential`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        encounter_id: encounterId,
+        primary_morphology: payload.primaryMorphology,
+        secondary_changes: payload.secondaryChanges || [],
+        color: payload.color || '',
+        border: payload.border || '',
+        surface: payload.surface || '',
+        distribution: payload.distribution || '',
+        symptoms: payload.symptoms || [],
+        duration_days: payload.durationDays,
+        fever: payload.fever || false,
+        pain: payload.pain || false,
+        pruritus: payload.pruritus || false,
+        systemic_red_flags: payload.systemicRedFlags || [],
+      }),
+    });
+  },
+
 export const encounterApi = {
   create(patientId: string, payload?: {
     complaints?: Record<string, unknown>;
