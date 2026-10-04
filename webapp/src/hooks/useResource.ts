@@ -24,7 +24,7 @@ export function useResource<T>(loader: (user: NonNullable<ReturnType<typeof useS
     } catch (reason) {
       if (requestId === requestIdRef.current) {
         setError(reason);
-        if (reason instanceof ApiError && reason.status === 401) await signOut(auth);
+        if (reason instanceof ApiError && reason.status === 401 && auth) await signOut(auth);
       }
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);

@@ -4,6 +4,32 @@ Updated: 2026-09-22
 
 This runbook is the operational handoff for deploying the current DermCareAI engineering baseline. It does not replace clinical validation, regulatory/privacy review, or accountable release approval.
 
+## Web PWA release addendum
+
+This addendum applies only to `webapp/`, the authenticated, read-only clinical dashboard. It does not change the backend API or policy, the Expo mobile app, or native/mobile CI. No hosting-provider-specific workflow is defined: the provider, production domain/origin, and accountable deployment and privacy approvals remain unresolved. Confirm these before selecting deployment automation or production configuration.
+
+### Web pre-deployment requirements
+
+1. Select and approve the hosting provider and one canonical production HTTPS origin. Serve the PWA only over HTTPS; use localhost HTTPS exceptions only for development.
+2. Set the API base URL to the approved API. Configure backend `CORS_ORIGINS` with the exact dashboard origin only (scheme, hostname, and any non-default port; no path and no trailing slash), for example `https://dashboard.example.invalid`. Do not use `*`, broad subdomains, preview URLs, or an origin supplied by an untrusted request. Backend CORS and authorization remain authoritative.
+3. Configure Firebase Authentication for email/password sign-in, add the exact production web origin's host to Firebase authorized domains, and provide the matching Firebase Web app `apiKey`, `authDomain`, `projectId`, and `appId`. Verify Firebase ID-token verification and server-side role and tenant checks for every existing read endpoint. Confirm the organization's clinician/staff role mapping and tenant membership in the server policy before release; client-side route protection is only a user-interface measure.
+4. Supply browser-visible settings only as `VITE_*` build configuration. Firebase Web app settings and the public API URL are not privileged credentials. Never put service-account JSON, private keys, server API secrets, bearer tokens, or other privileged credentials into Vite variables, source, build artifacts, or client environment files. Keep server credentials in the approved server-side secret/identity system.
+5. Review privacy controls for the selected hosting, monitoring, Firebase, and API services. Do not place patient data in deployment logs, analytics, crash reports, test fixtures, screenshots, browser storage, or service-worker caches. The PWA caches only static shell assets. Authentication and all patient-record reads require a live network; offline shell availability is not offline clinical access. Confirm the Firebase SDK's configured session-persistence behavior is acceptable for the organization's managed-device policy.
+6. Run the webapp dependency, lint, test, and production-build checks in the release pipeline. Review generated asset/service-worker precaching and verify no API, authentication, or clinical response is stored. Do not change backend policy/API or the Expo application as part of this web release.
+
+### Web deployment smoke and rollback
+
+Use approved synthetic/test accounts and synthetic records only; never use real patient data for a release smoke test unless explicitly authorized under clinic procedures.
+
+1. Confirm the HTTPS origin, certificate, app manifest, icons, service worker, and installability on supported browsers/devices. Confirm the service worker can serve the static app shell on a subsequent visit.
+2. Confirm signed-out access redirects to sign-in and invalid Firebase configuration fails safely. Sign in with an authorized test account; confirm a permitted synthetic record can be read through summary, prescription, and procedure routes without write controls.
+3. Confirm a test user lacking the required server role or tenant membership is denied by the API on each relevant route. A hidden/blocked client route is not a substitute for this API authorization check.
+4. Confirm API `401`/`403` and network/offline failures produce safe states, with retry available where appropriate. With the shell available offline, verify clinical endpoints are not served from cache and no stale clinical content is displayed. Inspect browser/service-worker storage for API response or clinical-record caches.
+5. Check hosting and API health, error rates, CORS behavior from the exact approved origin, and audit integrity. Review operational logs for accidental patient identifiers or credentials before widening access.
+6. On failure, disable/roll back the web release using the hosting provider's approved previous-known-good artifact/version process. Recheck the HTTPS origin, authentication, API authorization/CORS, and offline behavior after rollback. Preserve backend audit records; do not roll back or modify clinical data as a side effect of restoring the web shell.
+
+The hosting-specific deployment, cache-purge, and rollback commands cannot be finalized until the provider and production origin are approved.
+
 ## 1. Required production configuration
 
 Set these values in the deployment secret manager; never commit them to Git:

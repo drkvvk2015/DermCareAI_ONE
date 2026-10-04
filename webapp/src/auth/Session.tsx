@@ -15,16 +15,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
 
-  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
-    setUser(currentUser);
-    setInitializing(false);
-  }), []);
+  useEffect(() => {
+    if (!auth) {
+      setUser(null);
+      setInitializing(false);
+      return;
+    }
+    return onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setInitializing(false);
+    });
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (!auth) throw new Error('Firebase sign-in is not configured.');
     await signInWithEmailAndPassword(auth, email, password);
   }, []);
 
   const signOutUser = useCallback(async () => {
+    if (!auth) return;
     await signOut(auth);
   }, []);
 

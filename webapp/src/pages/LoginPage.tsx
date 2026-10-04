@@ -3,6 +3,7 @@ import { ArrowRight, ShieldCheck, Stethoscope } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSession } from '../auth/Session';
+import { firebaseConfigError } from '../firebase';
 
 export function LoginPage() {
   const { user, initializing, signIn } = useSession();
@@ -42,12 +43,13 @@ export function LoginPage() {
           <p className="eyebrow">STAFF SIGN IN</p>
           <h2>Welcome back</h2>
           <p className="form-subtitle">Use your clinical account to continue.</p>
+          {firebaseConfigError && <p className="form-error" role="alert">{firebaseConfigError}</p>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <label htmlFor="email">Work email</label>
           <input id="email" type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} />
           <label htmlFor="password">Password</label>
           <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-          <button className="primary-button" type="submit" disabled={busy || initializing}>{busy ? 'Signing in...' : 'Sign in'} <ArrowRight size={17} /></button>
+          <button className="primary-button" type="submit" disabled={busy || initializing || Boolean(firebaseConfigError)}>{busy ? 'Signing in...' : 'Sign in'} <ArrowRight size={17} /></button>
         </form>
       </section>
     </main>

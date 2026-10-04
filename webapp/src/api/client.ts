@@ -30,7 +30,7 @@ export type Procedure = Record<string, unknown> & {
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
-async function getJson(path: string, user: User): Promise<unknown> {
+async function fetchJson(path: string, user: User): Promise<unknown> {
   const token = await user.getIdToken();
   const response = await fetch(`${apiBase}${path}`, {
     method: 'GET',
@@ -45,7 +45,20 @@ async function getJson(path: string, user: User): Promise<unknown> {
         : `The request could not be completed (${response.status}).`;
     throw new ApiError(response.status, message);
   }
-  return response.json() as Promise<unknown>;
+  try {
+    return await response.json() as unknown;
+  } catch {
+    throw new ApiError(502, 'The server returned an unexpected response.');
+  }
+}
+
+async function getJson(path: string, user: User): Promise<unknown> {
+  try {
+    return await fetchJson(path, user);
+  } catch (reason) {
+    if (reason instanceof ApiError) throw reason;
+    throw new ApiError(0, 'The request needs a network connection. Check your connection and try again.');
+  }
 }
 
 function asArray<T>(payload: unknown): T[] {
