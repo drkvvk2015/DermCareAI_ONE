@@ -28,9 +28,18 @@ def capabilities() -> ClinicalAICapabilities:
         mode = DiagnosticMode(raw_mode)
     except ValueError:
         mode = DiagnosticMode.DISABLED
+
+    clinical_assist = _bool("ENABLE_CLINICAL_ASSIST_AI", False)
+    generative_requested = _bool("ENABLE_GENERATIVE_CLINICAL_ASSIST", False) and _bool("ENABLE_MEDGEMMA", False)
+    revision_pinned = bool(os.getenv("MEDGEMMA_REVISION", "").strip())
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        generative_assist = clinical_assist and generative_requested and revision_pinned
+    else:
+        generative_assist = clinical_assist and generative_requested
+
     return ClinicalAICapabilities(
-        clinical_assist_enabled=_bool("ENABLE_CLINICAL_ASSIST_AI", False),
-        generative_assist_enabled=_bool("ENABLE_GENERATIVE_CLINICAL_ASSIST", False),
+        clinical_assist_enabled=clinical_assist,
+        generative_assist_enabled=generative_assist,
         diagnostic_mode=mode,
     )
 
@@ -43,5 +52,4 @@ def require_clinical_assist_enabled() -> ClinicalAICapabilities:
 
 
 def diagnostic_clinical_activation_allowed() -> bool:
-    state = capabilities()
-    return state.diagnostic_mode is DiagnosticMode.CLINICAL
+    return capabilities().diagnostic_mode is DiagnosticMode.CLINICAL
