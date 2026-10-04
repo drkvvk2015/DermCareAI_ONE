@@ -46,7 +46,9 @@ The release model deliberately separates **software validation**, **clinical/AI 
 
 PR #212, merged as commit 8f1a5451c3d25c7210ed980e4667e11e6157310f, is the current security/reliability hardening baseline and supersedes PR #211. It covers the earlier ten-item production audit plus the final commerce, pharmacy, clinical-upload, dashboard-CI, and dependency-gating findings: payment events must be captured and authorized, pharmacy expiry values are canonical real dates, dispensing is tenant/patient/prescription scoped, clinical images are decoded and MIME-verified, the web dashboard has blocking lint/test/build gates, and remediable high/critical dependency findings block release.
 
-The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI.
+Production AI artifact verification has been hardened: the production-eligibility gate now fails closed for any model deployment whose name cannot be resolved to a locally verifiable artifact. Manifest validation test coverage was completed, error codes added for observability/audit, and helper functions extracted for maintainability. All 179 backend tests pass (178 baseline + 1 new manifest test).
+
+The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI. The artifact-identity gate now ensures that any production deployment without a verifiable, SHA-256-matched local artifact is rejected.
 
 The Android build path has also been aligned with Expo's Babel preset so clean native prebuilds link Expo native modules consistently.
 
@@ -54,10 +56,12 @@ The Android build path has also been aligned with Expo's Babel preset so clean n
 
 ## Mainline release checkpoint — 4 October 2026
 
-- **Latest merged hardening:** PR #212 → main
-- **Merge commit:** 8f1a5451c3d25c7210ed980e4667e11e6157310f
+- **Latest merged hardening:** PR #212 → main (production commerce/pharmacy/clinical-upload hardening)
+- **Latest CodeSwarm execution:** Production AI artifact-identity gate hardened (4 October 2026)
+- **Merge commit (PR #212):** 8f1a5451c3d25c7210ed980e4667e11e6157310f
 - **PR #212 head before merge:** 9b4935534345e97016c77a868a501758d460554f
 - **Required engineering gates:** ✅ green on the final PR #212 head, including CodeQL, backend/mobile regression, PostgreSQL integration, staging acceptance, production-preflight contract, Firestore rules, dependency audit, and dashboard lint/test/build
+- **Production AI gate improvements (4 Oct 2026):** ✅ artifact-identity fail-closed enforcement, manifest-validation test coverage added (6/6 gate tests + 179/179 full backend suite pass), error codes for observability, refactored helpers for maintainability
 - **Dashboard dependency audit:** ✅ 0 reported vulnerabilities in the final npm audit
 - **Clinical boundary:** software CI is green, but independent clinical validation, regulatory/privacy approval, and real-production operational evidence remain separate release gates
 
@@ -145,16 +149,17 @@ The final engineering swarm has now been integrated as three independently valid
 
 ### AI governance
 
-- Model registry
-- Artifact SHA-256 verification
-- Model status/approval lifecycle
-- Evaluation metadata
-- Subgroup metric storage
-- External-validation flagging
-- Production deployment restrictions
-- Confidence threshold and abstention
-- Clinician review traceability
-- Formal AI validation manifest template
+- Model registry with model name/version/artifact SHA-256 binding
+- Artifact SHA-256 verification with fail-closed enforcement for unmapped model names
+- Production deployment rejects any model whose artifact cannot be verified locally
+- Model status/approval lifecycle with separate accountable approver requirement
+- Evaluation metadata with sensitivity/specificity/PPV/NPV/AUC recording
+- Subgroup metric storage by population characteristics (skin tone, age, sex, anatomical site, device)
+- External-validation flagging and prospective-evaluation tracking
+- Production deployment restrictions requiring validated, non-research, approved model with evidence manifest
+- Confidence threshold and abstention with structured safety-gate checks
+- Clinician review traceability with AI assessment accept/reject/override recording
+- Formal AI validation manifest template with locked dataset, metrics CI, approval audits and external evidence URIs
 
 ## Release state
 
@@ -168,6 +173,7 @@ The final engineering swarm has now been integrated as three independently valid
 | Clinical API E2E | ✅ Automated |
 | Tenant isolation | ✅ Automated |
 | AI-review/sign-off safety | ✅ Automated |
+| AI production artifact verification | ✅ Fail-closed gate enforces local artifact SHA-256 match; manifest validation complete |
 | CodeQL | ✅ Automated |
 | Staging acceptance workflow | ✅ Implemented and exercised in release gating |
 | Disaster-recovery drill | ✅ Implemented |
@@ -188,6 +194,8 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 | Durable prescription dispense ledger integration | ✅ PR #155 merged |
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
+| Production AI artifact-identity gate hardening | ✅ CodeSwarm execution 4 October 2026; fail-closed for unmapped models; manifest validation test added; 179/179 tests pass |
+| Production AI error observability | ✅ Structured error codes added for gate rejection paths; audit/debug clarity improved |
 | Required PR CI matrix | ✅ Green on the final integration wave |
 | Latest merged hardening | ✅ PR #212 merged to `main` on 4 October 2026 |
 | Open release PRs | ℹ️ Remaining PRs are not represented as approved simply because they are mergeable |
