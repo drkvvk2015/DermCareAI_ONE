@@ -95,3 +95,14 @@ A build can be technically deployable while still being clinically or regulatori
 **Clinical release gate:** independent clinical/AI evidence + intended-use review + accountable clinician approval.
 
 **Regulatory/privacy gate:** jurisdiction-specific assessment + institutional approval + documented operational controls.
+
+## Tiered Clinical AI — engineering implementation
+
+| Capability | State | Safety boundary |
+|---|---|---|
+| Structured differential assist | ENABLED BY EXPLICIT FEATURE FLAG | Assistive only; not a diagnosis; clinician verification required |
+| Clinical image-quality assist | ENABLED BY EXPLICIT FEATURE FLAG | Requires patient-linked clinical-image consent; candidate segmentation is not validated diagnosis |
+| Generative image assist | SEPARATE OPT-IN | Production requires immutable model revision; output remains preliminary assistive content |
+| Diagnostic model | EVIDENCE-GATED | Disabled/shadow only until completed evidence package and accountable approvals pass |
+
+The mobile encounter workflow exposes Clinical AI Assist without automatically modifying the assessment or sign-off state. The existing AI-review/sign-off gate remains authoritative for model assessments attached to the clinical record.
