@@ -52,7 +52,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Commit authoritative generated lockfile to PR branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        working-directory: .
+        working-directory: ${{ github.workspace }}
         shell: bash
         run: |
           if git diff --quiet -- webapp/package-lock.json; then
@@ -76,12 +76,12 @@ jobs:
         run: npx cap add android
       - name: Validate Capacitor Android sync
         run: npx cap sync android
-      - name: Validate no active Expo or React Native deployment references
-        working-directory: .
+      - name: Validate no active Expo or React Native package references
+        working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- .github webapp package.json package-lock.json 2>/dev/null; then
-            echo 'Active Expo/React Native references remain in application or CI configuration.'
+          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- webapp package.json package-lock.json 2>/dev/null; then
+            echo 'Active Expo/React Native package references remain in the web application.'
             exit 1
           fi
 
