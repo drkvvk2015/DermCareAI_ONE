@@ -1,19 +1,61 @@
-# DermCare Clinical Dashboard
+# DermCareAI Clinical PWA
 
-Independent React, TypeScript, and Vite dashboard for authenticated, read-only patient record views.
+This directory is the **canonical DermCareAI client**.
 
-## Setup
+## Product model
 
-1. Copy `.env.example` to `.env` and provide the Firebase Web app settings and API base URL for your environment.
-2. Run `npm ci`.
-3. Run `npm run dev`.
+- **Primary:** React + Vite Progressive Web App (PWA)
+- **Mobile:** Capacitor 8 wrapper around the same built PWA
+- **Backend:** FastAPI under `../backend`
+- **Authentication:** Firebase Authentication
+- **Clinical AI:** suggestion-only; treating physician makes the final decision
 
-Firebase Authentication must be configured for email/password sign-in. The API must accept Firebase ID tokens and allow the dashboard origin through its CORS configuration. The client obtains ID tokens from Firebase at request time and does not store tokens itself.
+There is intentionally no separate mobile UI implementation here. Android and iOS consume the same `dist/` web bundle through Capacitor.
 
-## Scripts
+## Development
 
-- `npm run lint`
-- `npm test -- --run`
-- `npm run build`
+```bash
+npm install
+npm run dev
+```
 
-The dashboard only reads existing clinical summary, prescription, and procedure endpoints. It does not provide patient directory, write, diagnosis, treatment, prescribing, or procedure mutation features.
+## Validation
+
+```bash
+npm run lint
+npm run test -- --run
+npm run build
+```
+
+## Capacitor Android
+
+```bash
+npm run cap:android
+```
+
+This builds the PWA, synchronizes it into the Capacitor Android project, and opens Android Studio.
+
+## Capacitor iOS
+
+Run on macOS with Xcode installed:
+
+```bash
+npm run cap:ios
+```
+
+## Architecture
+
+```text
+React/Vite PWA
+     │
+     ├── Browser / installed PWA
+     │
+     └── Capacitor WebView
+             ├── Android
+             └── iOS
+     │
+     ▼
+FastAPI clinical platform
+```
+
+The PWA is the source of truth for clinical workflows. Capacitor native code is an infrastructure bridge only and must not become a second clinical application.
