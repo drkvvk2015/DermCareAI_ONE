@@ -22,8 +22,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]' python-multipart Pillow opencv-python-headless numpy
+      - name: Install locked test dependencies
+        run: python -m pip install --require-hashes -r requirements-ci.lock
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run regression tests
@@ -36,28 +36,30 @@ jobs:
             exit 1
           fi
 
-  mobile-regression:
+  pwa-capacitor-regression:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: dermcareai
+        working-directory: webapp
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: dermcareai/package-lock.json
-      - name: Install dependencies
-        run: npm ci
+      - name: Install web/PWA dependencies
+        run: npm install --no-audit --no-fund
       - name: TypeScript check
-        run: npx tsc --noEmit
-      - name: Expo web export smoke test
-        run: npx expo export --platform web
-      - name: Validate Expo project
-        run: npx expo-doctor
-      - name: Validate native project generation
-        run: npx expo prebuild --no-install --non-interactive
+        run: npx tsc -b
+      - name: Web lint
+        run: npm run lint
+      - name: Web tests
+        run: npm run test -- --run
+      - name: Production PWA build
+        run: npm run build
+      - name: Generate Capacitor Android project
+        run: npx cap add android
+      - name: Validate Capacitor Android sync
+        run: npx cap sync android
 
   web-dashboard:
     runs-on: ubuntu-latest
@@ -69,10 +71,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: webapp/package-lock.json
       - name: Install dashboard dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Dashboard lint
         run: npm run lint
       - name: Dashboard build
