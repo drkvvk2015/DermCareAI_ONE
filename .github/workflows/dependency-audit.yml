@@ -19,7 +19,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: dermcareai/package-lock.json
+          cache-dependency-path: |
+            dermcareai/package-lock.json
+            webapp/package-lock.json
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -31,6 +33,12 @@ jobs:
           set +e
           npm audit --json > ../npm-audit.json
           echo "$?" > ../npm-audit.exitcode
+      - name: Generate web dashboard npm audit report
+        working-directory: webapp
+        run: |
+          set +e
+          npm audit --json > ../webapp-npm-audit.json
+          echo "$?" > ../webapp-npm-audit.exitcode
       - name: Generate Python audit report
         working-directory: backend
         run: |
@@ -66,46 +74,52 @@ jobs:
                       urls.update(root_advisory_urls(vulnerabilities, via, seen))
               return urls
 
-          npm_path = Path("npm-audit.json")
-          if npm_path.exists():
+          def check_npm_report(label, report_path, allowed_ids):
+              path = Path(report_path)
+              if not path.exists():
+                  failures.append("{} npm audit report is missing".format(label))
+                  return
               try:
-                  npm = json.loads(npm_path.read_text())
-                  vulnerabilities = npm.get("vulnerabilities")
-                  if not isinstance(vulnerabilities, dict):
-                      failures.append("npm audit did not return a vulnerability map")
-                  else:
-                      blocking = []
-                      documented = []
-                      for name, item in vulnerabilities.items():
-                          severity = str(item.get("severity", "")).lower()
-                          if severity not in {"high", "critical"}:
-                              continue
-                          advisories = root_advisory_urls(vulnerabilities, name)
-                          ids = {
-                              advisory_id
-                              for advisory_id in allowed_upstream_unfixed
-                              if any(advisory_id in url for url in advisories)
-                          }
-                          if advisories and ids and all(
-                              any(advisory_id in url for advisory_id in ids)
-                              for url in advisories
-                          ):
-                              documented.append(name)
-                          else:
-                              blocking.append(f"{name}:{severity}")
-                      if blocking:
-                          failures.append(
-                              "npm high/critical findings: " + ", ".join(sorted(blocking))
-                          )
-                      if documented:
-                          print(
-                              "Non-blocking upstream-unfixed build-tooling advisories: "
-                              + ", ".join(sorted(documented))
-                          )
+                  report = json.loads(path.read_text())
               except json.JSONDecodeError as exc:
-                  failures.append(f"npm audit JSON could not be parsed: {exc}")
-          else:
-              failures.append("npm audit report is missing")
+                  failures.append("{} npm audit JSON could not be parsed: {}".format(label, exc))
+                  return
+              vulnerabilities = report.get("vulnerabilities")
+              if not isinstance(vulnerabilities, dict):
+                  failures.append("{} npm audit did not return a vulnerability map".format(label))
+                  return
+              blocking = []
+              documented = []
+              for name, item in vulnerabilities.items():
+                  severity = str(item.get("severity", "")).lower()
+                  if severity not in {"high", "critical"}:
+                      continue
+                  advisories = root_advisory_urls(vulnerabilities, name)
+                  ids = {
+                      advisory_id
+                      for advisory_id in allowed_ids
+                      if any(advisory_id in url for url in advisories)
+                  }
+                  if advisories and ids and all(
+                      any(advisory_id in url for advisory_id in ids)
+                      for url in advisories
+                  ):
+                      documented.append(name)
+                  else:
+                      blocking.append("{}:{}".format(name, severity))
+              if blocking:
+                  failures.append(
+                      "{} npm high/critical findings: {}".format(label, ", ".join(sorted(blocking)))
+                  )
+              if documented:
+                  print(
+                      "{} non-blocking upstream-unfixed build-tooling advisories: {}".format(
+                          label, ", ".join(sorted(documented))
+                      )
+                  )
+
+          check_npm_report("mobile", "npm-audit.json", allowed_upstream_unfixed)
+          check_npm_report("web-dashboard", "webapp-npm-audit.json", set())
 
           pip_path = Path("pip-audit.json")
           if pip_path.exists():
@@ -128,8 +142,9 @@ jobs:
               failures.append("pip-audit report is missing")
 
           summary = [
-              f"npm audit exit code: {Path('npm-audit.exitcode').read_text().strip() if Path('npm-audit.exitcode').exists() else 'missing'}",
-              f"pip-audit exit code: {Path('pip-audit.exitcode').read_text().strip() if Path('pip-audit.exitcode').exists() else 'missing'}",
+              "mobile npm audit exit code: {}".format(Path("npm-audit.exitcode").read_text().strip() if Path("npm-audit.exitcode").exists() else "missing"),
+              "web-dashboard npm audit exit code: {}".format(Path("webapp-npm-audit.exitcode").read_text().strip() if Path("webapp-npm-audit.exitcode").exists() else "missing"),
+              "pip-audit exit code: {}".format(Path("pip-audit.exitcode").read_text().strip() if Path("pip-audit.exitcode").exists() else "missing"),
           ]
           if failures:
               summary.extend(f"BLOCKING: {failure}" for failure in failures)
@@ -149,6 +164,8 @@ jobs:
           path: |
             npm-audit.json
             npm-audit.exitcode
+            webapp-npm-audit.json
+            webapp-npm-audit.exitcode
             pip-audit.json
             pip-audit.exitcode
             dependency-audit-summary.txt

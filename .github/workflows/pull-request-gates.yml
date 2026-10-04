@@ -58,3 +58,24 @@ jobs:
         run: npx expo-doctor
       - name: Validate native project generation
         run: npx expo prebuild --no-install --non-interactive
+
+  web-dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+      - name: Install dashboard dependencies
+        run: npm ci
+      - name: Dashboard lint
+        run: npm run lint
+      - name: Dashboard build
+        run: npm run build
+      - name: Dashboard tests
+        run: npm run test -- --run

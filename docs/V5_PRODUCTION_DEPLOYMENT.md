@@ -54,3 +54,17 @@ Define and test:
 ## Clinical release gate
 
 A release candidate is not a clinical production release solely because CI passes. Clinical validation, privacy governance, regulatory assessment and operational evidence remain separate release gates.
+
+## Release evidence ownership
+
+| Check | Required evidence | Owner |
+|---|---|---|
+| Payment settlement | Captured-state webhook tests, signature test, duplicate-event test | Engineering / Billing |
+| Pharmacy FEFO | Canonical date validation, expired/blocked batch tests, tenant-scoped allocation evidence | Engineering / Pharmacy |
+| Prescription linkage | Cross-patient, cross-tenant and already-dispensed rejection tests | Engineering / Pharmacy |
+| Clinical image uploads | Chunked size rejection, decoded-format validation, decompression-bomb protection | Engineering / Clinical safety |
+| Dashboard CI | Lint, build and Vitest checks on pull requests | Engineering |
+| Dependency security | Mobile + dashboard npm audit plus Python audit with severity-based blocking | Engineering / Security |
+| Production inference | Model artifact checksum/eligibility evidence plus controlled inference contract tests | AI engineering / Clinical governance |
+
+Passing automated checks is evidence of software behavior, not proof of clinical effectiveness, regulatory clearance or operational readiness.

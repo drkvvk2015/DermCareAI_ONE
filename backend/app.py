@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
-from PIL.Image import DecompressionBombError
+from PIL.Image import DecompressionBombError, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from dermatology.analytics_api import router as dermatology_analytics_router
@@ -509,9 +509,23 @@ def model_status(_: dict[str, Any] = Depends(require_roles("admin", "auditor")))
 async def predict(request: Request, file: UploadFile = File(...), user: dict[str, Any] = Depends(require_roles("doctor", "admin"))) -> Dict[str, Any]:
     user_key = client_key(request, user["uid"])
     enforce_rate_limit(f"predict:{user_key}", limit=30, window_seconds=60)
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    allowed_mime_formats = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+    expected_format = allowed_mime_formats.get((file.content_type or "").lower())
+    if expected_format is None:
+        raise HTTPException(status_code=400, detail="Unsupported image MIME type")
     contents = await read_upload_limited(file, MAX_IMAGE_BYTES)
+    try:
+        with Image.open(io.BytesIO(contents)) as uploaded:
+            uploaded_format = str(uploaded.format or "").upper()
+            uploaded.verify()
+            if uploaded_format != expected_format:
+                raise HTTPException(status_code=400, detail="Image MIME type does not match decoded format")
+    except HTTPException:
+        raise
+    except DecompressionBombError as exc:
+        raise HTTPException(status_code=413, detail="Image dimensions exceed configured safety limit") from exc
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Unable to decode image upload") from exc
     if not contents:
         raise HTTPException(status_code=400, detail="Empty image upload")
     try:

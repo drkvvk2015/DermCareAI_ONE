@@ -232,3 +232,26 @@ def test_model_service_translates_decompression_bomb_to_bounded_upload(monkeypat
         assert "dimensions exceed configured safety limit" in str(exc)
     else:
         raise AssertionError("Pillow decompression bomb must be translated to ValueError")
+
+
+def test_prediction_contract_decodes_real_image_before_inference(monkeypatch) -> None:
+    import io
+    import numpy as np
+    from PIL import Image
+    from app import ModelService
+
+    service = ModelService()
+    service.mode = "embedded-ham10000-research-model"
+    service.embedded = type("FakeModel", (), {
+        "predict": lambda self, image: {
+            "class_name": "synthetic-research-class",
+            "confidence": 0.81,
+            "model_used": "synthetic-test-model",
+        }
+    })()
+    gradient = np.linspace(0, 255, 256 * 256 * 3, dtype=np.uint8).reshape((256, 256, 3))
+    buf = io.BytesIO()
+    Image.fromarray(gradient).save(buf, format="PNG")
+    result = service.process_image(buf.getvalue())
+    assert result["class_name"] == "synthetic-research-class"
+    assert result["confidence"] == 0.81
