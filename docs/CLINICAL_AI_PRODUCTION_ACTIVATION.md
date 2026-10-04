@@ -25,15 +25,9 @@ ENABLE_CLINICAL_ASSIST_AI=true
 AI_DIAGNOSTIC_MODE=disabled
 ```
 
-### Lane B — Diagnostic model shadow mode
+### Lane B — Controlled evaluation (not a production clinical switch)
 
-Use:
-
-```text
-AI_DIAGNOSTIC_MODE=shadow
-```
-
-only for controlled evaluation where predictions are not presented as clinical decisions. Shadow-mode evidence must be handled under the clinic's approved evaluation protocol and privacy controls.
+The repository does not expose a live-patient diagnostic shadow switch in production. A shadow evaluation should be run as a separate, approved evaluation deployment with explicit data-governance, privacy and reference-label controls. This avoids accidentally treating live patient inference as clinical validation merely by changing an environment variable.
 
 ### Lane C — Diagnostic clinical mode
 
