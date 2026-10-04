@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import io
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from PIL import Image
+from PIL.Image import DecompressionBombError, UnidentifiedImageError
 
 from ai_adapters.medgemma import MedGemmaAdapter
 from audit import AuditEvent, record_event
@@ -16,6 +19,34 @@ from inference_runtime import run_inference
 from upload_limits import MAX_IMAGE_BYTES, read_upload_limited
 
 router = APIRouter(prefix="/api/v1/clinical-ai", tags=["clinical-ai-assist"])
+
+
+_ALLOWED_IMAGE_FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+
+
+async def _read_validated_clinical_image(file: UploadFile) -> bytes:
+    expected_format = _ALLOWED_IMAGE_FORMATS.get((file.content_type or "").lower())
+    if expected_format is None:
+        raise HTTPException(status_code=400, detail="Unsupported image MIME type")
+
+    content = await read_upload_limited(file, MAX_IMAGE_BYTES)
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty image upload")
+
+    try:
+        with Image.open(io.BytesIO(content)) as uploaded:
+            decoded_format = str(uploaded.format or "").upper()
+            uploaded.verify()
+            if decoded_format != expected_format:
+                raise HTTPException(status_code=400, detail="Image MIME type does not match decoded format")
+    except HTTPException:
+        raise
+    except DecompressionBombError as exc:
+        raise HTTPException(status_code=413, detail="Image dimensions exceed configured safety limit") from exc
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Unable to decode image upload") from exc
+
+    return content
 
 
 class DifferentialAssistRequest(BaseModel):
@@ -164,10 +195,7 @@ async def image_quality_assist(
     ):
         raise HTTPException(status_code=409, detail="Active clinical-image consent is required")
 
-    content = await read_upload_limited(file, MAX_IMAGE_BYTES)
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty image upload")
-
+    content = await _read_validated_clinical_image(file)
     try:
         result = await run_inference(analyze_image, content)
     except ValueError as exc:
@@ -245,9 +273,7 @@ async def generative_image_review(
     ):
         raise HTTPException(status_code=409, detail="Active clinical-image consent is required")
 
-    content = await read_upload_limited(file, MAX_IMAGE_BYTES)
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty image upload")
+    content = await _read_validated_clinical_image(file)
 
     adapter = MedGemmaAdapter()
     if not adapter.load():
