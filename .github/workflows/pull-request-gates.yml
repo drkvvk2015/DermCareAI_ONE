@@ -107,7 +107,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- ':!docs' ':!README.md' 2>/dev/null; then
+          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- ':!docs' ':!README.md' ':!.github/workflows/pull-request-gates.yml' 2>/dev/null; then
             echo 'Active Expo/React Native references remain outside historical documentation.'
             exit 1
           fi
