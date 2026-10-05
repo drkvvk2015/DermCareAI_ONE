@@ -1,0 +1,20 @@
+{
+  "exceptions": [
+    {
+      "ecosystem": "npm",
+      "package": "node-forge",
+      "advisory": "GHSA-86w9-cpqp-85rv",
+      "owner": "drkvvk2015",
+      "reason": "Upstream-unfixed Expo build-tooling advisory documented in docs/PRODUCTION_DEPENDENCY_SECURITY.md; remove as soon as a fixed release is available.",
+      "expires_on": "2026-11-04"
+    },
+    {
+      "ecosystem": "npm",
+      "package": "braces",
+      "advisory": "GHSA-vfj7-8cjw-p6xm",
+      "owner": "drkvvk2015",
+      "reason": "Upstream-unfixed Expo build-tooling advisory documented in docs/PRODUCTION_DEPENDENCY_SECURITY.md; remove as soon as a fixed release is available.",
+      "expires_on": "2026-11-04"
+    }
+  ]
+}

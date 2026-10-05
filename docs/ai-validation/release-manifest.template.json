@@ -1,68 +1,56 @@
 {
   "schema_version": 2,
   "release_status": "not_ready",
-  "intended_use_statement": "Describe the exact intended clinical use, target population, workflow, exclusions and limitations using actual approved language.",
+  "intended_use_statement": "",
   "research_only": true,
   "model": {
-    "name": "MODEL_NAME",
-    "version": "MODEL_VERSION",
-    "artifact_sha256": "64_HEX_SHA256"
+    "name": "",
+    "version": "",
+    "artifact_sha256": ""
   },
   "dataset": {
-    "name": "LOCKED_TEST_SET_NAME",
-    "version": "DATASET_VERSION",
-    "locked_test_set_manifest": "PATH_OR_DIGEST",
-    "manifest_sha256": "64_HEX_SHA256",
-    "provenance_ref": "EVIDENCE_REFERENCE",
-    "inclusion_exclusion_ref": "EVIDENCE_REFERENCE"
+    "name": "",
+    "version": "",
+    "locked_test_set_manifest": {
+      "uri": "",
+      "sha256": "",
+      "frozen_at": ""
+    }
   },
   "metrics": {
-    "sensitivity": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
-    "specificity": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
-    "ppv": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
-    "npv": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
-    "roc_auc": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]},
-    "pr_auc": {"value": "RESULT_NUMBER", "ci95": ["CI_LOW", "CI_HIGH"]}
+    "sensitivity": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
+    "specificity": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
+    "ppv": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
+    "npv": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
+    "roc_auc": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
+    "pr_auc": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null }
   },
   "calibration": {
-    "status": "not_started",
-    "method": "METHOD",
-    "result": "RESULT",
-    "evidence_ref": "EVIDENCE_REFERENCE"
+    "method": "",
+    "expected_calibration_error": null,
+    "brier_score": null,
+    "evidence": { "uri": "", "sha256": "" }
   },
-  "subgroups": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
-  "ood": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
-  "abstention": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
-  "clinician_review": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
-  "external_validation": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
+  "subgroups": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
+  "ood": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
+  "abstention": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
+  "clinician_review": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
+  "external_validation": {
+    "status": "not_evaluated",
+    "site_or_dataset": "",
+    "independent_reviewer": "",
+    "evidence": { "uri": "", "sha256": "" }
+  },
+  "prospective_evaluation": {
+    "status": "not_evaluated",
+    "protocol_id": "",
+    "site_or_cohort": "",
+    "evidence": { "uri": "", "sha256": "" }
+  },
   "approval": {
-    "status": "not_started",
-    "approvers": [
-      {
-        "id": "ACCOUNTABLE_ID",
-        "role": "CLINICAL_ACCOUNTABLE",
-        "approved_at": "ISO8601",
-        "record_ref": "APPROVAL_RECORD",
-        "record_sha256": "64_HEX_SHA256"
-      },
-      {
-        "id": "ACCOUNTABLE_ID_2",
-        "role": "TECHNICAL_OR_REGULATORY_ACCOUNTABLE",
-        "approved_at": "ISO8601",
-        "record_ref": "APPROVAL_RECORD",
-        "record_sha256": "64_HEX_SHA256"
-      }
-    ]
-  },
-  "governance": {
-    "clinical_intended_use_review": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
-    "regulatory_assessment": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"},
-    "privacy_assessment": {"status": "not_started", "evidence_ref": "EVIDENCE_REFERENCE"}
-  },
-  "deployment": {
-    "status": "not_started",
-    "staging_evidence_ref": "EVIDENCE_REFERENCE",
-    "rollback_evidence_ref": "EVIDENCE_REFERENCE",
-    "release_artifact_ref": "EVIDENCE_REFERENCE"
+    "status": "pending",
+    "approved_by": "",
+    "approved_at": "",
+    "evidence": { "uri": "", "sha256": "" }
   }
 }
