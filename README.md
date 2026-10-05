@@ -150,6 +150,22 @@ The final engineering swarm has now been integrated as three independently valid
 - Role-based authorization
 - Organization + clinic tenant claims
 - PostgreSQL production persistence
+
+### Firebase deployment setup
+
+Firebase Authentication is a **required identity boundary** for clinical API access. The complete first-time configuration is documented in [Firebase Authentication and Firestore Setup](docs/FIREBASE_SETUP.md), including:
+
+- Firebase project and web-app configuration
+- Email/password authentication and authorized domains
+- Admin/clinician account provisioning
+- `organization_id`, `clinic_id`, and `roles` custom claims
+- Firebase Admin SDK / service-account configuration
+- Firestore tenant rules and query alignment where Firestore is explicitly used
+- Production verification and tenant-isolation checks
+
+**Architecture note:** PostgreSQL remains the production clinical source of truth behind FastAPI. The current PWA does not use Firestore as its primary clinical datastore, so Firestore offline persistence must not be introduced merely as a cache layer. Clinical offline synchronization is a separate replay-safe/conflict-aware application concern tracked by the PWA + Capacitor migration acceptance.
+
+
 - SQLite development fallback only
 - Server-side signed object-storage uploads
 - Billing/payment integrity controls
