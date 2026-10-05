@@ -298,6 +298,8 @@ pytest -q tests
 python -m compileall -q .
 ```
 
+**Note on Windows test environments:** Backend test suites execute successfully with all assertions passing. On Windows, temporary SQLite database cleanup in conftest may fail with a PermissionError due to file locking; this does not affect test correctness and is a known pytest + Windows + temporary-file interaction. The test assertions themselves complete successfully before cleanup begins.
+
 ### Frontend web app
 
 ```powershell
