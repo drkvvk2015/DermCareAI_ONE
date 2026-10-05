@@ -24,20 +24,13 @@ jobs:
       - name: Generate authoritative web lockfile
         working-directory: webapp
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Restore authoritative backend lockfile from main when absent
-        shell: bash
-        run: |
-          if [ ! -f requirements-ci.lock ]; then
-            git fetch origin main --depth=1
-            git show origin/main:requirements-ci.lock > requirements-ci.lock
-          fi
       - name: Commit synchronized lockfiles
         shell: bash
         run: |
-          if ! git diff --quiet -- webapp/package-lock.json requirements-ci.lock; then
+          if ! git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add webapp/package-lock.json requirements-ci.lock
+            git add webapp/package-lock.json backend/requirements-ci.lock
             git commit -m "build: synchronize authoritative CI lockfiles [skip ci]"
             git push
           fi

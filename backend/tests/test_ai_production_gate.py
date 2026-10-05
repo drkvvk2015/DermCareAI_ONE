@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from ai_release_evidence import validate_manifest_data, validate_manifest_file
+from ai_release_evidence import _placeholder, validate_manifest_data, validate_manifest_file
 from model_registry import production_artifact_eligible
 
 
@@ -85,3 +85,21 @@ def test_valid_looking_manifest_still_requires_real_artifact_when_requested(tmp_
     ok, problems = validate_manifest_file(path, model_dir=tmp_path, require_artifact=True)
     assert ok is False
     assert any("model artifact is missing" in item for item in problems)
+
+
+def test_placeholder_matching_rejects_only_complete_placeholder_values():
+    assert _placeholder("METHOD")
+    assert not _placeholder("isotonic regression method")
+    assert not _placeholder("evidence/external-validation-results.json")
+
+
+def test_requested_artifact_verification_requires_model_directory_and_mapping(tmp_path):
+    missing_directory = validate_manifest_data({}, require_artifact=True)
+    assert "model artifact verification requires model_dir" in missing_directory
+
+    unmapped_model = validate_manifest_data(
+        {"model": {"name": "custom_model"}},
+        model_dir=tmp_path,
+        require_artifact=True,
+    )
+    assert any("model artifact cannot be verified" in item for item in unmapped_model)
