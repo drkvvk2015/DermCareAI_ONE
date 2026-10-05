@@ -38,6 +38,8 @@ jobs:
   backend-regression:
     needs: synchronize-lockfiles
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     defaults:
       run:
         working-directory: backend
