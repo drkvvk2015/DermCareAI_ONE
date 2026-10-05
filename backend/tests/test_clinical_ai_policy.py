@@ -26,7 +26,7 @@ def test_production_generative_assist_requires_model_revision(monkeypatch):
 
     assert capabilities().generative_assist_enabled is False
 
-    monkeypatch.setenv("MEDGEMMA_REVISION", "immutable-test-revision")
+    monkeypatch.setenv("MEDGEMMA_REVISION", "0123456789abcdef0123456789abcdef01234567")
     assert capabilities().generative_assist_enabled is True
 
 
