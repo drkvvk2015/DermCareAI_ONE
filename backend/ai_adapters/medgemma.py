@@ -119,7 +119,15 @@ class MedGemmaAdapter:
             do_sample=self.config.temperature > 0,
             **({"temperature": self.config.temperature} if self.config.temperature > 0 else {}),
         )
-        generated = outputs[0][inputs["input_ids"].shape[-1]:]
+        input_ids = inputs["input_ids"]
+        shape = getattr(input_ids, "shape", None)
+        if shape is not None:
+            input_length = int(shape[-1])
+        elif input_ids and isinstance(input_ids[0], (list, tuple)):
+            input_length = len(input_ids[0])
+        else:
+            input_length = len(input_ids)
+        generated = outputs[0][input_length:]
         text = self._processor.decode(generated, skip_special_tokens=True).strip()
         return {
             "model_name": "MedGemma",
