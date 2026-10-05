@@ -306,6 +306,8 @@ This script will:
 - copy `webapp/.env.example` to `webapp/.env` when needed;
 - install the frontend dependencies from `webapp/package.json` with `npm ci` when a lockfile is present.
 
+**Firebase is a required clinical-access setup step.** After the script completes, populate the Firebase Web App values in `webapp/.env`, provision `organization_id`, `clinic_id`, and `roles` custom claims for authorized clinicians, and verify the target Firebase project. Follow [Firebase Authentication and Firestore Setup](docs/FIREBASE_SETUP.md) before using real clinical accounts.
+
 ### Backend
 
 ```powershell
