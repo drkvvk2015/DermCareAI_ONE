@@ -6,16 +6,19 @@ DermCareAI handles clinical, identity, billing, pharmacy, and audit data. Securi
 
 | Version | Security support |
 | --- | --- |
-| main / current production release | Supported |
-| Older releases | Best effort; upgrade to the current supported release |
+| Latest `5.1.x` patch | Supported |
+| Earlier `5.1.x` patches | Upgrade to the latest patch |
+| `5.0.x`, `4.x`, and older | Unsupported |
 
-Security fixes are prioritized for the current production release and the active development branch.
+Security fixes target the latest patch release in the current `5.1.x` line and the active development branch.
 
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately through the repository's GitHub Security Advisories channel:
 
 **GitHub → Security → Advisories → Report a vulnerability**
+
+Repository maintainers must enable private vulnerability reporting in repository settings for this route to be available. If it is unavailable, contact the repository owner privately through the contact method listed on the owner's GitHub profile. Do not use a public issue, discussion, pull request, or commit message.
 
 Do not include real patient data, access tokens, service-account keys, production credentials, or other regulated information in the report. Use synthetic identifiers and sanitized logs.
 
@@ -29,7 +32,7 @@ Include, where available:
 
 ## Response expectations
 
-We aim to acknowledge a report within **3 business days**, provide an initial triage decision within **7 business days**, and coordinate a remediation and disclosure timeline based on severity and exploitability.
+We aim to acknowledge a report within **3 business days**, provide an initial triage decision within **7 business days**, and provide an update at least every **14 calendar days** while it remains open. We coordinate a remediation and disclosure timeline based on severity and exploitability.
 
 Reports may be declined when they are duplicates, are not security issues, or cannot be reproduced. Valid reports may result in a private fix, regression test, release note, and coordinated advisory.
 

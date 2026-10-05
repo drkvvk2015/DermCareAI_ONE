@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
+from PIL.Image import DecompressionBombError, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from dermatology.analytics_api import router as dermatology_analytics_router
@@ -84,18 +85,26 @@ async def request_context_middleware(request: Request, call_next):
     request_id = new_request_id(request.headers.get("X-Request-ID"))
     token = set_request_id(request_id)
     started = time.perf_counter()
+    response: JSONResponse | Any
     content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > MAX_REQUEST_BODY_BYTES:
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": "Request body exceeds configured size limit"},
-                )
-        except ValueError:
-            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
     try:
-        response = await call_next(request)
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                    response = JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request body exceeds configured size limit"},
+                    )
+                else:
+                    response = await call_next(request)
+            except ValueError:
+                response = JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid Content-Length header"},
+                )
+        else:
+            response = await call_next(request)
+
         elapsed_ms = (time.perf_counter() - started) * 1000
         record_request(response.status_code, elapsed_ms)
         response.headers["X-Request-ID"] = request_id
@@ -185,8 +194,10 @@ class ModelService:
                 except Exception as embedded_exc:
                     self.embedded = None
                     self.last_error = f"Local models: {exc}; embedded model: {embedded_exc}"
+                    logger.exception("All model loading paths failed")
+            else:
+                logger.warning("AI model unavailable: %s", self.last_error)
             self.mode = "unavailable"
-            logger.exception("All model loading paths failed")
             return False
 
     def recover(self) -> bool:
@@ -211,7 +222,10 @@ class ModelService:
     def process_image(self, image_bytes: bytes) -> Dict[str, Any]:
         if self.mode == "unavailable":
             raise RuntimeError("AI model service is unavailable")
-        image = Image.open(io.BytesIO(image_bytes))
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+        except DecompressionBombError as exc:
+            raise ValueError("Image dimensions exceed configured safety limit") from exc
         if image.width * image.height > Image.MAX_IMAGE_PIXELS:
             raise ValueError("Image dimensions exceed configured safety limit")
         image = image.convert("RGB")
@@ -495,9 +509,23 @@ def model_status(_: dict[str, Any] = Depends(require_roles("admin", "auditor")))
 async def predict(request: Request, file: UploadFile = File(...), user: dict[str, Any] = Depends(require_roles("doctor", "admin"))) -> Dict[str, Any]:
     user_key = client_key(request, user["uid"])
     enforce_rate_limit(f"predict:{user_key}", limit=30, window_seconds=60)
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    allowed_mime_formats = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+    expected_format = allowed_mime_formats.get((file.content_type or "").lower())
+    if expected_format is None:
+        raise HTTPException(status_code=400, detail="Unsupported image MIME type")
     contents = await read_upload_limited(file, MAX_IMAGE_BYTES)
+    try:
+        with Image.open(io.BytesIO(contents)) as uploaded:
+            uploaded_format = str(uploaded.format or "").upper()
+            uploaded.verify()
+            if uploaded_format != expected_format:
+                raise HTTPException(status_code=400, detail="Image MIME type does not match decoded format")
+    except HTTPException:
+        raise
+    except DecompressionBombError as exc:
+        raise HTTPException(status_code=413, detail="Image dimensions exceed configured safety limit") from exc
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Unable to decode image upload") from exc
     if not contents:
         raise HTTPException(status_code=400, detail="Empty image upload")
     try:

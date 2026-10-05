@@ -22,8 +22,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest fastapi pydantic httpx firebase-admin SQLAlchemy 'psycopg[binary]' python-multipart Pillow opencv-python-headless numpy
+      - name: Install locked test dependencies
+        run: python -m pip install --require-hashes -r requirements-ci.lock
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run regression tests
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: dermcareai/package-lock.json
       - name: Install dependencies
@@ -61,3 +61,24 @@ jobs:
         run: npx expo prebuild --no-install --non-interactive
       - name: Validate Expo project
         run: npx expo-doctor
+
+  web-dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+      - name: Install dashboard dependencies
+        run: npm ci
+      - name: Dashboard lint
+        run: npm run lint
+      - name: Dashboard build
+        run: npm run build
+      - name: Dashboard tests
+        run: npm run test -- --run

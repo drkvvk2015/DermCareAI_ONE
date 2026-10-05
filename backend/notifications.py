@@ -38,7 +38,7 @@ def _tenant(user: dict[str, Any]) -> tuple[str, str]:
     return str(organization_id), str(clinic_id)
 
 
-async def send_whatsapp(req: RegistrationNotification) -> Dict[str, Any]:
+async def send_whatsapp(req: RegistrationNotification, delivery_key: str | None = None) -> Dict[str, Any]:
     token = os.getenv("META_WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.getenv("META_WHATSAPP_PHONE_NUMBER_ID")
     if not token or not phone_number_id:
@@ -61,11 +61,10 @@ async def send_whatsapp(req: RegistrationNotification) -> Dict[str, Any]:
         },
     }
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            json=payload,
-        )
+        headers = {"Authorization": f"Bearer {token}"}
+        if delivery_key:
+            headers["Idempotency-Key"] = delivery_key
+        response = await client.post(url, headers=headers, json=payload)
     if response.status_code >= 400:
         raise RuntimeError("WhatsApp provider rejected the message")
     messages = response.json().get("messages", [])
@@ -76,7 +75,7 @@ async def send_whatsapp(req: RegistrationNotification) -> Dict[str, Any]:
     }
 
 
-async def send_sms(req: RegistrationNotification) -> Dict[str, Any]:
+async def send_sms(req: RegistrationNotification, delivery_key: str | None = None) -> Dict[str, Any]:
     url = os.getenv("SMS_PROVIDER_URL")
     token = os.getenv("SMS_PROVIDER_TOKEN")
     sender = os.getenv("SMS_SENDER_ID")
@@ -89,23 +88,25 @@ async def send_sms(req: RegistrationNotification) -> Dict[str, Any]:
         "message": f"Dear {req.patient_name}, {req.appointment_text}",
     }
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            json=payload,
-        )
+        headers = {"Authorization": f"Bearer {token}"}
+        if delivery_key:
+            headers["Idempotency-Key"] = delivery_key
+        response = await client.post(url, headers=headers, json=payload)
     if response.status_code >= 400:
         raise RuntimeError("SMS provider rejected the message")
     return {"channel": "sms", "status": "sent", "provider_message_id": None}
 
 
-async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
+async def social_safe_webhook(req: RegistrationNotification, delivery_key: str | None = None) -> Dict[str, Any]:
     url = os.getenv("SOCIAL_NOTIFICATION_WEBHOOK_URL")
     if not url:
         return {"channel": "social_webhook", "status": "not_configured"}
     payload = {"event": "patient_registration", "event_version": "v1"}
+    if delivery_key:
+        payload["delivery_key"] = delivery_key
     async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.post(url, json=payload)
+        headers = {"Idempotency-Key": delivery_key} if delivery_key else None
+        response = await client.post(url, headers=headers, json=payload)
     if response.status_code >= 400:
         raise RuntimeError("Social notification webhook failed")
     return {"channel": "social_webhook", "status": "sent", "provider_message_id": None}
@@ -114,12 +115,13 @@ async def social_safe_webhook(req: RegistrationNotification) -> Dict[str, Any]:
 async def _deliver(row: dict[str, Any]) -> None:
     try:
         req = RegistrationNotification.model_validate(json.loads(row["payload_json"]))
+        delivery_key = str(row.get("delivery_key") or row["id"])
         if row["channel"] == "whatsapp":
-            result = await send_whatsapp(req)
+            result = await send_whatsapp(req, delivery_key)
         elif row["channel"] == "sms":
-            result = await send_sms(req)
+            result = await send_sms(req, delivery_key)
         else:
-            result = await social_safe_webhook(req)
+            result = await social_safe_webhook(req, delivery_key)
         status = result.get("status")
         if status == "not_configured":
             mark_failed(row_id=row["id"], error=f"{row['channel']} provider is not configured", max_attempts=1)

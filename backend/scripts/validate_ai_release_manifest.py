@@ -1,55 +1,43 @@
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
-REQUIRED = {
-    "model": ["name", "version", "artifact_sha256"],
-    "dataset": ["name", "version", "locked_test_set_manifest"],
-    "metrics": ["sensitivity", "specificity", "ppv", "npv", "roc_auc", "pr_auc"],
-    "calibration": ["method", "result"],
-    "subgroups": ["status", "results"],
-    "ood": ["status", "results"],
-    "abstention": ["status", "results"],
-    "clinician_review": ["status", "override_analysis"],
-    "external_validation": ["status", "site_or_dataset"],
-    "approval": ["status", "approved_by", "approved_at"],
-}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ai_release_evidence import validate_ai_release_manifest
 
 
-def main(path: str) -> int:
-    data = json.loads(Path(path).read_text())
-    problems: list[str] = []
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Check the structure and model identity of an AI release evidence package.")
+    parser.add_argument("manifest", nargs="?", default="docs/ai-validation/release-manifest.json")
+    parser.add_argument("--expected-model-name")
+    parser.add_argument("--expected-model-version")
+    parser.add_argument("--expected-artifact-sha256")
+    args = parser.parse_args()
 
-    for section, fields in REQUIRED.items():
-        payload = data.get(section)
-        if not isinstance(payload, dict):
-            problems.append(f"{section}: missing object")
-            continue
-        for field in fields:
-            value = payload.get(field)
-            if value in (None, "", [], {}):
-                problems.append(f"{section}.{field}: missing")
+    try:
+        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"AI RELEASE EVIDENCE: FAIL ({exc})")
+        return 1
 
-    if data.get("release_status") != "approved":
-        problems.append("release_status must be 'approved'")
-
-    if data.get("intended_use_statement") in (None, ""):
-        problems.append("intended_use_statement: missing")
-
-    if data.get("research_only") is True and data.get("release_status") == "approved":
-        problems.append("research_only model cannot have an approved clinical release status")
-
+    problems = validate_ai_release_manifest(
+        manifest,
+        expected_model_name=args.expected_model_name,
+        expected_model_version=args.expected_model_version,
+        expected_artifact_sha256=args.expected_artifact_sha256,
+    )
     if problems:
         print("AI RELEASE EVIDENCE: FAIL")
         for problem in problems:
             print(f"- {problem}")
         return 1
 
-    print("AI RELEASE EVIDENCE: PASS")
+    print("AI RELEASE EVIDENCE: PASS (structural check only; accountable clinical review remains required)")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1] if len(sys.argv) > 1 else "docs/ai-validation/release-manifest.json"))
+    raise SystemExit(main())

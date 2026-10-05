@@ -1,5 +1,5 @@
 import SHA256 from 'crypto-js/sha256';
-import auth from '@react-native-firebase/auth';
+import { getAuth } from '@react-native-firebase/auth';
 import { API_URL } from '@env';
 
 export type InvoiceItem = { description: string; quantity: number; unit_price: number; tax_percent?: number };
@@ -7,7 +7,7 @@ export type Invoice = { id: string; patient_id: string; subtotal: number; tax: n
 export type StockItem = { medicine_id: string; name: string; quantity: number; reorder_level?: number; batch?: string; expiry?: string; unit_price?: number };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const user = auth().currentUser;
+  const user = getAuth().currentUser;
   const token = user ? await user.getIdToken() : null;
   if (!token) throw new Error('Authentication required. Please sign in again.');
   const response = await fetch(`${API_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers || {}) } });

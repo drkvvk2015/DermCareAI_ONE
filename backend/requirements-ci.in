@@ -1,0 +1,14 @@
+# Lightweight, Python 3.12 dependency set for backend regression CI.
+# Keep aligned with the imports exercised by backend/tests.
+pytest
+fastapi
+pydantic
+httpx
+firebase-admin
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+python-multipart
+Pillow
+opencv-python-headless
+numpy
+pip-audit

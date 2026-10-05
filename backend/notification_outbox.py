@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -18,6 +19,7 @@ _ENGINE = create_store_engine(
 )
 require_postgres_in_production(_ENGINE, "Notification outbox")
 _LOCK = Lock()
+NOTIFICATION_RETENTION_DAYS = max(1, int(os.getenv("NOTIFICATION_RETENTION_DAYS", "30")))
 
 
 def _now() -> datetime:
@@ -40,6 +42,8 @@ def init_outbox() -> None:
                 channel TEXT NOT NULL,
                 payload_json TEXT NOT NULL,
                 payload_hash TEXT,
+                delivery_key TEXT,
+                retention_until TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 attempts INTEGER NOT NULL DEFAULT 0,
                 available_at TEXT NOT NULL,
@@ -58,6 +62,41 @@ def init_outbox() -> None:
         columns = {column["name"] for column in inspect(conn._conn).get_columns("notification_outbox")}
         if "payload_hash" not in columns:
             conn.execute("ALTER TABLE notification_outbox ADD COLUMN payload_hash TEXT")
+        if "delivery_key" not in columns:
+            conn.execute("ALTER TABLE notification_outbox ADD COLUMN delivery_key TEXT")
+        if "retention_until" not in columns:
+            conn.execute("ALTER TABLE notification_outbox ADD COLUMN retention_until TEXT")
+        rows = conn.execute(
+            """
+            SELECT id, organization_id, clinic_id, event_key, channel, created_at, sent_at
+            FROM notification_outbox
+            WHERE delivery_key IS NULL OR retention_until IS NULL
+            """
+        ).fetchall()
+        for row in rows:
+            retention_anchor = row["sent_at"] or row["created_at"]
+            try:
+                anchor = datetime.fromisoformat(str(retention_anchor))
+            except ValueError:
+                anchor = _now()
+            conn.execute(
+                """
+                UPDATE notification_outbox
+                SET delivery_key = COALESCE(delivery_key, ?),
+                    retention_until = COALESCE(retention_until, ?)
+                WHERE id = ?
+                """,
+                (
+                    request_hash({
+                        "organization_id": row["organization_id"],
+                        "clinic_id": row["clinic_id"],
+                        "event_key": row["event_key"],
+                        "channel": row["channel"],
+                    }),
+                    _iso(anchor + timedelta(days=NOTIFICATION_RETENTION_DAYS)),
+                    row["id"],
+                ),
+            )
 
 
 def enqueue_registration(
@@ -72,6 +111,7 @@ def enqueue_registration(
     now = _iso(_now())
     payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     payload_digest = request_hash(payload)
+    retention_until = _iso(_now() + timedelta(days=NOTIFICATION_RETENTION_DAYS))
     rows: list[dict[str, Any]] = []
     with compat_connection(_ENGINE) as conn:
         existing = conn.execute(
@@ -103,12 +143,18 @@ def enqueue_registration(
 
         for channel in channels:
             row_id = f"NTF-{uuid.uuid4().hex[:12].upper()}"
+            delivery_key = request_hash({
+                "organization_id": organization_id,
+                "clinic_id": clinic_id,
+                "event_key": event_key,
+                "channel": channel,
+            })
             conn.execute(
                 """
                 INSERT INTO notification_outbox (
                     id, organization_id, clinic_id, event_key, channel, payload_json,
-                    payload_hash, status, attempts, available_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
+                    payload_hash, delivery_key, retention_until, status, attempts, available_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
                 ON CONFLICT(organization_id, clinic_id, event_key, channel) DO NOTHING
                 """,
                 (
@@ -119,6 +165,8 @@ def enqueue_registration(
                     channel,
                     payload_json,
                     payload_digest,
+                    delivery_key,
+                    retention_until,
                     now,
                     now,
                     now,
@@ -128,7 +176,7 @@ def enqueue_registration(
             dict(row)
             for row in conn.execute(
                 """
-                SELECT id, channel, status, attempts, provider_message_id, last_error
+                SELECT id, channel, status, attempts, provider_message_id, delivery_key, last_error
                 FROM notification_outbox
                 WHERE organization_id = ? AND clinic_id = ? AND event_key = ?
                 ORDER BY channel ASC
@@ -139,8 +187,25 @@ def enqueue_registration(
     return rows
 
 
+def purge_expired() -> int:
+    init_outbox()
+    now_iso = _iso(_now())
+    with compat_connection(_ENGINE) as conn:
+        result = conn.execute(
+            """
+            DELETE FROM notification_outbox
+            WHERE status IN ('sent', 'failed')
+              AND retention_until IS NOT NULL
+              AND retention_until <= ?
+            """,
+            (now_iso,),
+        )
+        return int(result.rowcount or 0)
+
+
 def claim_batch(*, limit: int = 8, lease_seconds: int = 120) -> list[dict[str, Any]]:
     init_outbox()
+    purge_expired()
     now = _now()
     now_iso = _iso(now)
     lease_iso = _iso(now + timedelta(seconds=lease_seconds))
@@ -194,13 +259,21 @@ def mark_sent(*, row_id: str, provider_message_id: str | None = None) -> None:
             UPDATE notification_outbox
             SET status = 'sent',
                 provider_message_id = ?,
+                payload_json = '{}',
                 last_error = NULL,
                 locked_until = NULL,
                 sent_at = ?,
+                retention_until = COALESCE(retention_until, ?),
                 updated_at = ?
             WHERE id = ?
             """,
-            (provider_message_id, now, now, row_id),
+            (
+                provider_message_id,
+                now,
+                _iso(_now() + timedelta(days=NOTIFICATION_RETENTION_DAYS)),
+                now,
+                row_id,
+            ),
         )
 
 
@@ -225,8 +298,20 @@ def mark_failed(*, row_id: str, error: str, max_attempts: int = 5) -> None:
                 available_at = ?,
                 locked_until = NULL,
                 last_error = ?,
+                retention_until = CASE
+                    WHEN ? = 'failed' THEN COALESCE(retention_until, ?)
+                    ELSE retention_until
+                END,
                 updated_at = ?
             WHERE id = ?
             """,
-            (status, _iso(available_at), error[:1000], _iso(now), row_id),
+            (
+                status,
+                _iso(available_at),
+                error[:1000],
+                status,
+                _iso(now + timedelta(days=NOTIFICATION_RETENTION_DAYS)),
+                _iso(now),
+                row_id,
+            ),
         )

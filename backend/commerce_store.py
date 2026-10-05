@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import re
 from typing import Any, Dict
 
 from sqlalchemy import Engine, inspect
@@ -15,6 +16,17 @@ require_postgres_in_production(ENGINE, "Commerce store")
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _canonical_expiry(value: str) -> str:
+    candidate = str(value).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", candidate):
+        raise ValueError("expiry must use canonical YYYY-MM-DD format")
+    try:
+        parsed = date.fromisoformat(candidate)
+    except ValueError as exc:
+        raise ValueError("expiry must be a valid calendar date") from exc
+    return parsed.isoformat()
 
 
 def init_store() -> None:
@@ -302,7 +314,7 @@ def upsert_batch(batch: Dict[str, Any], *, organization_id: str = "default-org",
     payload = dict(batch)
     batch_id = str(payload.get("batch_id", "")).strip()
     medicine_id = str(payload.get("medicine_id", "")).strip()
-    expiry = str(payload.get("expiry", "")).strip()
+    expiry = _canonical_expiry(payload.get("expiry", ""))
     quantity = float(payload.get("quantity", 0))
     blocked = bool(payload.get("blocked", False))
     if not batch_id or not medicine_id or not expiry:
@@ -369,7 +381,7 @@ def atomic_fefo_dispense(
             attempts = 0
             while remaining > 0 and attempts < 1000:
                 attempts += 1
-                row = execute(
+                rows = execute(
                     conn,
                     """SELECT batch_id, expiry, quantity, payload_json
                        FROM pharmacy_batches
@@ -378,16 +390,24 @@ def atomic_fefo_dispense(
                          AND medicine_id = :medicine_id
                          AND quantity > 0
                          AND blocked = FALSE
-                         AND expiry >= :on
-                       ORDER BY expiry, batch_id
-                       LIMIT 1""",
+                       LIMIT 100""",
                     {
                         "organization_id": organization_id,
                         "clinic_id": clinic_id,
                         "medicine_id": medicine_id,
-                        "on": on,
                     },
-                ).mappings().first()
+                ).mappings().all()
+                on_date = _canonical_expiry(on)
+                candidates = []
+                for candidate in rows:
+                    try:
+                        candidate_expiry = _canonical_expiry(candidate["expiry"])
+                    except ValueError:
+                        continue
+                    if candidate_expiry >= on_date:
+                        candidates.append((candidate_expiry, candidate))
+                candidates.sort(key=lambda item: (item[0], str(item[1]["batch_id"])))
+                row = candidates[0][1] if candidates else None
                 if row is None:
                     break
                 available = float(row["quantity"])
