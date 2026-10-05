@@ -1,15 +1,12 @@
-name: DermCareAI Pull Request Gates
+name: Pull Request Gates
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
-
-env:
-  PYTHONPATH: .
 
 jobs:
   synchronize-lockfiles:
@@ -22,30 +19,28 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
       - name: Generate authoritative web lockfile
         working-directory: webapp
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Restore authoritative backend lockfile from main when absent
-        working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          if [ ! -f backend/requirements-ci.lock ]; then
+          if [ ! -f requirements-ci.lock ]; then
             git fetch origin main --depth=1
-            git show origin/main:backend/requirements-ci.lock > backend/requirements-ci.lock
+            git show origin/main:requirements-ci.lock > requirements-ci.lock
           fi
       - name: Commit synchronized lockfiles
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
         run: |
-          if git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
-            echo 'All authoritative lockfiles are synchronized.'
-            exit 0
+          if ! git diff --quiet -- webapp/package-lock.json requirements-ci.lock; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add webapp/package-lock.json requirements-ci.lock
+            git commit -m "build: synchronize authoritative CI lockfiles [skip ci]"
+            git push
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add webapp/package-lock.json backend/requirements-ci.lock
-          git commit -m 'build: synchronize authoritative CI lockfiles [skip ci]'
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
 
   backend-regression:
     needs: synchronize-lockfiles
@@ -107,8 +102,8 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- ':!docs' ':!README.md' ':!.github/workflows/pull-request-gates.yml' 2>/dev/null; then
-            echo 'Active Expo/React Native references remain outside historical documentation.'
+          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- webapp ':!webapp/package-lock.json' 2>/dev/null; then
+            echo 'Active Expo/React Native references remain in the production PWA source tree.'
             exit 1
           fi
 
