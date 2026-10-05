@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from auth import require_roles
 from audit import AuditEvent, record_event
 from dermatology.clinical_documentation import validate_encounter, recommended_field_issues, DERMATOLOGY_RECOMMENDED_FIELDS
 from dermatology.clinical_workflow import TEMPLATES, get_history_template
 from idempotency import IdempotencyConflict, IdempotencyInProgress, begin_operation, complete_operation
+from patient_store import ActiveDoctorRequired, PatientStoreUnavailable, create_patient
 from clinical_store import (
     create_consent,
     create_encounter,
@@ -160,6 +161,88 @@ class AIReviewCreate(BaseModel):
 class AIReviewDecision(BaseModel):
     clinician_decision: str = Field(pattern="^(accepted|overridden|rejected)$")
     clinician_override_label: str | None = Field(default=None, max_length=200)
+
+
+class PatientCreate(BaseModel):
+    # Tenant and doctor fields are server-derived; extra keys are rejected.
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=200)
+    age: StrictInt = Field(ge=0, le=130)
+    gender: str = Field(pattern="^(male|female|other)$")
+    phone: str = Field(default="", max_length=50)
+    email: str = Field(default="", max_length=254)
+    address: str = Field(default="", max_length=1000)
+    medicalHistory: str = Field(default="", max_length=5000)
+    allergies: str = Field(default="", max_length=2000)
+    currentMedications: str = Field(default="", max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name must not be blank")
+        return value
+
+
+@router.post("/patients", status_code=201)
+def post_patient(
+    req: PatientCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
+):
+    organization_id, clinic_id = _tenant(user)
+    if not idempotency_key:
+        raise HTTPException(status_code=400, detail="Idempotency-Key header is required")
+    actor_id = str(user["uid"])
+    try:
+        replay = begin_operation(
+            scope="clinical",
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            actor_id=actor_id,
+            operation_key=idempotency_key,
+            payload={"method": "POST", "path": "/patients", "body": req.model_dump()},
+        )
+    except (IdempotencyConflict, IdempotencyInProgress) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if replay is not None:
+        return replay
+    roles = {str(role).lower() for role in user.get("roles", set())}
+    try:
+        patient_id = create_patient(
+            organization_id=organization_id,
+            clinic_id=clinic_id,
+            doctor_id=actor_id,
+            patient=req.model_dump(),
+            operation_key=idempotency_key,
+            require_active_doctor="admin" not in roles,
+        )
+    except ActiveDoctorRequired as exc:
+        raise HTTPException(status_code=403, detail="An active doctor account is required") from exc
+    except PatientStoreUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Patient registry is temporarily unavailable") from exc
+    record_event(
+        AuditEvent(
+            action="patient_created",
+            resource_type="patient",
+            resource_id=patient_id,
+            metadata={"organization_id": organization_id, "clinic_id": clinic_id},
+        ),
+        user,
+    )
+    result = {"id": patient_id}
+    complete_operation(
+        scope="clinical",
+        organization_id=organization_id,
+        clinic_id=clinic_id,
+        actor_id=actor_id,
+        operation_key=idempotency_key,
+        response=result,
+    )
+    return result
 
 
 @router.get("/templates")

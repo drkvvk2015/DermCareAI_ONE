@@ -30,6 +30,66 @@ export type ActiveConsent = {
   active: boolean;
 };
 
+export type NewPatientPayload = {
+  name: string;
+  age: number;
+  gender: string;
+  phone: string;
+  email: string;
+  address: string;
+  medicalHistory: string;
+  allergies: string;
+  currentMedications: string;
+};
+
+function safePatientCreateMessage(status: number): string {
+  if (status === 401) return 'Your session has expired. Sign in again.';
+  if (status === 403) return 'You do not have permission to register patients.';
+  if (status === 400 || status === 422) return 'The patient details were not accepted. Check the fields and try again.';
+  if (status === 409) return 'This registration is already being processed. Wait a moment and try again.';
+  if (status === 503) return 'The patient registry is temporarily unavailable. Try again shortly.';
+  return `The patient could not be registered (${status}).`;
+}
+
+// Online-only by design: patient data is never written to the offline sync queue.
+export const patientRegistrationApi = {
+  async create(patient: NewPatientPayload, idempotencyKey: string): Promise<{ id: string }> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Authentication required');
+    const token = await user.getIdToken();
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/v1/clinical/patients`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify(patient),
+      });
+    } catch {
+      throw new ClinicalApiError('Cannot reach the server. The patient was not saved; check your connection and try again.');
+    }
+    if (!response.ok) {
+      throw new ClinicalApiError(
+        safePatientCreateMessage(response.status),
+        response.status,
+        undefined,
+        response.headers.get('X-Request-ID') ?? undefined,
+      );
+    }
+    let parsed: unknown;
+    try { parsed = await response.json(); } catch { parsed = undefined; }
+    const id = (parsed as { id?: unknown } | undefined)?.id;
+    if (typeof id !== 'string' || !id) {
+      throw new ClinicalApiError('The server returned an unexpected response.', 502);
+    }
+    return { id };
+  },
+};
+
 export const clinicalApi = {
   getActiveConsent(patientId: string, purpose = 'clinical-image') {
     return authorizedRequest<ActiveConsent>(

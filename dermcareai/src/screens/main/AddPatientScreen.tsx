@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,19 +15,21 @@ import {
   SegmentedButtons,
 } from 'react-native-paper';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { collection, addDoc } from 'firebase/firestore';
-import { db, auth } from '../../config/firebase';
-import { getClinicScope } from '../../services/tenant';
+import { patientRegistrationApi } from '../../services/clinicalApi';
+import { isClinicalApiError } from '../../types/clinicalApi';
 
 type AddPatientScreenProps = {
   navigation: NativeStackNavigationProp<any>;
 };
 
+const newIdempotencyKey = () => `patient-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const AddPatientScreen: React.FC<AddPatientScreenProps> = ({ navigation }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
+  const idempotencyKey = useRef(newIdempotencyKey());
+  const [formData, setFormDataState] = useState({
     name: '',
     age: '',
     gender: 'male',
@@ -39,9 +41,20 @@ const AddPatientScreen: React.FC<AddPatientScreenProps> = ({ navigation }) => {
     currentMedications: '',
   });
 
+  // A changed payload needs a new key; the server rejects key reuse with different content.
+  const setFormData = (next: typeof formData) => {
+    idempotencyKey.current = newIdempotencyKey();
+    setFormDataState(next);
+  };
+
   const handleSubmit = async () => {
-    if (!formData.name || !formData.age) {
+    const age = Number(formData.age);
+    if (!formData.name.trim() || !formData.age.trim()) {
       setError('Please fill in all required fields');
+      return;
+    }
+    if (!Number.isInteger(age) || age < 0 || age > 130) {
+      setError('Enter a valid age');
       return;
     }
 
@@ -49,23 +62,14 @@ const AddPatientScreen: React.FC<AddPatientScreenProps> = ({ navigation }) => {
     setError('');
 
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
-      const { organizationId, clinicId } = await getClinicScope();
-
-      await addDoc(collection(db, 'patients'), {
-        ...formData,
-        organizationId,
-        clinicId,
-        doctorId: userId,
-        createdAt: new Date().toISOString(),
-        upcomingVisit: null,
-        age: parseInt(formData.age),
-      });
-
+      await patientRegistrationApi.create(
+        { ...formData, name: formData.name.trim(), age },
+        idempotencyKey.current,
+      );
+      idempotencyKey.current = newIdempotencyKey();
       navigation.goBack();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(isClinicalApiError(err) ? err.message : 'The patient could not be registered. Try again.');
     } finally {
       setLoading(false);
     }

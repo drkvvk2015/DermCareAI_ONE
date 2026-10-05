@@ -42,9 +42,11 @@ AI output remains **traceable and reviewable**. An attached AI assessment cannot
 
 The release model deliberately separates **software validation**, **clinical/AI validation**, and **regulatory/privacy review**. Passing CI is necessary engineering evidence, not proof of clinical validity or regulatory clearance.
 
-## Production hardening — mainline checkpoint, 4 October 2026
+## Production hardening — mainline checkpoint, 5 October 2026
 
 PR #212, merged as commit 8f1a5451c3d25c7210ed980e4667e11e6157310f, is the current security/reliability hardening baseline and supersedes PR #211. It covers the earlier ten-item production audit plus the final commerce, pharmacy, clinical-upload, dashboard-CI, and dependency-gating findings: payment events must be captured and authorized, pharmacy expiry values are canonical real dates, dispensing is tenant/patient/prescription scoped, clinical images are decoded and MIME-verified, the web dashboard has blocking lint/test/build gates, and remediable high/critical dependency findings block release.
+
+Shared patient registration has been added: a tenant-scoped, audited `POST /api/v1/clinical/patients` endpoint serves both the web dashboard and mobile app, with idempotency, tenant/clinician identity server-derived from verified claims, and audit metadata free of patient PHI. Existing Firestore reads and rules remain unchanged for backward compatibility.
 
 Production AI artifact verification has been hardened: the production-eligibility gate now fails closed for any model deployment whose name cannot be resolved to a locally verifiable artifact. Manifest validation test coverage was completed, error codes added for observability/audit, and helper functions extracted for maintainability. All 179 backend tests pass (178 baseline + 1 new manifest test).
 
@@ -54,10 +56,10 @@ The Android build path has also been aligned with Expo's Babel preset so clean n
 
 
 
-## Mainline release checkpoint — 4 October 2026
+## Mainline release checkpoint — 5 October 2026
 
-- **Latest merged hardening:** PR #212 → main (production commerce/pharmacy/clinical-upload hardening)
-- **Latest CodeSwarm execution:** Production AI artifact-identity gate hardened (4 October 2026)
+- **Latest merged hardening:** Shared patient registration API (5 October 2026) + PR #212 → main (production commerce/pharmacy/clinical-upload hardening)
+- **Latest CodeSwarm execution:** Shared patient creation endpoint (tenant-scoped, audited, idempotent) for web and mobile (5 October 2026); Production AI artifact-identity gate hardened (4 October 2026)
 - **Merge commit (PR #212):** 8f1a5451c3d25c7210ed980e4667e11e6157310f
 - **PR #212 head before merge:** 9b4935534345e97016c77a868a501758d460554f
 - **Required engineering gates:** ✅ green on the final PR #212 head, including CodeQL, backend/mobile regression, PostgreSQL integration, staging acceptance, production-preflight contract, Firestore rules, dependency audit, and dashboard lint/test/build
@@ -113,6 +115,7 @@ The final engineering swarm has now been integrated as three independently valid
 
 ### Clinical workflow
 
+- **Patient registration** — shared audited API endpoint for web and mobile; tenant and clinician identity server-derived from verified Firebase claims; idempotency key prevents duplicate submissions; no patient PHI in audit logs
 - Patient 360 clinical summary
 - Encounter-centered documentation
 - Structured dermatology history and examination
@@ -165,10 +168,12 @@ The final engineering swarm has now been integrated as three independently valid
 
 | Gate | State |
 | --- | --- |
-| Backend regression | ✅ Automated |
+| Shared patient registration | ✅ Tenant-scoped audited API; both web/mobile clients use shared endpoint; server-derived tenant/clinician fields; idempotency-safe |
+| Backend regression | ✅ Automated; all 24 patient-create tests pass |
 | Mobile TypeScript | ✅ Automated |
 | Expo export smoke test | ✅ Automated |
-| Web dashboard lint/tests/build | ✅ Configured in pull request CI |
+| Web dashboard lint/tests/build | ✅ Configured in pull request CI; patient-creation tests added |
+| Web API client | ✅ Automated; bearer auth and idempotency-key coverage added |
 | PostgreSQL integration | ✅ Automated |
 | Clinical API E2E | ✅ Automated |
 | Tenant isolation | ✅ Automated |
@@ -191,13 +196,14 @@ See [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md).
 
 | Change | Mainline evidence |
 | --- | --- |
+| Shared patient registration endpoint | ✅ 5 October 2026; POST /api/v1/clinical/patients; tenant-scoped, audited, idempotent; web + mobile clients integrated; server-derived tenant/clinician from verified claims |
 | Durable prescription dispense ledger integration | ✅ PR #155 merged |
 | Concurrent dispense ownership / bounded recovery | ✅ PR #156 merged |
 | Idempotent replay audit trace | ✅ PR #157 merged |
 | Production AI artifact-identity gate hardening | ✅ CodeSwarm execution 4 October 2026; fail-closed for unmapped models; manifest validation test added; 179/179 tests pass |
 | Production AI error observability | ✅ Structured error codes added for gate rejection paths; audit/debug clarity improved |
 | Required PR CI matrix | ✅ Green on the final integration wave |
-| Latest merged hardening | ✅ PR #212 merged to `main` on 4 October 2026 |
+| Latest merged hardening | ✅ PR #212 merged to `main` on 4 October 2026; patient registration added 5 October 2026 |
 | Open release PRs | ℹ️ Remaining PRs are not represented as approved simply because they are mergeable |
 | Clinical validation / regulatory approval | ⏳ Separate external evidence and governance gates remain incomplete |
 
