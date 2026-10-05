@@ -62,10 +62,9 @@ Production configuration:
 
 ```text
 ENABLE_CLINICAL_ASSIST_AI=true
-AI_DIAGNOSTIC_MODE=disabled
 ```
 
-The optional generative-assist lane is separately controlled and requires an immutable MedGemma revision in production. Diagnostic clinical mode remains protected by the complete evidence-manifest/artifact gate described in [Clinical AI Production Activation](docs/CLINICAL_AI_PRODUCTION_ACTIVATION.md).
+The optional generative-assist lane is separately controlled and requires an immutable MedGemma revision in production. Diagnostic evaluation is not an application-level activation option; any future diagnostic capability requires a separately governed deployment as described in [Clinical AI Production Activation](docs/CLINICAL_AI_PRODUCTION_ACTIVATION.md).
 
 ## Mainline release checkpoint — 4 October 2026
 

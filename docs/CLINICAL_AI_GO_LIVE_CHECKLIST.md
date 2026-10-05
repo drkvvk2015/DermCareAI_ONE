@@ -9,7 +9,6 @@ APP_ENV=production
 ENABLE_CLINICAL_ASSIST_AI=true
 ENABLE_GENERATIVE_CLINICAL_ASSIST=false
 ENABLE_MEDGEMMA=false
-AI_DIAGNOSTIC_MODE=disabled
 ```
 
 Verify:
@@ -40,15 +39,7 @@ The production adapter rejects an unpinned revision. Patient-linked image review
 
 ## Diagnostic development/evaluation boundary
 
-Do **not** attempt to activate diagnostic inference with:
-
-```text
-AI_DIAGNOSTIC_MODE=clinical
-```
-
-The application policy intentionally keeps diagnostic mode disabled and does not expose an executable production switch for autonomous or diagnostic clinical inference.
-
-A future diagnostic evaluation must use a separate governed deployment and complete the schema-v2 evidence manifest, exact model-artifact identity, validation evidence, accountable approvals, privacy/security review, staging/rollback evidence, and applicable regulatory/governance requirements before any patient-facing use.
+The application does not expose an environment-variable switch for diagnostic inference. Any future diagnostic evaluation must use a separately governed deployment and complete the schema-v2 evidence manifest, exact model-artifact identity, validation evidence, accountable approvals, privacy/security review, staging/rollback evidence, and applicable regulatory/governance requirements before any patient-facing use.
 
 ## Clinical safety
 

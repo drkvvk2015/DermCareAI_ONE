@@ -276,6 +276,9 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
         <Card>
           <Card.Title title="Clinical AI Assist" subtitle="Assistive suggestions only — not a diagnosis" />
           <Card.Content>
+            <Text style={styles.warningText}>
+              Clinical AI Copilot — Suggestions only. Verify all information and make the final clinical decision.
+            </Text>
             <Text style={styles.meta}>
               The assistive engine never signs, diagnoses, prescribes, or silently changes the clinical record.
               Review the suggestions clinically before entering anything into the assessment.
@@ -292,6 +295,9 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
             </Button>
             {assistResult ? (
               <View style={styles.assistBox}>
+                <Text style={styles.meta}>
+                  Decision authority: {assistResult.decision_authority.replace('_', ' ')}
+                </Text>
                 <Chip icon={assistResult.abstained ? 'alert-circle' : 'information'}>
                   {assistResult.abstained ? 'Abstained' : 'Assistive output'}
                 </Chip>

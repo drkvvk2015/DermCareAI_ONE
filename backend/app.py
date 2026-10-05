@@ -26,6 +26,7 @@ from ai_governance import build_governance_card
 from audit import router as audit_router
 from auth import require_roles
 from clinical import router as clinical_router
+from clinical_ai_policy import diagnostic_clinical_activation_allowed
 from clinical_ai_assist_api import router as clinical_ai_assist_router
 from ai_registry import router as ai_registry_router
 from admin import router as admin_router
@@ -154,6 +155,14 @@ class ModelService:
 
     def load(self) -> bool:
         paths = self.model_paths
+        if not diagnostic_clinical_activation_allowed():
+            self.preprocessor = None
+            self.mobilenet = None
+            self.nasnet = None
+            self.embedded = None
+            self.mode = "unavailable"
+            self.last_error = "Diagnostic inference is disabled by the physician-final Clinical AI policy"
+            return False
         if APP_ENV == "production":
             if not AI_ENABLED_IN_PRODUCTION:
                 self.mode = "disabled-by-production-policy"
@@ -509,6 +518,8 @@ def model_status(_: dict[str, Any] = Depends(require_roles("admin", "auditor")))
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(request: Request, file: UploadFile = File(...), user: dict[str, Any] = Depends(require_roles("doctor", "admin"))) -> Dict[str, Any]:
+    if not diagnostic_clinical_activation_allowed():
+        raise HTTPException(status_code=503, detail="Diagnostic inference is disabled by the physician-final Clinical AI policy")
     user_key = client_key(request, user["uid"])
     enforce_rate_limit(f"predict:{user_key}", limit=30, window_seconds=60)
     allowed_mime_formats = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}

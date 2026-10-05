@@ -22,7 +22,6 @@ Enable the assistive lane with:
 ```text
 APP_ENV=production
 ENABLE_CLINICAL_ASSIST_AI=true
-AI_DIAGNOSTIC_MODE=disabled
 ```
 
 ### Lane B — Controlled evaluation
@@ -31,7 +30,7 @@ The repository does not expose a live-patient diagnostic shadow switch. Diagnost
 
 ### Lane C — Governed diagnostic development/evaluation boundary
 
-The application policy deliberately has **no executable diagnostic activation switch**. `AI_DIAGNOSTIC_MODE=clinical` is not a supported production activation path and cannot enable diagnostic inference.
+The application policy deliberately has **no executable diagnostic activation switch**. Diagnostic inference cannot be enabled through application configuration.
 
 If a future diagnostic capability is developed, it must be delivered as a separately governed deployment artifact outside this application-level Clinical AI Assist lane. That deployment must independently satisfy the complete evidence package, exact artifact binding, external/clinical validation, accountable clinical approvals, privacy/security review, staging/rollback evidence, applicable regulatory requirements, and documented release decision before any patient-facing use.
 
