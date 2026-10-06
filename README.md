@@ -48,6 +48,8 @@ PR #212, merged as commit 8f1a5451c3d25c7210ed980e4667e11e6157310f, is the curre
 
 Shared patient registration has been added: a tenant-scoped, audited `POST /api/v1/clinical/patients` endpoint serves both the web dashboard and mobile app, with idempotency, tenant/clinician identity server-derived from verified claims, and audit metadata free of patient PHI. Existing Firestore reads and rules remain unchanged for backward compatibility.
 
+Clinical guideline support is suggestion-only: clinicians choose among IADVL, AAD, BAD and NICE in the web patient summary and mobile encounter screen. Entries load from `GUIDELINES_DIR` (default `backend/guidelines/`) and must be clinician-approved (`approved_by`, `approved_on`); none are bundled, and drug-interaction and dosing checks are not performed.
+
 Production AI artifact verification has been hardened: the production-eligibility gate now fails closed for any model deployment whose name cannot be resolved to a locally verifiable artifact. Manifest validation test coverage was completed, error codes added for observability/audit, and helper functions extracted for maintainability. All 179 backend tests pass (178 baseline + 1 new manifest test).
 
 The production contract remains explicit: PostgreSQL is required in production; clinical AI remains disabled by default until approved production artifacts and independent clinical validation are in place; CI evidence is required before merge; and clinical/regulatory/privacy validation remains outside software CI. The artifact-identity gate now ensures that any production deployment without a verifiable, SHA-256-matched local artifact is rejected.

@@ -206,6 +206,45 @@ export const patientClinicalApi = {
   },
 };
 
+export const GUIDELINE_SOURCES = ['IADVL', 'AAD', 'BAD', 'NICE'] as const;
+export type GuidelineSource = (typeof GUIDELINE_SOURCES)[number];
+
+export type GuidelineQuery = {
+  symptoms: string[];
+  conditions: string[];
+  medications: string[];
+  allergies: string[];
+  sources: GuidelineSource[];
+};
+
+export type GuidelineRecommendation = {
+  summary: string;
+  guideline_id: string;
+  guideline_version: string;
+  citations: string[];
+  evidence_quality: string;
+  approved_by: string;
+  approved_on: string;
+  missing_information: string[];
+  contraindications_flagged: string[];
+  alternatives: string[];
+  confidence_score: number;
+  escalation_required: boolean;
+  notes: string[];
+};
+
+export const guidelineApi = {
+  sources() {
+    return authorizedRequest<{ sources: Record<GuidelineSource, number> }>('/api/v1/dermatology/guidelines');
+  },
+  recommend(query: GuidelineQuery) {
+    return authorizedRequest<{ matched: boolean; recommendation: GuidelineRecommendation | null }>(
+      '/api/v1/dermatology/guidelines/recommend',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(query) },
+    );
+  },
+};
+
 export type DermatologyTemplate = {
   condition: string;
   required_sections: string[];

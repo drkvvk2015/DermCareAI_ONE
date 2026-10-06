@@ -114,8 +114,69 @@ function asClinicalSummary(payload: unknown): ClinicalSummary {
   return value as ClinicalSummary;
 }
 
+export const GUIDELINE_SOURCES = ['IADVL', 'AAD', 'BAD', 'NICE'] as const;
+export type GuidelineSource = (typeof GUIDELINE_SOURCES)[number];
+
+export type GuidelineQuery = {
+  symptoms: string[];
+  conditions: string[];
+  medications: string[];
+  allergies: string[];
+  sources: GuidelineSource[];
+};
+
+export type GuidelineRecommendation = {
+  summary: string;
+  guideline_id: string;
+  guideline_version: string;
+  citations: string[];
+  evidence_quality: string;
+  approved_by: string;
+  approved_on: string;
+  missing_information: string[];
+  contraindications_flagged: string[];
+  alternatives: string[];
+  confidence_score: number;
+  escalation_required: boolean;
+  notes: string[];
+};
+
+export type GuidelineResult = { matched: boolean; recommendation: GuidelineRecommendation | null };
+export type GuidelineSources = Record<GuidelineSource, number>;
+
+async function recommendGuideline(query: GuidelineQuery, user: User): Promise<GuidelineResult> {
+  const token = await user.getIdToken();
+  const response = await fetch(`${apiBase}/api/v1/dermatology/guidelines/recommend`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(query),
+  });
+  if (!response.ok) {
+    const message = response.status === 401
+      ? 'Your session has expired. Sign in again.'
+      : response.status === 403
+        ? 'You do not have permission to use guideline support.'
+        : response.status === 422
+          ? 'The guideline query was not accepted. Check the terms and sources.'
+          : `Guideline support is unavailable (${response.status}).`;
+    throw new ApiError(response.status, message);
+  }
+  const payload = await response.json() as Record<string, unknown>;
+  if (typeof payload?.matched !== 'boolean') throw new ApiError(502, 'The server returned an unexpected response.');
+  return payload as unknown as GuidelineResult;
+}
+
+async function guidelineSources(user: User): Promise<GuidelineSources> {
+  const payload = await getJson('/api/v1/dermatology/guidelines', user) as Record<string, unknown>;
+  const sources = payload?.sources;
+  if (typeof sources !== 'object' || sources === null) throw new ApiError(502, 'The server returned an unexpected response.');
+  return sources as GuidelineSources;
+}
+
 export const api = {
   createPatient: createPatientRequest,
+  recommendGuideline,
+  guidelineSources,
   async clinicalSummary(patientId: string, user: User) {
     return asClinicalSummary(await getJson(`/api/v1/clinical/patients/${encodeURIComponent(patientId)}/summary`, user));
   },

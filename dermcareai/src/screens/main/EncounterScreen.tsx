@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, Divider, Snackbar, Text, TextInput, ActivityIndicator } from 'react-native-paper';
 import { NavigationProps } from '../../navigation/types';
 import { ClinicalAIReview, ClinicalEncounter, encounterApi } from '../../services/clinicalApi';
+import GuidelineSupportCard from '../../components/GuidelineSupportCard';
 
 const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, route }) => {
   const { encounterId, patient } = route.params;
@@ -302,6 +303,11 @@ const EncounterScreen: React.FC<NavigationProps<'Encounter'>> = ({ navigation, r
             )) : <Text style={styles.meta}>No AI assessment is attached to this encounter.</Text>}
           </Card.Content>
         </Card>
+
+        <GuidelineSupportCard
+          initialConditions={[provisionalDiagnosis, ...differential.split(',')].map(item => item.trim()).filter(Boolean)}
+          initialSymptoms={[chiefComplaint].map(item => item.trim()).filter(Boolean)}
+        />
 
         <Card><Card.Title title="Follow-up" subtitle="Record the intended review point" /><Card.Content>
           <TextInput mode="outlined" label="Due date/time (ISO 8601)" value={followupAt} onChangeText={setFollowupAt} disabled={signed} />
