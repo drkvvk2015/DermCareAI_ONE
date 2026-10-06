@@ -1,0 +1,6 @@
+node_modules/
+/FIREBASE SETUP/
+*CREDENTIALS*.txt
+.env
+.env.*
+!.env.example
