@@ -30,6 +30,15 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    // Local development: proxy relative API calls to the FastAPI dev server.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
