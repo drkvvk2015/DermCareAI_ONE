@@ -18,6 +18,13 @@ def build_governance_card(
         intended_use="Assist a qualified clinician with dermatology image review and prioritisation.",
         diagnostic_status="not_a_diagnosis",
         human_review_required=True,
+        advisory_scope=[
+            "diagnostic aid",
+            "differential diagnosis aid",
+            "guideline support for diagnosis and management",
+            "drug interaction alerts",
+            "dosage adjustment suggestions",
+        ],
         abstention_enabled=True,
         confidence_threshold=confidence_threshold,
         model_provenance=model_provenance,

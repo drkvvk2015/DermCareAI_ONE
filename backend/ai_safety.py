@@ -17,6 +17,10 @@ class SafetyDecision:
     clinical_use: str = "preliminary_assistive_only"
     requires_clinician_verification: bool = True
 
+    def __post_init__(self) -> None:
+        if not self.requires_clinician_verification:
+            raise ValueError("AI output always requires clinician verification")
+
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
 
