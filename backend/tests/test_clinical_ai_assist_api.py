@@ -339,3 +339,36 @@ def test_generative_review_receives_multipart_context_image_and_records_audit(mo
     assert event.action == "clinical_ai_assist_generative_image_review"
     assert event.metadata["organization_id"] == "org-1"
     assert event.metadata["clinic_id"] == "clinic-1"
+
+
+def test_generative_review_bounds_multipart_clinical_context(monkeypatch):
+    _enable_assist(monkeypatch, generative=True)
+    _install_encounter_and_consent(monkeypatch)
+
+    class StubAdapter:
+        def load(self):
+            return True
+
+        def review(self, _content, clinical_context):
+            return {
+                "model_name": "synthetic",
+                "model_id": "synthetic/model",
+                "revision": "a" * 40,
+                "image_sha256": "b" * 64,
+                "output": clinical_context,
+            }
+
+    monkeypatch.setattr(module, "_medgemma_adapter", StubAdapter)
+
+    async def run_inline(function, *args):
+        return function(*args)
+
+    monkeypatch.setattr(module, "run_inference", run_inline)
+
+    response = _post_image(
+        _http_client(),
+        GENERATIVE_REVIEW_PATH,
+        clinical_context="x" * 4001,
+    )
+
+    assert response.status_code == 422
