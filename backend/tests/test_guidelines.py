@@ -15,7 +15,7 @@ _ENTRY = {
     "recommendation": "Synthetic recommendation A",
     "supporting_evidence": ["synthetic ref"],
     "strength": "high",
-    "source": {"name": "Synthetic Source", "category": "test"},
+    "source": {"name": "NICE", "category": "test"},
     "version": {"guideline_id": "TEST-001", "version": "1.0", "publication_date": "2026-01-01"},
     "medications": ["drugx"],
     "contraindications": ["allergyx"],
@@ -58,6 +58,26 @@ def test_no_match_returns_none_and_duplicates_rejected() -> None:
     assert _store().recommend(PatientContext(symptoms=("unrelated",))) is None
     with pytest.raises(ValueError):
         GuidelineStore([EvidenceItem.model_validate(_ENTRY), EvidenceItem.model_validate(_ENTRY)])
+
+
+def test_clinician_can_select_guideline_sources() -> None:
+    other = {**_ENTRY, "guideline_id": "TEST-002", "recommendation": "Synthetic B",
+             "source": {"name": "BAD", "category": "test"},
+             "version": {"guideline_id": "TEST-002", "version": "2.0", "publication_date": "2026-03-01"}}
+    store = GuidelineStore([EvidenceItem.model_validate(_ENTRY), EvidenceItem.model_validate(other)])
+    base = {"conditions": ("testdisease",), "symptoms": ("itching",)}
+    assert store.available_sources() == {"IADVL": 0, "AAD": 0, "BAD": 1, "NICE": 1}
+    assert store.recommend(PatientContext(**base, sources=("BAD",))).guideline_id == "TEST-002"
+    assert store.recommend(PatientContext(**base, sources=("NICE",))).guideline_id == "TEST-001"
+    assert store.recommend(PatientContext(**base, sources=("AAD",))) is None
+    assert store.recommend(PatientContext(**base)) is not None
+
+
+def test_unsupported_source_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        PatientContext(symptoms=("x",), sources=("WHO",))
+    with pytest.raises(ValidationError):
+        EvidenceItem.model_validate({**_ENTRY, "source": {"name": "WHO", "category": "test"}})
 
 
 def test_missing_directory_yields_empty_store(tmp_path) -> None:

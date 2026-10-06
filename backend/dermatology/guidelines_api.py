@@ -26,7 +26,11 @@ def _store() -> GuidelineStore:
 
 @router.get("")
 def list_guidelines(_: dict = Depends(require_roles("doctor", "admin"))) -> dict[str, object]:
-    return {"advisory": ADVISORY_ENVELOPE, "guidelines": _store().list_guidelines()}
+    return {
+        "advisory": ADVISORY_ENVELOPE,
+        "sources": _store().available_sources(),
+        "guidelines": _store().list_guidelines(),
+    }
 
 
 @router.post("/recommend")

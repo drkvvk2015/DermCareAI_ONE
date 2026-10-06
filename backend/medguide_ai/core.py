@@ -4,9 +4,12 @@ from __future__ import annotations
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+GuidelineSource = Literal["IADVL", "AAD", "BAD", "NICE"]
+SUPPORTED_SOURCES: tuple[str, ...] = ("IADVL", "AAD", "BAD", "NICE")
 
 _STRENGTH_CONFIDENCE = {"high": 0.95, "moderate": 0.8, "low": 0.65}
 _MISSING_INFO_PENALTY = 0.15
@@ -23,7 +26,7 @@ class EvidenceStrength(str, Enum):
 
 
 class TrustedSource(BaseModel):
-    name: str = Field(min_length=1)
+    name: GuidelineSource
     category: str = Field(min_length=1)
     region: str = "global"
 
@@ -69,6 +72,7 @@ class PatientContext(BaseModel):
     conditions: tuple[str, ...] = Field(default=(), max_length=50)
     medications: tuple[str, ...] = Field(default=(), max_length=100)
     allergies: tuple[str, ...] = Field(default=(), max_length=50)
+    sources: tuple[GuidelineSource, ...] = Field(default=(), max_length=4)
 
 
 class Recommendation(BaseModel):
@@ -117,10 +121,19 @@ class GuidelineStore:
             for i in sorted(self._items.values(), key=lambda x: x.guideline_id)
         ]
 
+    def available_sources(self) -> dict[str, int]:
+        counts = {source: 0 for source in SUPPORTED_SOURCES}
+        for item in self._items.values():
+            counts[item.source.name] += 1
+        return counts
+
     def _match(self, patient: PatientContext) -> list[tuple[EvidenceItem, tuple[str, ...]]]:
         terms = _norm((*patient.symptoms, *patient.conditions))
+        selected = set(patient.sources)
         matches: list[tuple[EvidenceItem, tuple[str, ...]]] = []
         for item in self._items.values():
+            if selected and item.source.name not in selected:
+                continue
             keys = {item.disease.lower(), *_norm(item.required_information)}
             hit = tuple(sorted(terms & keys))
             if item.disease.lower() in terms or hit:

@@ -7,9 +7,11 @@ simulation paths are intentionally not vendored.
 from medguide_ai.core import (
     EvidenceItem,
     EvidenceStrength,
+    GuidelineSource,
     GuidelineStore,
     PatientContext,
     Recommendation,
+    SUPPORTED_SOURCES,
     TrustedSource,
     EvidenceVersion,
     load_guideline_dir,
@@ -19,9 +21,11 @@ __all__ = [
     "EvidenceItem",
     "EvidenceStrength",
     "EvidenceVersion",
+    "GuidelineSource",
     "GuidelineStore",
     "PatientContext",
     "Recommendation",
+    "SUPPORTED_SOURCES",
     "TrustedSource",
     "load_guideline_dir",
 ]
