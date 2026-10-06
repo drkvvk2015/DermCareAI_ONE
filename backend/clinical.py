@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -192,6 +193,8 @@ def post_patient(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
     organization_id, clinic_id = _tenant(user)
+    if os.getenv("PATIENT_REGISTRATION_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+        raise HTTPException(status_code=503, detail="Patient registration is currently disabled")
     if not idempotency_key:
         raise HTTPException(status_code=400, detail="Idempotency-Key header is required")
     actor_id = str(user["uid"])

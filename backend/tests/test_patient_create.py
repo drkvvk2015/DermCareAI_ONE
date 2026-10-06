@@ -134,6 +134,15 @@ def test_invalid_fields_rejected(env, override):
     assert fake.collections["patients"] == {}
 
 
+def test_registration_kill_switch_returns_503_without_writing(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("PATIENT_REGISTRATION_ENABLED", "false")
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
 def test_missing_idempotency_key_rejected(env):
     client, fake, _, _ = env
     assert client.post(URL, json=_body()).status_code == 400
