@@ -19,6 +19,8 @@ npm install
 npm run dev
 ```
 
+For local development, Vite serves the PWA on `http://localhost:5173` and proxies `/api/*` to FastAPI on `http://localhost:8000`. Keep `VITE_API_BASE_URL` blank when using this local proxy. For a deployed browser/PWA, set `VITE_API_BASE_URL` to the approved API origin and configure `CORS_ORIGINS` for that exact deployed origin.
+
 ## Validation
 
 ```bash
