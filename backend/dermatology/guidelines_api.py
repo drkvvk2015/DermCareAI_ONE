@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
-from functools import lru_cache
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,23 +21,69 @@ router = APIRouter(
 )
 
 _DEFAULT_DIR = Path(__file__).resolve().parent.parent / "guidelines"
+logger = logging.getLogger(__name__)
 
 
 def _dir() -> Path:
     return Path(os.getenv("GUIDELINES_DIR", str(_DEFAULT_DIR)))
 
 
-@lru_cache(maxsize=1)
+class _Loaded:
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.reset()
+
+    def reset(self) -> None:
+        self.directory: Path | None = None
+        self.signature: tuple | None = None
+        self.store = GuidelineStore()
+        self.loaded_at: str | None = None
+        self.load_error = False
+
+
+_loaded = _Loaded()
+
+
+def _signature(directory: Path) -> tuple:
+    if not directory.is_dir():
+        return ()
+    return tuple(
+        (p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in sorted(directory.glob("*.json"))
+    )
+
+
 def _store() -> GuidelineStore:
-    return load_guideline_dir(_dir())
+    """Return the approved guideline store, reloading when any guideline file changes."""
+    directory = _dir()
+    signature = _signature(directory)
+    with _loaded.lock:
+        if directory != _loaded.directory or signature != _loaded.signature:
+            try:
+                _loaded.store = load_guideline_dir(directory)
+                _loaded.load_error = False
+                _loaded.loaded_at = datetime.now(timezone.utc).isoformat()
+            except Exception as exc:  # keep serving the last good set; never load unvalidated entries
+                _loaded.load_error = True
+                logger.error("Guideline reload rejected: %s", type(exc).__name__)
+            _loaded.directory = directory
+            _loaded.signature = signature
+        return _loaded.store
+
+
+def reset_store() -> None:
+    with _loaded.lock:
+        _loaded.reset()
 
 
 @router.get("")
 def list_guidelines(_: dict = Depends(require_roles("doctor", "admin"))) -> dict[str, object]:
+    store = _store()
     return {
         "advisory": ADVISORY_ENVELOPE,
-        "sources": _store().available_sources(),
-        "guidelines": _store().list_guidelines(),
+        "sources": store.available_sources(),
+        "guidelines": store.list_guidelines(),
+        "loaded_at": _loaded.loaded_at,
+        "reload_rejected": _loaded.load_error,
     }
 
 
@@ -100,7 +148,7 @@ def review_update(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Update notice not found") from exc
     if req.outcome == "entry_updated":
-        _store.cache_clear()
+        reset_store()
     record_event(
         AuditEvent(
             action="guideline_update_reviewed",

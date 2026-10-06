@@ -67,7 +67,7 @@ def test_acknowledge_requires_valid_id_and_outcome(tmp_path) -> None:
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("GUIDELINES_DIR", str(tmp_path))
-    guidelines_api._store.cache_clear()
+    guidelines_api.reset_store()
     monkeypatch.setattr(guidelines_api, "record_event", lambda event, user: None)
     monkeypatch.setattr(guidelines_api, "check_for_updates", lambda directory: updates.check_for_updates(directory, fetch=lambda u: b"x"))
     current = {"uid": "doctor-1", "roles": {"doctor"}, "claims": {"organization_id": "o", "clinic_id": "c"}}
@@ -76,7 +76,7 @@ def client(monkeypatch, tmp_path):
     app.dependency_overrides[get_current_user] = lambda: current
     _configure(tmp_path)
     yield TestClient(app), current, tmp_path
-    guidelines_api._store.cache_clear()
+    guidelines_api.reset_store()
 
 
 def test_only_admin_can_trigger_check_and_doctor_can_review(client) -> None:
@@ -94,3 +94,35 @@ def test_only_admin_can_trigger_check_and_doctor_can_review(client) -> None:
     assert ok.status_code == 200 and ok.json()["reviewed_by"] == "doctor-1"
     missing = http.post("/api/v1/dermatology/guidelines/updates/NOPE-1/review", json={"outcome": "no_clinical_change"})
     assert missing.status_code == 404
+
+
+def test_guideline_files_are_reloaded_automatically_on_change(tmp_path, monkeypatch) -> None:
+    import json as _json
+    import os
+
+    from tests.test_guidelines import _ENTRY
+
+    monkeypatch.setenv("GUIDELINES_DIR", str(tmp_path))
+    guidelines_api.reset_store()
+    assert guidelines_api._store().list_guidelines() == []
+
+    path = tmp_path / "g.json"
+    path.write_text(_json.dumps([_ENTRY]), encoding="utf-8")
+    assert [g["guideline_id"] for g in guidelines_api._store().list_guidelines()] == ["TEST-001"]
+
+    updated = {**_ENTRY, "recommendation": "Synthetic updated"}
+    path.write_text(_json.dumps([updated]), encoding="utf-8")
+    os.utime(path, ns=(1, 2_000_000_000))
+    assert guidelines_api._store()._items["TEST-001"].recommendation == "Synthetic updated"
+
+    path.write_text("{ not valid json", encoding="utf-8")
+    os.utime(path, ns=(1, 3_000_000_000))
+    assert guidelines_api._store()._items["TEST-001"].recommendation == "Synthetic updated"
+    assert guidelines_api._loaded.load_error is True
+
+    unapproved = {k: v for k, v in _ENTRY.items() if k != "approved_by"}
+    path.write_text(_json.dumps([unapproved]), encoding="utf-8")
+    os.utime(path, ns=(1, 4_000_000_000))
+    assert guidelines_api._store()._items["TEST-001"].recommendation == "Synthetic updated"
+    assert guidelines_api._loaded.load_error is True
+    guidelines_api.reset_store()
