@@ -120,15 +120,26 @@ def list_pending(directory: Path) -> list[dict]:
 
 
 def acknowledge(directory: Path, notice_id: str, reviewer: str, outcome: str) -> dict:
-    if not _ID_RE.match(notice_id):
+    if not _ID_RE.fullmatch(notice_id):
         raise ValueError("invalid notice id")
     if outcome not in REVIEW_OUTCOMES:
         raise ValueError("invalid outcome")
+
     _, pending, reviewed = _dirs(directory)
-    path = pending / f"{notice_id}.json"
-    if not path.is_file():
+    notice_path: Path | None = None
+    for candidate in pending.glob("*.json"):
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("id") == notice_id:
+            notice_path = candidate
+            notice = payload
+            break
+
+    if notice_path is None:
         raise FileNotFoundError(notice_id)
-    notice = json.loads(path.read_text(encoding="utf-8"))
+
     notice.update(
         status="reviewed",
         outcome=outcome,
@@ -136,8 +147,9 @@ def acknowledge(directory: Path, notice_id: str, reviewer: str, outcome: str) ->
         reviewed_at=datetime.now(timezone.utc).isoformat(),
     )
     reviewed.mkdir(parents=True, exist_ok=True)
-    (reviewed / path.name).write_text(json.dumps(notice, indent=2), encoding="utf-8")
-    path.unlink()
+    reviewed_path = reviewed / notice_path.name
+    reviewed_path.write_text(json.dumps(notice, indent=2), encoding="utf-8")
+    notice_path.unlink()
     return notice
 
 
