@@ -1,7 +1,7 @@
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { URL, fileURLToPath } from "node:url";
 
 const testEnv = await initializeTestEnvironment({
   projectId: "demo-dermcareai",
@@ -45,7 +45,6 @@ try {
   await assertFails(updateDoc(doc(otherTenant.firestore(), "patients/p1"), { name: "Cross-tenant write" }));
 
   await testEnv.clearFirestore();
-  console.log("Firestore tenant/RBAC rules: PASS");
 } finally {
   await testEnv.cleanup();
 }
