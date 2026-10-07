@@ -1,0 +1,1 @@
+PWA-first migration has been initiated on `migration/pwa-capacitor-core`. The webapp is now the canonical client, PWA packaging is enabled, Capacitor 8 configuration is present, and Expo is removed from the active pull-request gate.

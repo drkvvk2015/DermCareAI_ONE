@@ -6,6 +6,13 @@ from typing import Any
 from platform_contracts import AIGovernanceCard
 
 
+IMPLEMENTED_ADVISORY_SCOPE = [
+    "diagnostic aid",
+    "differential diagnosis aid",
+    "dermatology image review support",
+]
+
+
 def build_governance_card(
     *,
     model_name: str,
@@ -18,6 +25,9 @@ def build_governance_card(
         intended_use="Assist a qualified clinician with dermatology image review and prioritisation.",
         diagnostic_status="not_a_diagnosis",
         human_review_required=True,
+        can_sign_diagnosis=False,
+        can_prescribe=False,
+        advisory_scope=list(IMPLEMENTED_ADVISORY_SCOPE),
         abstention_enabled=True,
         confidence_threshold=confidence_threshold,
         model_provenance=model_provenance,
@@ -34,6 +44,7 @@ def build_governance_card(
             "Performance may vary across populations, devices, lighting and acquisition conditions.",
             "Research models are not established as standalone diagnostic devices.",
             "A model prediction must be interpreted with clinical history, examination and indicated investigations.",
+            "Guideline lookup, drug-interaction evaluation, and dosage adjustment are separate governed capabilities and are not provided by this model contract.",
         ],
     )
     return card.model_dump()

@@ -4,6 +4,7 @@ import { Link, NavLink, useParams } from 'react-router-dom';
 import { api, type ClinicalSummary } from '../api/client';
 import { useSession } from '../auth/Session';
 import { DataState, EmptyState, LoadingState } from '../components/DataState';
+import { GuidelinePanel } from '../components/GuidelinePanel';
 import { useResource } from '../hooks/useResource';
 
 function text(value: unknown) { return typeof value === 'string' && value.trim() ? value : 'Not recorded'; }
@@ -47,6 +48,7 @@ export function PatientSummaryPage() {
           {data.signoffs.length ? <ul className="record-list">{data.signoffs.map((item, index) => <li key={String(item.id ?? index)}><div className="record-row"><strong>Reviewed</strong><time>{date(item.signed_at)}</time></div><p>{text(item.attestation)}</p></li>)}</ul> : <EmptyState title="No signoffs" message="No signoff records are available for this patient." />}
         </section>
       </div>
+      <GuidelinePanel />
     </section>
   );
 }

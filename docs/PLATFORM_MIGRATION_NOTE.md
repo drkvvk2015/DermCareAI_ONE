@@ -1,0 +1,1 @@
+Canonical client: webapp PWA. Native mobile distribution: Capacitor. Expo is not an active CI target. See PLATFORM_MIGRATION_STATUS.md for remaining cleanup gates.

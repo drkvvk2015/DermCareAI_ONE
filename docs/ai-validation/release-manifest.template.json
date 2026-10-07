@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "release_status": "not_ready",
   "intended_use_statement": "",
   "research_only": true,
@@ -45,8 +46,8 @@
     "protocol_id": "",
     "site_or_cohort": "",
     "evidence": { "uri": "", "sha256": "" }
-  },
-  "approval": {
+},
+"approval": {
     "status": "pending",
     "approved_by": "",
     "approved_at": "",
