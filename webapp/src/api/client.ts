@@ -133,6 +133,10 @@ export type GuidelineRecommendation = {
   evidence_quality: string;
   approved_by: string;
   approved_on: string;
+  source_identifier: string;
+  publication_date: string;
+  retrieved_at: string;
+  evidence_status: 'current' | 'superseded' | 'conflicting';
   missing_information: string[];
   contraindications_flagged: string[];
   alternatives: string[];

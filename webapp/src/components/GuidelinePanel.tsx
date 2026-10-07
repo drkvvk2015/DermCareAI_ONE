@@ -18,8 +18,15 @@ export function GuidelinePanel() {
     api.guidelineSources(user).then(setAvailable).catch(() => setAvailable(null));
   }, [user]);
 
-  const toggle = (source: GuidelineSource) =>
+  const toggle = (source: GuidelineSource) => {
+    setResult(null);
     setSelected((current) => (current.includes(source) ? current.filter((item) => item !== source) : [...current, source]));
+  };
+
+  const updateField = (key: keyof typeof fields, value: string) => {
+    setResult(null);
+    setFields((current) => ({ ...current, [key]: value }));
+  };
 
   const submit = async () => {
     if (!user) return;
@@ -46,7 +53,7 @@ export function GuidelinePanel() {
     <section className="summary-section" aria-labelledby="guideline-heading">
       <div className="section-title"><h2 id="guideline-heading">Guideline support</h2></div>
       <p><strong>Suggestion only.</strong> Guidance for the treating clinician; it does not make decisions, diagnose or prescribe. Interactions and dosing are not evaluated.</p>
-      <fieldset>
+      <fieldset disabled={busy}>
         <legend>Guideline sources (none selected = all)</legend>
         {GUIDELINE_SOURCES.map((source) => (
           <label key={source} style={{ marginRight: 12 }}>
@@ -58,7 +65,7 @@ export function GuidelinePanel() {
       {(['symptoms', 'conditions', 'medications', 'allergies'] as const).map((key) => (
         <label key={key} style={{ display: 'block', marginTop: 8 }}>
           {key[0].toUpperCase() + key.slice(1)} (comma separated, clinical terms only)
-          <input value={fields[key]} onChange={(event) => setFields({ ...fields, [key]: event.target.value })} />
+          <input value={fields[key]} onChange={(event) => updateField(key, event.target.value)} />
         </label>
       ))}
       <button type="button" disabled={busy} onClick={() => void submit()}>{busy ? 'Searching…' : 'Get suggestion'}</button>
@@ -68,6 +75,12 @@ export function GuidelinePanel() {
         <div>
           <h3>{rec.summary}</h3>
           <p>{rec.guideline_id} v{rec.guideline_version} · evidence {rec.evidence_quality} · approved by {rec.approved_by} on {rec.approved_on}</p>
+          <dl>
+            <dt>Evidence status</dt><dd>{rec.evidence_status}</dd>
+            <dt>Source identifier</dt><dd>{rec.source_identifier}</dd>
+            <dt>Publication date</dt><dd>{rec.publication_date}</dd>
+            <dt>Retrieved at</dt><dd>{rec.retrieved_at}</dd>
+          </dl>
           {rec.escalation_required ? <p role="alert">Review recommended: possible contraindication or low heuristic score.</p> : null}
           {rec.contraindications_flagged.length ? <p>Possible contraindications: {rec.contraindications_flagged.join(', ')}</p> : null}
           {rec.missing_information.length ? <p>Missing information: {rec.missing_information.join(', ')}</p> : null}

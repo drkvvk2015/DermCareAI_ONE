@@ -10,8 +10,10 @@
     "test": "vitest",
     "pwa:preview": "vite preview",
     "cap:sync": "npm run build && cap sync",
-    "cap:android": "npm run build && cap sync android && cap open android",
-    "cap:ios": "npm run build && cap sync ios && cap open ios"
+    "cap:init:android": "node scripts/capacitor-platform.mjs android",
+    "cap:init:ios": "node scripts/capacitor-platform.mjs ios",
+    "cap:android": "npm run build && node scripts/capacitor-platform.mjs android open",
+    "cap:ios": "npm run build && node scripts/capacitor-platform.mjs ios open"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
