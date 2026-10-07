@@ -31,11 +31,19 @@ npm run build
 
 ## Capacitor Android
 
+On a fresh checkout:
+
 ```bash
 npm run cap:android
 ```
 
-This builds the PWA, synchronizes it into the Capacitor Android project, and opens Android Studio.
+This builds the PWA, initializes the Android Capacitor platform when it is absent, synchronizes the web bundle, and opens Android Studio. Production/staging native builds must set `VITE_API_BASE_URL` to an approved, device-reachable **HTTPS** FastAPI origin; the Vite development proxy is not available inside a packaged WebView. Backend `CORS_ORIGINS` must include the configured Capacitor WebView origin (Android uses `https://localhost` in the default configuration).
+
+To initialize without opening Android Studio:
+
+```bash
+npm run cap:init:android
+```
 
 ## Capacitor iOS
 
@@ -43,6 +51,14 @@ Run on macOS with Xcode installed:
 
 ```bash
 npm run cap:ios
+```
+
+This initializes the iOS Capacitor platform when it is absent, synchronizes the web bundle, and opens Xcode. Use the same approved HTTPS API-origin requirement and allow the configured iOS Capacitor WebView origin in backend `CORS_ORIGINS`.
+
+To initialize without opening Xcode:
+
+```bash
+npm run cap:init:ios
 ```
 
 ## Architecture

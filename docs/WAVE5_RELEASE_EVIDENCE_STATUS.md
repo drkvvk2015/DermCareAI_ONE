@@ -1,13 +1,13 @@
 # Wave 5 — Release Evidence Status
 
-Updated: 2026-10-04
+Updated: 2026-10-07
 
 This document separates automated software evidence from clinical, regulatory and deployment evidence that requires real-world data, environments or accountable human review.
 
 | Area | Current state | Evidence |
 |---|---|---|
 | Backend regression | PASS | GitHub Actions |
-| Mobile TypeScript/export | PASS | GitHub Actions |
+| PWA/Capacitor client build | PASS | GitHub Actions |
 | Web dashboard lint/tests/build | GATE CONFIGURED | Pull request workflow includes the independent Vite dashboard |
 | CodeQL | PASS | GitHub Actions |
 | PostgreSQL integration | PASS | PostgreSQL staging gate |
@@ -19,11 +19,9 @@ This document separates automated software evidence from clinical, regulatory an
 | Tenant isolation | PASS | Clinical E2E tests |
 | Backup/restore automation | READY | Monthly DR workflow |
 | Staging acceptance | PASS in current release gating | Docker staging workflow; current hotfix gate passed build, schema init and clinical acceptance |
-| Dependency audit | GATED | Locked mobile + dashboard npm and Python audits; high/critical npm and any Python findings block unless a narrow, reviewed, expiring exception exists |
-| Python dependency resolution | LOCKED | Python 3.12 runtime and CI graphs now pin transitive versions and hashes; branch CI/audit will report current findings |
-| Mobile toolchain | HARDENED | Expo SDK 57 / React Native 0.86.3 migration candidate passed Expo Doctor and generated a synchronized lockfile |
-| Mobile lockfile synchronization | PASS | CI-generated package-lock is synchronized with package.json after SDK 57 migration |
-| Mobile CI toolchain | PASS | Node 24 / npm 11.19.0 successfully performs clean `npm ci` |
+| Dependency audit | PASS in current release gating | Webapp npm + Python runtime/CI audits; high/critical npm and any Python findings block unless a narrow, reviewed, expiring exception exists |
+| Python dependency resolution | LOCKED | Python 3.12 runtime and CI graphs pin transitive versions and hashes |
+| Native packaging | PASS | Capacitor Android/iOS projects are generated and synced by CI from the canonical PWA |
 | SBOM/provenance | ENABLED | Container release workflow |
 | Independent clinical validation | NOT ESTABLISHED | Requires locked test set and external/independent validation; no results are recorded here |
 | Prospective clinical evaluation | NOT ESTABLISHED | Requires approved clinical protocol and real-world evidence; no results are recorded here |
@@ -91,7 +89,7 @@ The CDSCO site currently lists a guidance document on Medical Device Software un
 
 A build can be technically deployable while still being clinically or regulatorily unapproved. Keep these gates separate.
 
-**Software release gate:** automated CI + staging + DR + security evidence, including backend, mobile, dashboard, payment/FEFO/prescription safety tests and dependency audit enforcement. The current v5.1 engineering promotion is complete in `main`; environment-specific production deployment remains separate.
+**Software release gate:** automated CI + staging + DR + security evidence, including backend, mobile, dashboard, payment/FEFO/prescription safety tests and dependency audit enforcement. The current v5.1 engineering release candidate is gated by PR CI and staging; environment-specific production deployment remains separate.
 
 **Clinical release gate:** independent clinical/AI evidence + intended-use review + accountable clinician approval.
 
@@ -106,4 +104,4 @@ A build can be technically deployable while still being clinically or regulatori
 | Generative image assist | SEPARATE OPT-IN | Production requires immutable model revision; output remains preliminary assistive content |
 | Diagnostic model | EVIDENCE-GATED | Disabled/shadow only until completed evidence package and accountable approvals pass |
 
-The mobile encounter workflow exposes Clinical AI Assist without automatically modifying the assessment or sign-off state. The existing AI-review/sign-off gate remains authoritative for model assessments attached to the clinical record.
+The current release exposes Clinical AI Assist at the backend API boundary only. No mobile encounter workflow is claimed in this release. Clinical AI remains suggestion-only; the existing AI-review/sign-off gate remains authoritative for any model assessment attached to the clinical record.
