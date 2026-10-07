@@ -55,6 +55,20 @@ describe('clinical API client', () => {
     });
   });
 
+  it('requests guideline suggestions for selected sources with bearer auth', async () => {
+    const query = { symptoms: ['itching'], conditions: [], medications: [], allergies: [], sources: ['NICE' as const, 'BAD' as const] };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ matched: false, recommendation: null }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.recommendGuideline(query, user)).resolves.toEqual({ matched: false, recommendation: null });
+
+    expect(fetchMock).toHaveBeenCalledWith(`${apiBase}/api/v1/dermatology/guidelines/recommend`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer synthetic-id-token', Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(query),
+    });
+  });
+
   it('distinguishes unauthorized and forbidden responses', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
     await expect(api.prescriptions('synthetic-patient', user)).rejects.toMatchObject({ status: 401 });

@@ -12,6 +12,14 @@ router = APIRouter(
     tags=["dermatology-clinical-ai"],
 )
 
+ADVISORY_ENVELOPE: dict[str, object] = {
+    "role": "suggestion_only",
+    "clinician_decision_required": True,
+    "can_decide": False,
+    "can_sign_diagnosis": False,
+    "can_prescribe": False,
+}
+
 
 class ClinicalDifferentialRequest(BaseModel):
     primary_morphology: str
@@ -51,6 +59,7 @@ def clinical_differential(
     )
 
     return {
+        "advisory": ADVISORY_ENVELOPE,
         "abstained": result.abstained,
         "disclaimer": result.disclaimer,
         "safety": {

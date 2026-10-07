@@ -1,0 +1,1 @@
+PWA is the core application. Capacitor is the mobile runtime. Expo is no longer an active development path.

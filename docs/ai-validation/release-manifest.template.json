@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "release_status": "not_ready",
   "intended_use_statement": "",
   "research_only": true,
@@ -10,46 +11,43 @@
   "dataset": {
     "name": "",
     "version": "",
-    "locked_test_set_manifest": {
-      "uri": "",
-      "sha256": "",
-      "frozen_at": ""
-    }
+    "locked_test_set_manifest": "",
+    "manifest_sha256": "",
+    "provenance_ref": "",
+    "inclusion_exclusion_ref": ""
   },
   "metrics": {
-    "sensitivity": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
-    "specificity": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
-    "ppv": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
-    "npv": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
-    "roc_auc": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null },
-    "pr_auc": { "estimate": null, "ci95": { "lower": null, "upper": null }, "sample_count": null }
+    "sensitivity": { "value": null, "ci95": [null, null] },
+    "specificity": { "value": null, "ci95": [null, null] },
+    "ppv": { "value": null, "ci95": [null, null] },
+    "npv": { "value": null, "ci95": [null, null] },
+    "roc_auc": { "value": null, "ci95": [null, null] },
+    "pr_auc": { "value": null, "ci95": [null, null] }
   },
   "calibration": {
+    "status": "not_completed",
     "method": "",
-    "expected_calibration_error": null,
-    "brier_score": null,
-    "evidence": { "uri": "", "sha256": "" }
+    "result": "",
+    "evidence_ref": ""
   },
-  "subgroups": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
-  "ood": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
-  "abstention": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
-  "clinician_review": { "status": "not_evaluated", "evidence": { "uri": "", "sha256": "" } },
-  "external_validation": {
-    "status": "not_evaluated",
-    "site_or_dataset": "",
-    "independent_reviewer": "",
-    "evidence": { "uri": "", "sha256": "" }
-  },
-  "prospective_evaluation": {
-    "status": "not_evaluated",
-    "protocol_id": "",
-    "site_or_cohort": "",
-    "evidence": { "uri": "", "sha256": "" }
-  },
+  "subgroups": { "status": "not_completed", "evidence_ref": "" },
+  "ood": { "status": "not_completed", "evidence_ref": "" },
+  "abstention": { "status": "not_completed", "evidence_ref": "" },
+  "clinician_review": { "status": "not_completed", "evidence_ref": "" },
+  "external_validation": { "status": "not_completed", "evidence_ref": "" },
   "approval": {
     "status": "pending",
-    "approved_by": "",
-    "approved_at": "",
-    "evidence": { "uri": "", "sha256": "" }
+    "approvers": []
+  },
+  "governance": {
+    "clinical_intended_use_review": { "status": "not_completed", "evidence_ref": "" },
+    "regulatory_assessment": { "status": "not_completed", "evidence_ref": "" },
+    "privacy_assessment": { "status": "not_completed", "evidence_ref": "" }
+  },
+  "deployment": {
+    "status": "not_completed",
+    "staging_evidence_ref": "",
+    "rollback_evidence_ref": "",
+    "release_artifact_ref": ""
   }
 }

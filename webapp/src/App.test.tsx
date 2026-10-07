@@ -17,7 +17,14 @@ vi.mock('./auth/Session', () => ({
 }));
 vi.mock('./api/client', () => ({
   ApiError: class ApiError extends Error { constructor(public status: number, message: string) { super(message); } },
-  api: { clinicalSummary: mocks.clinicalSummary, prescriptions: mocks.prescriptions, procedures: mocks.procedures },
+  GUIDELINE_SOURCES: ['IADVL', 'AAD', 'BAD', 'NICE'],
+  api: {
+    clinicalSummary: mocks.clinicalSummary,
+    prescriptions: mocks.prescriptions,
+    procedures: mocks.procedures,
+    guidelineSources: () => Promise.resolve({ IADVL: 0, AAD: 0, BAD: 0, NICE: 0 }),
+    recommendGuideline: vi.fn(),
+  },
 }));
 
 function renderAt(path: string) {

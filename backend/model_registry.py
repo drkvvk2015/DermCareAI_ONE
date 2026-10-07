@@ -40,13 +40,12 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
     },
 }
 
-
 MODEL_TO_FILE = {
     "melanoma_binary": "melanoma_classifier.pth",
     "skin_lesion_7class": "FinetunedNasNetMobile.keras",
 }
- 
- 
+
+
 def load_registry() -> Dict[str, Any]:
     if not MODEL_REGISTRY_PATH.exists():
         return DEFAULT_REGISTRY
@@ -66,8 +65,6 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
     root = Path(model_dir)
     results: Dict[str, Any] = {}
     for key, spec in registry.get("models", {}).items():
-        # Repository-backed models are metadata-only entries until their
-        # local cache is explicitly materialized and checksum-pinned.
         if not spec.get("file"):
             results[key] = {
                 "repository": spec.get("repository"),
@@ -99,9 +96,16 @@ def verify_models(model_dir: str = "models") -> Dict[str, Any]:
 
 
 def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "development") -> tuple[bool, str]:
-    """Require an approved, active, non-research AI deployment in production."""
+    """Check diagnostic-artifact eligibility while honoring the physician-final policy."""
     if app_env.lower() != "production":
         return True, "non-production"
+
+    # This application is a suggestion-only Clinical AI Copilot. The same
+    # policy that disables diagnostic execution must therefore gate the model
+    # loader, so an approved artifact can never be activated through /predict.
+    from clinical_ai_policy import diagnostic_clinical_activation_allowed
+    if not diagnostic_clinical_activation_allowed():
+        return False, "Production diagnostic inference is disabled by the physician-final Clinical AI policy"
 
     try:
         from ai_registry import get_active_production_model
@@ -111,7 +115,6 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
 
     if not deployment:
         return False, "No active production AI deployment is approved"
-
     if int(deployment.get("research_only", 1)):
         return False, "Active production model is marked research-only"
     if not int(deployment.get("validated", 0)):
@@ -123,11 +126,11 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
 
     model_name = str(deployment.get("model_name") or "")
     expected_file = MODEL_TO_FILE.get(model_name)
-    if expected_file:
-        actual = sha256(Path(model_dir) / expected_file) if (Path(model_dir) / expected_file).is_file() else None
-        if not actual or actual.lower() != str(deployment.get("artifact_sha256") or "").lower():
-            return False, "Active production model artifact hash does not match the approved registry record"
-
+    if not expected_file:
+        return False, "Production clinical AI model is not mapped to a controlled artifact file"
+    actual = sha256(Path(model_dir) / expected_file) if (Path(model_dir) / expected_file).is_file() else None
+    if not actual or actual.lower() != str(deployment.get("artifact_sha256") or "").lower():
+        return False, "Active production model artifact hash does not match the approved registry record"
     manifest_path = os.getenv("AI_VALIDATION_MANIFEST_PATH", "").strip()
     if not manifest_path:
         return False, "AI_VALIDATION_MANIFEST_PATH must point to the approved clinical evidence package"
@@ -137,7 +140,7 @@ def production_artifact_eligible(*, model_dir: str = "models", app_env: str = "d
         return False, f"Clinical AI evidence package cannot be read: {exc}"
     evidence_problems = validate_ai_release_manifest(
         manifest,
-        expected_model_name=str(deployment.get("model_name") or ""),
+        expected_model_name=model_name,
         expected_model_version=str(deployment.get("version") or ""),
         expected_artifact_sha256=str(deployment.get("artifact_sha256") or ""),
     )

@@ -35,7 +35,11 @@ def _npm_advisory_sources(
             sources.extend(_npm_advisory_sources(vulnerabilities, item, visited))
         elif isinstance(item, dict):
             url = str(item.get("url") or "")
-            stable_ids = re.findall(r"(?:GHSA-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}|CVE-\d{4}-\d+)", url, re.IGNORECASE)
+            stable_ids = re.findall(
+                r"(?:GHSA-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}|CVE-\d{4}-\d+)",
+                url,
+                re.IGNORECASE,
+            )
             if stable_ids:
                 sources.extend((package, advisory) for advisory in stable_ids)
             elif item.get("source") is not None:
@@ -96,27 +100,28 @@ def _matching_npm_exceptions(
     active: dict[tuple[str, str, str], dict[str, str]],
     sources: list[tuple[str, str]],
 ) -> bool:
-    """Match npm exceptions against the affected package at the end of each via chain."""
     return bool(sources) and all(
         ("npm", _package(package), advisory.strip().upper()) in active
         for package, advisory in sources
     )
 
 
-def enforce(npm_mobile: Any, npm_web: Any, python_reports: list[tuple[str, Any]], exception_payload: Any) -> list[str]:
+def enforce(npm_web: Any, python_reports: list[tuple[str, Any]], exception_payload: Any) -> list[str]:
     active, problems = _exceptions(exception_payload)
 
-    for label, report in (("mobile npm", npm_mobile), ("webapp npm", npm_web)):
-        if not isinstance(report, dict) or not isinstance(report.get("auditReportVersion"), int) or not isinstance(report.get("vulnerabilities"), dict):
-            problems.append(f"{label}: invalid or incomplete npm audit report")
-            continue
-        for package, finding in report["vulnerabilities"].items():
+    if not isinstance(npm_web, dict) or not isinstance(npm_web.get("auditReportVersion"), int) or not isinstance(npm_web.get("vulnerabilities"), dict):
+        problems.append("webapp npm: invalid or incomplete npm audit report")
+    else:
+        for package, finding in npm_web["vulnerabilities"].items():
             if not isinstance(finding, dict) or finding.get("severity") not in {"high", "critical"}:
                 continue
-            sources = _npm_advisory_sources(report["vulnerabilities"], package)
+            sources = _npm_advisory_sources(npm_web["vulnerabilities"], package)
             if not _matching_npm_exceptions(active, sources):
                 advisories = sorted({advisory for _, advisory in sources}, key=str.upper)
-                problems.append(f"{label}: {package} has an unexcepted high/critical advisory ({', '.join(advisories) or 'advisory ID unavailable'})")
+                problems.append(
+                    f"webapp npm: {package} has an unexcepted high/critical advisory "
+                    f"({', '.join(advisories) or 'advisory ID unavailable'})"
+                )
 
     for label, python in python_reports:
         if not isinstance(python, dict) or not isinstance(python.get("dependencies"), list):
@@ -136,14 +141,16 @@ def enforce(npm_mobile: Any, npm_web: Any, python_reports: list[tuple[str, Any]]
                 if isinstance(aliases, list):
                     advisory_ids.extend(str(alias) for alias in aliases)
                 if not any(_matching_exception(active, "python", package, [advisory]) for advisory in advisory_ids):
-                    problems.append(f"{label}: {package} has an unexcepted vulnerability ({advisory_ids[0] or 'advisory ID unavailable'})")
+                    problems.append(
+                        f"{label}: {package} has an unexcepted vulnerability "
+                        f"({advisory_ids[0] or 'advisory ID unavailable'})"
+                    )
 
     return problems
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Enforce dependency audit thresholds and time-limited advisory exceptions.")
-    parser.add_argument("--mobile", type=Path, required=True)
     parser.add_argument("--webapp", type=Path, required=True)
     parser.add_argument("--python-runtime", type=Path, required=True)
     parser.add_argument("--python-ci", type=Path, required=True)
@@ -151,7 +158,6 @@ def main() -> int:
     args = parser.parse_args()
     try:
         problems = enforce(
-            _load(args.mobile, "mobile npm"),
             _load(args.webapp, "webapp npm"),
             [
                 ("Python runtime", _load(args.python_runtime, "Python runtime")),

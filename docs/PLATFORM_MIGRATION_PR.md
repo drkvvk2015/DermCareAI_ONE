@@ -1,0 +1,1 @@
+This branch contains the PWA-first/Capacitor migration. The legacy Expo tree remains only until parity gates pass.

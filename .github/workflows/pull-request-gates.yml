@@ -1,24 +1,50 @@
-name: DermCareAI Pull Request Gates
+name: Pull Request Gates
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  PYTHONPATH: .
-
 jobs:
+  synchronize-lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+          cache-dependency-path: webapp/package-lock.json
+      - name: Generate authoritative web lockfile
+        working-directory: webapp
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Fail on lockfile drift
+        shell: bash
+        run: |
+          if ! git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
+            echo 'Authoritative lockfiles are out of sync. Regenerate and commit them before opening the PR.'
+            git diff -- webapp/package-lock.json backend/requirements-ci.lock
+            exit 1
+          fi
+
   backend-regression:
+    needs: synchronize-lockfiles
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -36,43 +62,85 @@ jobs:
             exit 1
           fi
 
-  mobile-regression:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dermcareai
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: dermcareai/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: TypeScript check
-        run: npx tsc --noEmit
-      - name: Expo web export smoke test
-        run: npx expo export --platform web
-      - name: Validate Expo project
-        run: npx expo-doctor
-      - name: Validate native project generation
-        run: npx expo prebuild --no-install --non-interactive
-
-  web-dashboard:
+  pwa-capacitor-regression:
+    needs: synchronize-lockfiles
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: webapp
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
+          package-manager-cache: false
           cache-dependency-path: webapp/package-lock.json
-      - name: Install dashboard dependencies
-        run: npm ci
+      - name: Install locked web/PWA dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc -b
+      - name: Web lint
+        run: npm run lint
+      - name: Web tests
+        run: npm run test -- --run
+      - name: Production PWA build
+        run: npm run build
+      - name: Generate Capacitor Android project
+        run: npx cap add android
+      - name: Validate Capacitor Android sync
+        run: npx cap sync android
+      - name: Validate no active Expo or React Native package references
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          if git grep -nEi '(^|[^A-Za-z])(expo|@expo|react-native)([^A-Za-z]|$)' -- webapp ':!webapp/package-lock.json' 2>/dev/null; then
+            echo 'Active Expo/React Native references remain in the production PWA source tree.'
+            exit 1
+          fi
+
+  capacitor-ios-regression:
+    needs: synchronize-lockfiles
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+          cache-dependency-path: webapp/package-lock.json
+      - name: Install locked web/PWA dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Production PWA build
+        run: npm run build
+      - name: Generate Capacitor iOS project
+        run: npx cap add ios
+      - name: Validate Capacitor iOS sync
+        run: npx cap sync ios
+
+  web-dashboard:
+    needs: synchronize-lockfiles
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+          cache-dependency-path: webapp/package-lock.json
+      - name: Install locked dashboard dependencies
+        run: npm ci --no-audit --no-fund
       - name: Dashboard lint
         run: npm run lint
       - name: Dashboard build
