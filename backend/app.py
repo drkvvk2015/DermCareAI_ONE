@@ -21,6 +21,8 @@ from dermatology.decision_support_api import router as dermatology_scoring_route
 from dermatology.vision_api import router as dermatology_vision_router
 from dermatology.followup_api import router as dermatology_followup_router
 from dermatology.procedure_api import router as dermatology_procedure_router
+from dermatology.clinical_ai_api import router as dermatology_clinical_ai_router
+from dermatology.guidelines_api import router as dermatology_guidelines_router
 from dermatology.image_quality import assess_image_quality as assess_dermatology_image_quality
 from ai_governance import build_governance_card
 from audit import router as audit_router
@@ -135,6 +137,8 @@ app.include_router(dermatology_scoring_router)
 app.include_router(dermatology_vision_router)
 app.include_router(dermatology_followup_router)
 app.include_router(dermatology_procedure_router)
+app.include_router(dermatology_clinical_ai_router)
+app.include_router(dermatology_guidelines_router)
 
 
 class ModelService:

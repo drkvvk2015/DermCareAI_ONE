@@ -45,3 +45,11 @@ def test_authenticated_differential_returns_non_decision_advisory_contract(monke
         "can_sign_diagnosis": False,
         "can_prescribe": False,
     }
+
+
+def test_production_app_registers_clinical_ai_and_guideline_routes():
+    from app import app
+    paths = {route.path for route in app.routes}
+    assert "/api/v1/dermatology/clinical-ai/differential" in paths
+    assert "/api/v1/dermatology/guidelines" in paths
+    assert "/api/v1/dermatology/guidelines/recommend" in paths

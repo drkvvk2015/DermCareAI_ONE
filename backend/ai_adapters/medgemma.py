@@ -30,12 +30,15 @@ class MedGemmaAdapter:
     """
 
     def __init__(self) -> None:
-        requested_revision = os.getenv("MEDGEMMA_REVISION") or None
-        revision = requested_revision.strip() if is_immutable_model_revision(requested_revision) else None
+        requested_revision = (os.getenv("MEDGEMMA_REVISION") or "").strip()
         enabled = os.getenv("ENABLE_MEDGEMMA", "false").lower() == "true"
         production = os.getenv("APP_ENV", "development").lower() == "production"
-        if production and enabled and revision is None:
-            enabled = False
+        if production:
+            revision = requested_revision if is_immutable_model_revision(requested_revision) else None
+            if enabled and revision is None:
+                enabled = False
+        else:
+            revision = requested_revision or "main"
         self.config = MedGemmaConfig(
             model_id=os.getenv("MEDGEMMA_MODEL_ID", "google/medgemma-1.5-4b-it"),
             revision=revision,

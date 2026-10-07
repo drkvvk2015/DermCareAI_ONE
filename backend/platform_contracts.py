@@ -39,14 +39,14 @@ class AIGovernanceCard(BaseModel):
     human_review_required: Literal[True] = True
     can_sign_diagnosis: Literal[False] = False
     can_prescribe: Literal[False] = False
-    advisory_scope: list[str] = Field(default_factory=list)
+    advisory_scope: tuple[str, ...] = Field(default_factory=tuple)
     abstention_enabled: bool = True
     confidence_threshold: float = Field(ge=0.0, le=1.0)
     model_provenance: str
     model_name: str
     research_model: bool
-    safety_controls: list[str]
-    limitations: list[str]
+    safety_controls: tuple[str, ...]
+    limitations: tuple[str, ...]
 
 
 class PredictionEnvelope(BaseModel):

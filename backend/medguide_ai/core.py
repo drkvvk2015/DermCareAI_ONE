@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Iterable, Literal
@@ -100,6 +100,10 @@ class Recommendation(BaseModel):
     evidence_quality: str
     approved_by: str
     approved_on: str
+    source_identifier: str
+    publication_date: str
+    retrieved_at: str
+    evidence_status: Literal["current", "superseded", "conflicting"]
     matched_terms: tuple[str, ...]
     missing_information: tuple[str, ...]
     contraindications_flagged: tuple[str, ...]
@@ -228,6 +232,10 @@ class GuidelineStore:
             evidence_quality=item.strength.value,
             approved_by=item.approved_by,
             approved_on=item.approved_on.isoformat(),
+            source_identifier=f"{item.source.name}:{item.guideline_id}:{item.version.version}",
+            publication_date=item.version.publication_date.isoformat(),
+            retrieved_at=datetime.now(timezone.utc).isoformat(),
+            evidence_status="current",
             matched_terms=hit,
             missing_information=missing,
             contraindications_flagged=flagged,
@@ -245,6 +253,8 @@ def load_guideline_dir(directory: Path) -> GuidelineStore:
         return store
 
     for path in sorted(directory.glob("*.json")):
+        if path.name == "sources.json":
+            continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         for entry in payload if isinstance(payload, list) else [payload]:
             store.add(EvidenceItem.model_validate(entry))
