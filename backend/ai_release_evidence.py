@@ -215,79 +215,23 @@ def _evidence_ref(value: Any, label: str, problems: list[str]) -> None:
     if not _valid_sha256(value.get("sha256")): problems.append(f"{label}.sha256: a 64-character SHA-256 digest is required")
 
 
-def validate_ai_release_manifest(manifest: Any, *, expected_model_name: str | None = None, expected_model_version: str | None = None, expected_artifact_sha256: str | None = None) -> list[str]:
-    """Validate the evidence package used by the production model registry."""
-    problems: list[str] = []
-    if not isinstance(manifest, dict): return ["manifest must be a JSON object"]
-    if manifest.get("release_status") != "approved": problems.append("release_status must be 'approved'")
-    if manifest.get("research_only") is not False: problems.append("research_only must be false for a clinical release")
-    if not _text(manifest.get("intended_use_statement")): problems.append("intended_use_statement is required")
-
+def validate_ai_release_manifest(
+    manifest: Any,
+    *,
+    expected_model_name: str | None = None,
+    expected_model_version: str | None = None,
+    expected_artifact_sha256: str | None = None,
+) -> list[str]:
+    """Compatibility entry point backed by the single strict schema-v2 validator."""
+    if not isinstance(manifest, dict):
+        return ["manifest must be a JSON object"]
+    problems = validate_manifest_data(manifest)
     model = manifest.get("model") if isinstance(manifest.get("model"), dict) else {}
-    if not isinstance(manifest.get("model"), dict): problems.append("model must be an object")
-    for field in ("name", "version"):
-        if not _text(model.get(field)): problems.append(f"model.{field} is required")
+    if expected_model_name and model.get("name") != expected_model_name:
+        problems.append("manifest model.name does not match the active production model")
+    if expected_model_version and model.get("version") != expected_model_version:
+        problems.append("manifest model.version does not match the active production model")
     artifact_sha = model.get("artifact_sha256")
-    if not _valid_sha256(artifact_sha): problems.append("model.artifact_sha256 must be a 64-character SHA-256 digest")
-    if expected_model_name and model.get("name") != expected_model_name: problems.append("manifest model.name does not match the active production model")
-    if expected_model_version and model.get("version") != expected_model_version: problems.append("manifest model.version does not match the active production model")
-    if expected_artifact_sha256 and str(artifact_sha).lower() != expected_artifact_sha256.lower(): problems.append("manifest artifact SHA-256 does not match the active production model")
-
-    dataset = manifest.get("dataset") if isinstance(manifest.get("dataset"), dict) else {}
-    if not isinstance(manifest.get("dataset"), dict): problems.append("dataset must be an object")
-    for field in ("name", "version"):
-        if not _text(dataset.get(field)): problems.append(f"dataset.{field} is required")
-    locked = dataset.get("locked_test_set_manifest")
-    if not isinstance(locked, dict): locked = {}; problems.append("dataset.locked_test_set_manifest must be an object")
-    if not _text(locked.get("uri")): problems.append("dataset locked manifest URI is required")
-    if not _valid_sha256(locked.get("sha256")): problems.append("dataset locked manifest SHA-256 is required")
-    if not _text(locked.get("frozen_at")) or not _iso8601(locked.get("frozen_at")): problems.append("dataset locked manifest frozen_at must be an ISO 8601 timestamp with timezone")
-
-    metrics = manifest.get("metrics") if isinstance(manifest.get("metrics"), dict) else {}
-    if not isinstance(manifest.get("metrics"), dict): problems.append("metrics must be an object")
-    for name in ("sensitivity", "specificity", "ppv", "npv", "roc_auc", "pr_auc"):
-        metric = metrics.get(name)
-        if not isinstance(metric, dict): problems.append(f"metrics.{name} must include an estimate, 95% CI, and sample count"); continue
-        estimate, interval, sample_count = metric.get("estimate"), metric.get("ci95"), metric.get("sample_count")
-        if not _number(estimate) or not 0 <= estimate <= 1: problems.append(f"metrics.{name}.estimate must be a number in [0, 1]")
-        if not isinstance(interval, dict): problems.append(f"metrics.{name}.ci95 must include lower and upper bounds")
-        else:
-            low, high = interval.get("lower"), interval.get("upper")
-            if not _number(low) or not _number(high) or not 0 <= low <= high <= 1: problems.append(f"metrics.{name}.ci95 bounds must be ordered numbers in [0, 1]")
-        if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count < 1: problems.append(f"metrics.{name}.sample_count must be a positive integer")
-
-    calibration = manifest.get("calibration") if isinstance(manifest.get("calibration"), dict) else {}
-    if not isinstance(manifest.get("calibration"), dict): problems.append("calibration must be an object")
-    if not _text(calibration.get("method")): problems.append("calibration.method is required")
-    for field in ("expected_calibration_error", "brier_score"):
-        if not _number(calibration.get(field)) or not 0 <= calibration[field] <= 1: problems.append(f"calibration.{field} must be a number in [0, 1]")
-    _evidence_ref(calibration.get("evidence"), "calibration.evidence", problems)
-
-    for section in ("subgroups", "ood", "abstention", "clinician_review"):
-        payload = manifest.get(section)
-        if not isinstance(payload, dict): problems.append(f"{section} must be an object"); continue
-        if payload.get("status") != "completed": problems.append(f"{section}.status must be 'completed'")
-        _evidence_ref(payload.get("evidence"), f"{section}.evidence", problems)
-
-    external = manifest.get("external_validation")
-    if not isinstance(external, dict): external = {}; problems.append("external_validation must be an object")
-    if external.get("status") != "completed": problems.append("external_validation.status must be 'completed'")
-    for field in ("site_or_dataset", "independent_reviewer"):
-        if not _text(external.get(field)): problems.append(f"external_validation.{field} is required")
-    _evidence_ref(external.get("evidence"), "external_validation.evidence", problems)
-
-    prospective = manifest.get("prospective_evaluation")
-    if not isinstance(prospective, dict): prospective = {}; problems.append("prospective_evaluation must be an object")
-    if prospective.get("status") != "completed": problems.append("prospective_evaluation.status must be 'completed'")
-    for field in ("protocol_id", "site_or_cohort"):
-        if not _text(prospective.get(field)): problems.append(f"prospective_evaluation.{field} is required")
-    _evidence_ref(prospective.get("evidence"), "prospective_evaluation.evidence", problems)
-
-    approval = manifest.get("approval") if isinstance(manifest.get("approval"), dict) else {}
-    if not isinstance(manifest.get("approval"), dict): problems.append("approval must be an object")
-    if approval.get("status") != "approved": problems.append("approval.status must be 'approved'")
-    if not _text(approval.get("approved_by")): problems.append("approval.approved_by is required")
-    if not _text(approval.get("approved_at")) or not _iso8601(approval.get("approved_at")): problems.append("approval.approved_at must be an ISO 8601 timestamp with timezone")
-    if _text(approval.get("approved_by")) and approval.get("approved_by") == external.get("independent_reviewer"): problems.append("the accountable approver must differ from the independent external reviewer")
-    _evidence_ref(approval.get("evidence"), "approval.evidence", problems)
+    if expected_artifact_sha256 and str(artifact_sha).lower() != expected_artifact_sha256.lower():
+        problems.append("manifest artifact SHA-256 does not match the active production model")
     return problems
