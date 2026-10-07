@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   synchronize-lockfiles:
@@ -24,15 +24,13 @@ jobs:
       - name: Generate authoritative web lockfile
         working-directory: webapp
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Commit synchronized lockfiles
+      - name: Fail on lockfile drift
         shell: bash
         run: |
           if ! git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add webapp/package-lock.json backend/requirements-ci.lock
-            git commit -m "build: synchronize authoritative CI lockfiles [skip ci]"
-            git push
+            echo 'Authoritative lockfiles are out of sync. Regenerate and commit them before opening the PR.'
+            git diff -- webapp/package-lock.json backend/requirements-ci.lock
+            exit 1
           fi
 
   backend-regression:
