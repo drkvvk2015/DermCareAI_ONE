@@ -49,16 +49,7 @@ def test_authenticated_differential_returns_non_decision_advisory_contract(monke
 
 def test_production_app_registers_clinical_ai_and_guideline_routes():
     from app import app
-    paths: set[str] = set()
-    pending = list(app.routes)
-    while pending:
-        route = pending.pop()
-        route_path = getattr(route, "path", None)
-        if route_path:
-            paths.add(route_path)
-        nested = getattr(route, "routes", None)
-        if nested:
-            pending.extend(nested)
+    paths = set(app.openapi()["paths"])
     assert "/api/v1/dermatology/clinical-ai/differential" in paths
     assert "/api/v1/dermatology/guidelines" in paths
     assert "/api/v1/dermatology/guidelines/recommend" in paths
