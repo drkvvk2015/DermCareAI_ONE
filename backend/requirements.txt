@@ -16,7 +16,7 @@ numpy
 torch
 torchvision
 tensorflow
-transformers>=5.18,<6
+transformers>=5.19.0,<6
 huggingface-hub
 
 # Utilities
