@@ -6,6 +6,7 @@ a managed HTTPS reverse proxy or platform ingress.
 from __future__ import annotations
 
 import os
+import sys
 
 import uvicorn
 
@@ -16,11 +17,15 @@ def main() -> None:
     reload_enabled = os.getenv("UVICORN_RELOAD", "false").lower() == "true"
 
     if os.getenv("ENABLE_NGROK", "false").lower() == "true":
-        from pyngrok import ngrok
+        try:
+            from pyngrok import ngrok
 
-        public_url = ngrok.connect(port).public_url
-        print(f"Public URL: {public_url}")
+            public_url = ngrok.connect(port).public_url
+            print(f"Public URL: {public_url}")
+        except ImportError:
+            print("Warning: ENABLE_NGROK=true but pyngrok not installed")
 
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     uvicorn.run("app:app", host=host, port=port, reload=reload_enabled)
 
 
