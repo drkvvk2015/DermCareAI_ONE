@@ -22,9 +22,9 @@ def main() -> None:
             from pyngrok import ngrok
 
             public_url = ngrok.connect(port).public_url
-            print(f"Public URL: {public_url}")
+            print(f"Yo! Your app is live at: {public_url}")
         except ImportError:
-            print("Warning: ENABLE_NGROK=true but pyngrok not installed")
+            print("Heads up: ENABLE_NGROK=true but pyngrok not installed")
 
     sys.path.insert(0, str(Path(__file__).parent.resolve()))
     uvicorn.run("app:app", host=host, port=port, reload=reload_enabled)
