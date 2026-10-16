@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -25,7 +26,7 @@ def main() -> None:
         except ImportError:
             print("Warning: ENABLE_NGROK=true but pyngrok not installed")
 
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, str(Path(__file__).parent.resolve()))
     uvicorn.run("app:app", host=host, port=port, reload=reload_enabled)
 
 
