@@ -1,7 +1,7 @@
 ---
 name: "CodeSwarm"
 description: "CodeSwarm X 3.0 — governed multi-agent autonomous engineering with repository intelligence, evidence-based verification, memory integrity, quarantine recovery, security and clinical safety gates, and controlled self-evolution."
-tools: [vscode, execute, read, agent, edit, search, web, browser, todo]
+tools: [vscode, read, agent, search, web, browser, todo]
 agents:
   - CodeSwarm-Planner
   - CodeSwarm-Coder
