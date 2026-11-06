@@ -33,12 +33,27 @@ try {
 
   await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "patients/p1")));
 
-  await assertSucceeds(setDoc(doc(doctor.firestore(), "patients/p1"), {
+  const admin = testEnv.authenticatedContext(
+    "admin-1",
+    { roles: ["admin"], organization_id: "org-1", clinic_id: "clinic-1" },
+  );
+
+  // Patient creation is restricted to the authenticated server API. Direct
+  // Firestore writes must be denied for both tenant doctors and administrators.
+  const patient = {
     doctorId: "doctor-1",
     organizationId: "org-1",
     clinicId: "clinic-1",
     name: "Synthetic Test Patient",
-  }));
+  };
+  await assertFails(setDoc(doc(doctor.firestore(), "patients/direct-doctor"), patient));
+  await assertFails(setDoc(doc(admin.firestore(), "patients/direct-admin"), patient));
+
+  // Seed a synthetic record through the privileged server-side path, then verify
+  // tenant-scoped reads remain available to authorized clinicians.
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "patients/p1"), patient);
+  });
 
   await assertSucceeds(getDoc(doc(doctor.firestore(), "patients/p1")));
   await assertFails(getDoc(doc(otherTenant.firestore(), "patients/p1")));
