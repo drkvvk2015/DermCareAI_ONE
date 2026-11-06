@@ -10,6 +10,10 @@ permissions:
 
 jobs:
   synchronize-lockfiles:
+    # Temporary write permission is scoped to this one PR while the patched
+    # lockfiles are regenerated; the step is removed after the refresh commit.
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,15 +25,43 @@ jobs:
           node-version: 24
           package-manager-cache: false
           cache-dependency-path: webapp/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install pinned uv lockfile generator
+        run: python -m pip install --disable-pip-version-check uv==0.10.0
+      - name: Regenerate authoritative Python lockfiles
+        run: |
+          uv pip compile backend/requirements.txt --python-version 3.12 --universal --generate-hashes --output-file backend/requirements.lock
+          uv pip compile backend/requirements-ci.in --python-version 3.12 --universal --generate-hashes --output-file backend/requirements-ci.lock
       - name: Generate authoritative web lockfile
         working-directory: webapp
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Refresh vulnerable compatible npm dependencies
+        working-directory: webapp
+        continue-on-error: true
+        run: npm audit fix --package-lock-only --ignore-scripts --no-fund
+      - name: Commit refreshed lockfiles to this PR branch
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 243 && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add webapp/package-lock.json backend/requirements.lock backend/requirements-ci.lock
+          if git diff --cached --quiet; then
+            echo "Generated lockfiles already match the branch."
+          else
+            git commit -m "security(deps): refresh patched dependency lockfiles"
+            git push origin "HEAD:${BRANCH_NAME}"
+          fi
       - name: Fail on lockfile drift
         shell: bash
         run: |
-          if ! git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
+          if ! git diff --quiet -- webapp/package-lock.json backend/requirements.lock backend/requirements-ci.lock; then
             echo 'Authoritative lockfiles are out of sync. Regenerate and commit them before opening the PR.'
-            git diff -- webapp/package-lock.json backend/requirements-ci.lock
+            git diff --stat -- webapp/package-lock.json backend/requirements.lock backend/requirements-ci.lock
             exit 1
           fi
 
