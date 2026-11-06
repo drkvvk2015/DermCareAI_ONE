@@ -139,6 +139,65 @@ class MemoryValidatorTests(unittest.TestCase):
         self.assertEqual(report.manifest_rebuild_candidate["record_count"], 2)
         self.assertEqual((self.memory / "learnings.md").read_bytes(), before)
 
+    def test_malformed_record_fails(self) -> None:
+        (self.memory / "learnings.md").write_text(
+            "# CodeSwarm Learnings\n\n### LEARNING-0001\n\n- Date (UTC): 2026-11-06\n\n## Entry Format\n",
+            encoding="utf-8",
+        )
+        self.write_manifest(
+            recordCount=1,
+            record_count=1,
+            latestRecordId="LEARNING-0001",
+            latest_record_id="LEARNING-0001",
+        )
+        report = validate_memory(self.root)
+        self.assertEqual(report.structural_status, "FAILURE")
+        self.assertTrue(any("missing required fields" in item for item in report.issues))
+
+    def test_out_of_order_learning_ids_fail(self) -> None:
+        out_of_order = learning_record("LEARNING-0002") + "\n" + learning_record("LEARNING-0001")
+        (self.memory / "learnings.md").write_text(
+            "# CodeSwarm Learnings\n\n" + out_of_order + "\n## Entry Format\n",
+            encoding="utf-8",
+        )
+        self.write_manifest(
+            recordCount=2,
+            record_count=2,
+            firstRecordId="LEARNING-0002",
+            first_record_id="LEARNING-0002",
+            latestRecordId="LEARNING-0001",
+            latest_record_id="LEARNING-0001",
+        )
+        report = validate_memory(self.root)
+        self.assertEqual(report.structural_status, "FAILURE")
+        self.assertTrue(any("not in ascending numeric order" in item for item in report.issues))
+
+    def test_manifest_path_traversal_fails(self) -> None:
+        (self.memory / "manifest.json").write_text(
+            json.dumps({
+                "schema_version": "1.1.0",
+                "record_count": 2,
+                "first_record_id": "LEARNING-0001",
+                "latest_record_id": "LEARNING-0002",
+                "latest_record_hash": None,
+                "files": {
+                    "learnings": "../../outside.md",
+                    "schemaVersion": "schema-version",
+                    "promptVersions": "prompt-versions.md",
+                },
+            }),
+            encoding="utf-8",
+        )
+        report = validate_memory(self.root)
+        self.assertEqual(report.structural_status, "FAILURE")
+        self.assertTrue(any("escapes the memory directory" in item for item in report.issues))
+
+    def test_missing_prompt_version_file_fails(self) -> None:
+        (self.memory / "prompt-versions.md").unlink()
+        report = validate_memory(self.root)
+        self.assertEqual(report.structural_status, "FAILURE")
+        self.assertTrue(any("Required file is missing" in item for item in report.issues))
+
     def test_alias_disagreement_fails(self) -> None:
         self.write_manifest(recordCount=2, record_count=3)
         report = validate_memory(self.root)
