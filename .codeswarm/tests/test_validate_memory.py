@@ -128,6 +128,15 @@ class MemoryValidatorTests(unittest.TestCase):
         self.assertEqual(report.overall_status, "FAILURE")
         self.assertTrue(any("Duplicate learning record IDs" in item for item in report.issues))
 
+    def test_metadata_only_mismatch_offers_candidate_without_writing(self) -> None:
+        before = (self.memory / "learnings.md").read_bytes()
+        self.write_manifest(recordCount=9, record_count=9)
+        report = validate_memory(self.root)
+        self.assertEqual(report.repairability, "METADATA_ONLY_SAFE")
+        self.assertIsNotNone(report.manifest_rebuild_candidate)
+        self.assertEqual(report.manifest_rebuild_candidate["record_count"], 2)
+        self.assertEqual((self.memory / "learnings.md").read_bytes(), before)
+
     def test_alias_disagreement_fails(self) -> None:
         self.write_manifest(recordCount=2, record_count=3)
         report = validate_memory(self.root)
