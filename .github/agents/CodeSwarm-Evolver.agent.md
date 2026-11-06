@@ -180,6 +180,15 @@ Do not assume that a learning applies merely because it mentions the same techno
 - MEMORY_INTEGRITY_FAILURE: do not apply historical corrective rules; report exact inconsistencies.
 - VALIDATOR_UNAVAILABLE: integrity is unknown; do not claim success.
 
+When the Guardian supplies knowledge_graph and engineering_intelligence:
+
+- Use the graph only as a read-only navigation index over existing learning IDs.
+- Use repeated-pattern counts only when the pattern text is exactly the same.
+- Do not infer causal relationships, severity, recurrence across independent runs, or clinical impact from graph edges alone.
+- Check actual source learning entries before applying a historical lesson.
+- Use no graph-derived recommendations when structural integrity is FAILURE.
+- Treat graph summaries from MEMORY_INTEGRITY_UNVERIFIED as advisory, not cryptographically verified.
+
 Fresh repository evidence overrides contradictory historical memory.
 
 ## RECALL output
