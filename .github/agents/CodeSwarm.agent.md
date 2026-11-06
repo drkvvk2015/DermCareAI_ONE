@@ -682,24 +682,11 @@ Environment, permission, SDK, credential, network and external-service failures 
 
 Required output:
 
-The Debugger's canonical output contract is the existing CodeSwarm-Debugger schema, extended with the evidence fields below:
+The existing CodeSwarm-Debugger output contract is authoritative. Require these exact fields and status values; do not demand a different wrapper or renamed keys:
 
 ~~~yaml
 status: "DEBUG_PASS|DEBUG_PASS_AFTER_FIX|DEBUG_BLOCKED|BLOCKED_ENVIRONMENT|BLOCKED_INFRASTRUCTURE|FAIL"
-
 attempts_used: 1
-
-environment: ""
-source_ref: ""
-commands_executed: []
-exit_codes: []
-
-test_scope:
-  unit: []
-  integration: []
-  subsystem_regression: []
-  repository_wide: []
-  omitted_with_reason: []
 
 validation:
   - command: ""
@@ -725,17 +712,15 @@ regression_results:
     exit_code: 0
     evidence: ""
 
-acceptance_criteria_results: []
-security_results: []
-clinical_results: []
 remaining_risks: []
-blockers: []
 control_plane_modified: false
 ready_for_optimizer: true
 ready_for_final_debug: false
 ~~~
 
-Map DEBUG_PASS and DEBUG_PASS_AFTER_FIX to the initial/final pass gates. Map DEBUG_BLOCKED, BLOCKED_ENVIRONMENT, BLOCKED_INFRASTRUCTURE and FAIL to a blocked or failed gate; never normalize them to PASS. The validation and regression_results arrays are the primary execution evidence. If a value is unavailable, report NOT_RUN or null rather than inventing it.
+Use the validation and regression_results entries to state the exact selected test scope, affected module, commands, source ref, and actual environment. Record omitted test suites and reasons in remaining_risks or an explicit handoff note. Include only fields the Debugger actually returned; do not fabricate missing environment, exit-code, security, clinical, or acceptance evidence.
+
+Map DEBUG_PASS and DEBUG_PASS_AFTER_FIX to the relevant initial/final pass gates. Map DEBUG_BLOCKED, BLOCKED_ENVIRONMENT, BLOCKED_INFRASTRUCTURE and FAIL to a blocked or failed gate; never normalize them to PASS.
 
 Do not advance to optimization unless initial DEBUG_PASS or DEBUG_PASS_AFTER_FIX is evidenced.
 
@@ -1012,6 +997,8 @@ EVOLVE is complete only when the Evolver returns a valid structured result and o
 - QUARANTINED_LEARNING_SAVED
 - MEMORY_CONFLICT
 - MEMORY_INTEGRITY_FAILURE
+- VALIDATOR_UNAVAILABLE
+- QUARANTINE_WRITE_FAILED
 - EVOLUTION_REJECTED
 
 A conflict or integrity failure is an explicit outcome, not a success.
