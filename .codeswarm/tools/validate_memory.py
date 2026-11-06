@@ -65,6 +65,7 @@ class ValidationReport:
     computed_latest_record_hash: Optional[str] = None
     stored_latest_record_hash: Optional[str] = None
     issues: list[str] = field(default_factory=list)
+    cryptographic_issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     read_only: bool = True
     repairability: str = "NONE"
@@ -264,28 +265,25 @@ def validate_memory(repo_root: Path) -> ValidationReport:
         )
     elif not isinstance(stored_hash, str):
         report.cryptographic_status = "MISMATCH"
-        issues.append("Stored latest_record_hash must be a string or null.")
+        report.cryptographic_issues.append("Stored latest_record_hash must be a string or null.")
     else:
         match = SHA256_RE.fullmatch(stored_hash.strip())
         if not match:
             report.cryptographic_status = "MISMATCH"
-            issues.append("Stored latest_record_hash is not a valid SHA-256 value.")
+            report.cryptographic_issues.append("Stored latest_record_hash is not a valid SHA-256 value.")
         elif report.computed_latest_record_hash and (
             match.group(1).lower() != report.computed_latest_record_hash.lower()
         ):
             report.cryptographic_status = "MISMATCH"
-            issues.append("Latest learning record SHA-256 does not match the manifest.")
+            report.cryptographic_issues.append("Latest learning record SHA-256 does not match the manifest.")
         elif report.computed_latest_record_hash:
             report.cryptographic_status = "VERIFIED"
 
-    report.structural_status = "FAILURE" if issues and (
-        report.cryptographic_status != "MISMATCH"
-    ) else ("PASS" if not issues else "FAILURE")
+    # Keep structural and cryptographic results independent. A digest mismatch
+    # fails overall memory integrity, but does not make the record structure fail.
+    report.structural_status = "FAILURE" if issues else "PASS"
 
-    if report.cryptographic_status == "MISMATCH":
-        report.structural_status = "FAILURE"
-
-    if report.structural_status == "FAILURE":
+    if report.structural_status == "FAILURE" or report.cryptographic_status == "MISMATCH":
         report.overall_status = "FAILURE"
     elif report.cryptographic_status == "UNVERIFIED":
         report.overall_status = "UNVERIFIED"
@@ -332,7 +330,7 @@ def validate_memory(repo_root: Path) -> ValidationReport:
             report.manifest_rebuild_candidate = candidate
         else:
             report.repairability = "MANUAL_REVIEW_REQUIRED"
-    elif issues:
+    elif issues or report.cryptographic_status == "MISMATCH":
         report.repairability = "MANUAL_REVIEW_REQUIRED"
 
     return report
