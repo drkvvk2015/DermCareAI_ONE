@@ -745,6 +745,8 @@ memory:
   manifest_repaired: false
   digest_baseline_established: false
   quarantine_entry_saved: false
+  active_store_unchanged: false
+  failure_diagnostics_preserved: false
   post_write_validation: "PASS|FAIL|NOT_RUN"
   snapshot_created: false
 
@@ -763,8 +765,13 @@ EVOLVE is complete only when:
 - The transaction summary was processed.
 - The correct memory path was selected.
 - Any learning is either safely appended, safely quarantined, or explicitly determined unnecessary.
-- Manifest metadata is consistent with the actual active records.
-- A stored digest matches when one is present.
+- For an ACTIVE memory write or metadata repair, manifest metadata is consistent with the actual active records and any stored digest matches.
+- For a QUARANTINE write, do not require the active manifest or digest to pass. Instead:
+  - the pending entry was written and read back from `.codeswarm/memory/quarantine/pending-learnings.md`;
+  - `active_store_unchanged: true` is supported by before/after byte comparisons of learnings.md, manifest.json, schema-version, and prompt-versions.md;
+  - `failure_diagnostics_preserved: true` is supported by retaining the original structural and cryptographic diagnostics verbatim in the output;
+  - the active store remains in its original failing/unverified state and no manifest, learning record, schema version, or digest is repaired;
+  - the quarantined entry is not applied as trusted memory.
 - Any prompt patch satisfies independent-run thresholds.
 - The allowed write boundary was respected.
 - No application files were modified.
