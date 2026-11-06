@@ -210,6 +210,13 @@ applicable_learnings:
     relevance: ""
     constraint: ""
 
+knowledge_context:
+  repeated_patterns: []
+  affected_area_counts: {}
+  source_stage_distribution: {}
+  confidence_distribution: {}
+  low_confidence_records: []
+
 repeated_patterns: []
 prompt_versions: []
 issues: []
