@@ -378,6 +378,19 @@ A structurally valid store with a missing digest is UNVERIFIED, not FAILURE.
 
 A matching digest detects drift against the stored digest. It is not a digital signature and does not prove authorship if both record and manifest can be changed by the same actor.
 
+## 8.2.1 Knowledge graph and engineering intelligence
+
+The validator also emits a deterministic, read-only knowledge graph derived from existing learning records. It connects each learning record to its exact affected-area, pattern and root-cause text.
+
+The engineering-intelligence summary includes:
+
+- Learning counts by affected area.
+- Source-stage and confidence distributions.
+- Exact-text repeated patterns with source learning IDs.
+- Low-confidence records requiring caution.
+
+These are navigation and prioritization aids, not proof of causality or independent-run recurrence. Similar but non-identical text must not be merged. Use graph-derived historical context only when structural integrity is PASS; when integrity is UNVERIFIED, treat it as advisory; when structural validation fails, do not apply it.
+
 ## 8.3 RECALL — exactly once
 
 After the Guardian report, invoke CodeSwarm-Evolver in RECALL mode exactly once.
