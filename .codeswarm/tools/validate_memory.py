@@ -67,6 +67,8 @@ class ValidationReport:
     issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     read_only: bool = True
+    repairability: str = "NONE"
+    manifest_rebuild_candidate: Optional[dict[str, Any]] = None
 
 
 def _read_text(path: Path, issues: list[str]) -> Optional[str]:
@@ -289,6 +291,49 @@ def validate_memory(repo_root: Path) -> ValidationReport:
         report.overall_status = "UNVERIFIED"
     else:
         report.overall_status = "PASS"
+
+    # Only manifest metadata drift is eligible for deterministic reconstruction.
+    # Never rebuild metadata after malformed records, duplicate IDs, schema drift,
+    # path violations, missing files, invalid JSON, or a stored digest mismatch.
+    metadata_prefixes = (
+        "Manifest alias mismatch:",
+        "Record count mismatch:",
+        "First record mismatch:",
+        "Latest record mismatch:",
+    )
+    if issues and all(issue.startswith(metadata_prefixes) for issue in issues):
+        if report.cryptographic_status != "MISMATCH" and records:
+            candidate = dict(manifest)
+            count = len(records)
+            first_id = ids[0]
+            latest_id = ids[-1]
+            latest_hash = report.computed_latest_record_hash
+
+            candidate["recordCount"] = count
+            candidate["record_count"] = count
+            candidate["firstRecordId"] = first_id
+            candidate["first_record_id"] = first_id
+            candidate["latestRecordId"] = latest_id
+            candidate["latest_record_id"] = latest_id
+            candidate["latestRecordHash"] = latest_hash
+            candidate["latest_record_hash"] = latest_hash
+            candidate["recordHashAlgorithm"] = "sha256"
+            candidate["record_hash_algorithm"] = "sha256"
+            candidate["recordHashScope"] = "normalized-latest-record-block-v1"
+            candidate["record_hash_scope"] = "normalized-latest-record-block-v1"
+            candidate["structuralIntegrity"] = "PASS"
+            candidate["structural_integrity"] = "PASS"
+            candidate["cryptographicIntegrity"] = "VERIFIED"
+            candidate["cryptographic_integrity"] = "VERIFIED"
+            candidate["integrityStatus"] = "PASS"
+            candidate["integrity_status"] = "PASS"
+
+            report.repairability = "METADATA_ONLY_SAFE"
+            report.manifest_rebuild_candidate = candidate
+        else:
+            report.repairability = "MANUAL_REVIEW_REQUIRED"
+    elif issues:
+        report.repairability = "MANUAL_REVIEW_REQUIRED"
 
     return report
 
