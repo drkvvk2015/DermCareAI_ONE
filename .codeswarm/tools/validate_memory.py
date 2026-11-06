@@ -67,6 +67,8 @@ class ValidationReport:
     issues: list[str] = field(default_factory=list)
     cryptographic_issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    knowledge_graph: dict[str, Any] = field(default_factory=dict)
+    engineering_intelligence: dict[str, Any] = field(default_factory=dict)
     read_only: bool = True
     repairability: str = "NONE"
     manifest_rebuild_candidate: Optional[dict[str, Any]] = None
@@ -119,6 +121,116 @@ def _manifest_value(manifest: dict[str, Any], snake: str, camel: str) -> Any:
     if snake in manifest:
         return manifest[snake]
     return manifest.get(camel)
+
+
+def _record_field(block: str, field_name: str) -> Optional[str]:
+    match = re.search(
+        r"(?m)^- " + re.escape(field_name) + r":\s*(.*?)\s*$",
+        block,
+    )
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value if value else None
+
+
+def _stable_node_id(prefix: str, label: str) -> str:
+    normalized = " ".join(label.casefold().split())
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
+    return prefix + "-" + digest
+
+
+def _build_knowledge_views(
+    records: list[tuple[str, bytes, str]],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: set[tuple[str, str, str]] = set()
+    area_counts: dict[str, int] = {}
+    stage_counts: dict[str, int] = {}
+    confidence_counts: dict[str, int] = {}
+    patterns: dict[str, list[str]] = {}
+    low_confidence_records: list[str] = []
+
+    for record_id, _, block in records:
+        pattern = _record_field(block, "Pattern")
+        root_cause = _record_field(block, "Root cause")
+        affected_area = _record_field(block, "Affected area")
+        source_stage = (_record_field(block, "Source stage") or "UNKNOWN").upper()
+        confidence = (_record_field(block, "Confidence") or "unknown").lower()
+
+        nodes[record_id] = {
+            "id": record_id,
+            "type": "learning",
+            "label": pattern or record_id,
+            "source_stage": source_stage,
+            "confidence": confidence,
+        }
+        stage_counts[source_stage] = stage_counts.get(source_stage, 0) + 1
+        confidence_counts[confidence] = confidence_counts.get(confidence, 0) + 1
+
+        if confidence == "low":
+            low_confidence_records.append(record_id)
+
+        if affected_area:
+            area_id = _stable_node_id("AREA", affected_area)
+            nodes[area_id] = {
+                "id": area_id,
+                "type": "affected_area",
+                "label": affected_area,
+            }
+            edges.add((record_id, "AFFECTS", area_id))
+            area_counts[affected_area] = area_counts.get(affected_area, 0) + 1
+
+        if pattern:
+            pattern_id = _stable_node_id("PATTERN", pattern)
+            nodes[pattern_id] = {
+                "id": pattern_id,
+                "type": "pattern",
+                "label": pattern,
+            }
+            edges.add((record_id, "IDENTIFIES_PATTERN", pattern_id))
+            patterns.setdefault(pattern, []).append(record_id)
+
+        if root_cause:
+            cause_id = _stable_node_id("CAUSE", root_cause)
+            nodes[cause_id] = {
+                "id": cause_id,
+                "type": "root_cause",
+                "label": root_cause,
+            }
+            edges.add((record_id, "ROOT_CAUSE", cause_id))
+
+    repeated_patterns = [
+        {"pattern": label, "record_ids": sorted(record_ids), "occurrences": len(record_ids)}
+        for label, record_ids in patterns.items()
+        if len(record_ids) > 1
+    ]
+    repeated_patterns.sort(key=lambda item: (-item["occurrences"], item["pattern"]))
+
+    graph = {
+        "projection": "READ_ONLY_DERIVED_FROM_LEARNING_RECORDS",
+        "nodes": sorted(nodes.values(), key=lambda item: item["id"]),
+        "edges": [
+            {"from": source, "type": relation, "to": target}
+            for source, relation, target in sorted(edges)
+        ],
+    }
+    intelligence = {
+        "record_count": len(records),
+        "affected_area_counts": dict(sorted(area_counts.items())),
+        "source_stage_distribution": dict(sorted(stage_counts.items())),
+        "confidence_distribution": dict(sorted(confidence_counts.items())),
+        "repeated_patterns": repeated_patterns,
+        "low_confidence_records": sorted(low_confidence_records),
+        "knowledge_graph_node_count": len(nodes),
+        "knowledge_graph_edge_count": len(edges),
+        "interpretation": (
+            "Exact-text grouping only. Similar but non-identical patterns are not "
+            "automatically merged. Use as navigation and prioritization evidence, "
+            "not as proof of causality."
+        ),
+    }
+    return graph, intelligence
 
 
 def validate_memory(repo_root: Path) -> ValidationReport:
@@ -176,6 +288,7 @@ def validate_memory(repo_root: Path) -> ValidationReport:
     records = _extract_records(learnings_text)
     ids = [record[0] for record in records]
     report.record_count = len(records)
+    report.knowledge_graph, report.engineering_intelligence = _build_knowledge_views(records)
 
     if not records:
         issues.append("No learning records were found in learnings.md.")
