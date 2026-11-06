@@ -23,21 +23,22 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-LEARNING_HEADING = re.compile(r"(?m)^###\s+(LEARNING-\d+)\s*$")
+LEARNING_HEADING = re.compile(r"(?m)^[ \t]{0,3}###\s+(LEARNING-\d+)[ \t]*$")
 SECTION_HEADING = re.compile(r"(?m)^##\s+")
 SHA256_RE = re.compile(r"^(?:sha256:)?([0-9a-fA-F]{64})$")
 
 REQUIRED_FIELDS = {
-    "Date (UTC)": re.compile(r"(?m)^- Date \(UTC\):\s*\S.+$"),
-    "Run ID": re.compile(r"(?m)^- Run ID:\s*\S.+$"),
-    "Source stage": re.compile(r"(?m)^- Source stage:\s*\S.+$"),
-    "Pattern": re.compile(r"(?m)^- Pattern:\s*\S.+$"),
-    "Root cause": re.compile(r"(?m)^- Root cause:\s*\S.+$"),
-    "Evidence": re.compile(r"(?m)^- Evidence:\s*\S.+$"),
-    "Action": re.compile(r"(?m)^- Action:\s*\S.+$"),
-    "Affected area": re.compile(r"(?m)^- Affected area:\s*\S.+$"),
-    "Occurrences": re.compile(r"(?m)^- Occurrences:\s*\d+\s*$"),
-    "Confidence": re.compile(r"(?m)^- Confidence:\s*(low|medium|high)\s*$"),
+    # Horizontal whitespace only: an empty field must not borrow the next line's value.
+    "Date (UTC)": re.compile(r"(?m)^- Date \(UTC\):[ \t]*\S.*$"),
+    "Run ID": re.compile(r"(?m)^- Run ID:[ \t]*\S.*$"),
+    "Source stage": re.compile(r"(?m)^- Source stage:[ \t]*\S.*$"),
+    "Pattern": re.compile(r"(?m)^- Pattern:[ \t]*\S.*$"),
+    "Root cause": re.compile(r"(?m)^- Root cause:[ \t]*\S.*$"),
+    "Evidence": re.compile(r"(?m)^- Evidence:[ \t]*\S.*$"),
+    "Action": re.compile(r"(?m)^- Action:[ \t]*\S.*$"),
+    "Affected area": re.compile(r"(?m)^- Affected area:[ \t]*\S.*$"),
+    "Occurrences": re.compile(r"(?m)^- Occurrences:[ \t]*\d+[ \t]*$"),
+    "Confidence": re.compile(r"(?m)^- Confidence:[ \t]*(low|medium|high)[ \t]*$"),
 }
 
 ALIASES = (
@@ -92,6 +93,43 @@ def _canonical_record_block(text: str, start: int, end: int) -> bytes:
     return block.encode("utf-8")
 
 
+def _malformed_learning_headings(text: str) -> list[str]:
+    """Find active learning-like headings that do not match the canonical ID.
+
+    Fenced Markdown examples are excluded from active-store validation.
+    """
+    malformed: list[str] = []
+    in_fence = False
+    fence_char = ""
+    fence_length = 0
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    for line_number, line in enumerate(normalized.splitlines(), 1):
+        fence_match = re.match(r"^[ \t]*([~]{3,})", line)
+        if fence_match is None:
+            fence_match = re.match("^[ \t]*(" + chr(96) + "{3,})", line)
+        if fence_match:
+            marker = fence_match.group(1)
+            if not in_fence:
+                in_fence = True
+                fence_char = marker[0]
+                fence_length = len(marker)
+            elif marker[0] == fence_char and len(marker) >= fence_length:
+                in_fence = False
+                fence_char = ""
+                fence_length = 0
+            continue
+
+        if not in_fence and re.match(r"^[ \t]{0,3}###[ \t]+LEARNING-", line):
+            if not LEARNING_HEADING.fullmatch(line):
+                malformed.append(
+                    "Malformed active learning record heading on line "
+                    + str(line_number) + ": " + line.strip()
+                )
+
+    return malformed
+
+
 def _extract_records(text: str) -> list[tuple[str, bytes, str]]:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     matches = list(LEARNING_HEADING.finditer(text))
@@ -125,7 +163,7 @@ def _manifest_value(manifest: dict[str, Any], snake: str, camel: str) -> Any:
 
 def _record_field(block: str, field_name: str) -> Optional[str]:
     match = re.search(
-        r"(?m)^- " + re.escape(field_name) + r":\s*(.*?)\s*$",
+        r"(?m)^- " + re.escape(field_name) + r":[ \t]*(.*?)[ \t]*$",
         block,
     )
     if not match:
@@ -271,7 +309,7 @@ def validate_memory(repo_root: Path) -> ValidationReport:
 
     if not schema_version:
         issues.append("schema-version is empty.")
-    if not isinstance(manifest_schema, (str, int, float)):
+    if type(manifest_schema) not in (str, int, float):
         issues.append("manifest schema_version/schemaVersion is missing or invalid.")
     elif str(manifest_schema) != schema_version:
         issues.append(
@@ -285,6 +323,7 @@ def validate_memory(repo_root: Path) -> ValidationReport:
                 "Manifest alias mismatch: " + camel + " differs from " + snake + "."
             )
 
+    issues.extend(_malformed_learning_headings(learnings_text))
     records = _extract_records(learnings_text)
     ids = [record[0] for record in records]
     report.record_count = len(records)
@@ -314,11 +353,11 @@ def validate_memory(repo_root: Path) -> ValidationReport:
         report.latest_record_id = ids[-1]
 
     raw_count = _manifest_value(manifest, "record_count", "recordCount")
-    try:
-        manifest_count = int(raw_count)
+    if type(raw_count) is int:
+        manifest_count = raw_count
         report.manifest_record_count = manifest_count
-    except (TypeError, ValueError):
-        issues.append("Manifest record_count/recordCount is missing or not an integer.")
+    else:
+        issues.append("Manifest record_count/recordCount is missing or not an exact JSON integer.")
         manifest_count = None
 
     if manifest_count is not None and manifest_count != len(records):
@@ -346,51 +385,91 @@ def validate_memory(repo_root: Path) -> ValidationReport:
         issues.append("prompt-versions.md is empty.")
 
     file_map = manifest.get("files")
-    if file_map is not None:
-        if not isinstance(file_map, dict):
-            issues.append("Manifest files entry must be an object.")
-        else:
-            for key in ("learnings", "schemaVersion", "promptVersions"):
-                relative = file_map.get(key)
-                if not isinstance(relative, str) or not relative.strip():
-                    issues.append("Manifest files." + key + " is missing or invalid.")
-                    continue
-                candidate = memory_dir / relative
-                try:
-                    candidate.resolve().relative_to(memory_dir.resolve())
-                except ValueError:
-                    issues.append("Manifest files." + key + " escapes the memory directory.")
-                    continue
-                if not candidate.is_file():
-                    issues.append("Manifest references a missing file: " + str(candidate))
+    if not isinstance(file_map, dict):
+        issues.append("Manifest files entry is missing or must be an object.")
+    else:
+        required_files = {
+            "learnings": ("learnings.md", "file"),
+            "schemaVersion": ("schema-version", "file"),
+            "promptVersions": ("prompt-versions.md", "file"),
+            "snapshots": ("snapshots", "directory"),
+        }
+        for key, (expected_relative, expected_type) in required_files.items():
+            relative = file_map.get(key)
+            if not isinstance(relative, str) or not relative.strip():
+                issues.append("Manifest files." + key + " is missing or invalid.")
+                continue
+            relative_path = Path(relative)
+            if (
+                relative_path.is_absolute()
+                or chr(92) in relative
+                or ".." in relative_path.parts
+                or relative_path.as_posix().rstrip("/") != expected_relative
+            ):
+                issues.append(
+                    "Manifest files." + key
+                    + " must reference the canonical in-directory path "
+                    + expected_relative + "."
+                )
+                continue
+            candidate = (memory_dir / relative_path).resolve()
+            try:
+                candidate.relative_to(memory_dir.resolve())
+            except ValueError:
+                issues.append("Manifest files." + key + " escapes the memory directory.")
+                continue
+            exists_with_type = (
+                candidate.is_dir() if expected_type == "directory" else candidate.is_file()
+            )
+            if not exists_with_type:
+                issues.append(
+                    "Manifest references a missing or invalid "
+                    + expected_type + ": " + str(candidate)
+                )
 
     if records:
         latest_hash = hashlib.sha256(records[-1][1]).hexdigest()
         report.computed_latest_record_hash = latest_hash
-    stored_hash = _manifest_value(manifest, "latest_record_hash", "latestRecordHash")
-    report.stored_latest_record_hash = stored_hash
 
-    if stored_hash in (None, ""):
-        report.cryptographic_status = "UNVERIFIED"
-        warnings.append(
-            "No stored latest-record SHA-256 exists; structural integrity can still pass. "
-            "A bootstrap baseline may be established from this repository snapshot."
-        )
-    elif not isinstance(stored_hash, str):
+    hash_alias_conflict = (
+        "latestRecordHash" in manifest
+        and "latest_record_hash" in manifest
+        and manifest["latestRecordHash"] != manifest["latest_record_hash"]
+    )
+    if hash_alias_conflict:
+        # A null alias must never hide a stored digest, and conflicting aliases
+        # must never be rewritten by metadata-only recovery.
+        report.stored_latest_record_hash = "ALIAS_CONFLICT"
         report.cryptographic_status = "MISMATCH"
-        report.cryptographic_issues.append("Stored latest_record_hash must be a string or null.")
+        report.cryptographic_issues.append(
+            "Manifest latestRecordHash/latest_record_hash aliases conflict; "
+            "manual review is required before any digest decision."
+        )
     else:
-        match = SHA256_RE.fullmatch(stored_hash.strip())
-        if not match:
+        stored_hash = _manifest_value(manifest, "latest_record_hash", "latestRecordHash")
+        report.stored_latest_record_hash = stored_hash
+
+        if stored_hash in (None, ""):
+            report.cryptographic_status = "UNVERIFIED"
+            warnings.append(
+                "No stored latest-record SHA-256 exists; structural integrity can still pass. "
+                "A bootstrap baseline may be established from this repository snapshot."
+            )
+        elif not isinstance(stored_hash, str):
             report.cryptographic_status = "MISMATCH"
-            report.cryptographic_issues.append("Stored latest_record_hash is not a valid SHA-256 value.")
-        elif report.computed_latest_record_hash and (
-            match.group(1).lower() != report.computed_latest_record_hash.lower()
-        ):
-            report.cryptographic_status = "MISMATCH"
-            report.cryptographic_issues.append("Latest learning record SHA-256 does not match the manifest.")
-        elif report.computed_latest_record_hash:
-            report.cryptographic_status = "VERIFIED"
+            report.cryptographic_issues.append("Stored latest_record_hash must be a string or null.")
+        else:
+            match = SHA256_RE.fullmatch(stored_hash.strip())
+            if not match:
+                report.cryptographic_status = "MISMATCH"
+                report.cryptographic_issues.append("Stored latest_record_hash is not a valid SHA-256 value.")
+            elif report.computed_latest_record_hash and (
+                match.group(1).lower() != report.computed_latest_record_hash.lower()
+            ):
+                report.cryptographic_status = "MISMATCH"
+                report.cryptographic_issues.append("Latest learning record SHA-256 does not match the manifest.")
+            elif report.computed_latest_record_hash:
+                report.cryptographic_status = "VERIFIED"
 
     # Keep structural and cryptographic results independent. A digest mismatch
     # fails overall memory integrity, but does not make the record structure fail.
