@@ -100,9 +100,11 @@ class MemoryValidatorTests(unittest.TestCase):
             latest_record_hash="0" * 64,
         )
         report = validate_memory(self.root)
-        self.assertEqual(report.structural_status, "FAILURE")
+        self.assertEqual(report.structural_status, "PASS")
         self.assertEqual(report.cryptographic_status, "MISMATCH")
         self.assertEqual(report.overall_status, "FAILURE")
+        self.assertTrue(any("SHA-256 does not match" in item for item in report.cryptographic_issues))
+        self.assertEqual(report.repairability, "MANUAL_REVIEW_REQUIRED")
 
     def test_record_count_mismatch_fails(self) -> None:
         self.write_manifest(recordCount=99, record_count=99)
