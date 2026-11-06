@@ -400,12 +400,10 @@ def validate_memory(repo_root: Path) -> ValidationReport:
                 issues.append("Manifest files." + key + " is missing or invalid.")
                 continue
             relative_path = Path(relative)
-            if (
-                relative_path.is_absolute()
-                or chr(92) in relative
-                or ".." in relative_path.parts
-                or relative_path.as_posix().rstrip("/") != expected_relative
-            ):
+            if relative_path.is_absolute() or chr(92) in relative or ".." in relative_path.parts:
+                issues.append("Manifest files." + key + " escapes the memory directory.")
+                continue
+            if relative_path.as_posix().rstrip("/") != expected_relative:
                 issues.append(
                     "Manifest files." + key
                     + " must reference the canonical in-directory path "
