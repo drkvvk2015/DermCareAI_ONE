@@ -135,7 +135,7 @@ def _record_field(block: str, field_name: str) -> Optional[str]:
 
 
 def _stable_node_id(prefix: str, label: str) -> str:
-    normalized = " ".join(label.casefold().split())
+    normalized = " ".join(label.split())
     digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
     return prefix + "-" + digest
 
