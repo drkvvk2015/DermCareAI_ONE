@@ -342,7 +342,7 @@ class MemoryValidatorTests(unittest.TestCase):
         )
         report = validate_memory(self.root)
         self.assertEqual(report.structural_status, "FAILURE")
-        self.assertTrue(any("Manifest files.snapshots must reference" in item for item in report.issues))
+        self.assertTrue(any("Manifest files.snapshots escapes the memory directory" in item for item in report.issues))
 
     def test_missing_snapshot_directory_fails(self) -> None:
         (self.memory / "snapshots").rmdir()
