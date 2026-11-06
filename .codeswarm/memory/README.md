@@ -41,6 +41,8 @@ python -B -m unittest discover -s .codeswarm/tests -p "test_*.py" -v
 
 The validator is read-only. It never repairs files or changes the manifest.
 
+It also returns a deterministic knowledge-graph projection and engineering-intelligence summary derived from the validated learning records. The graph links learning IDs to exact affected-area, pattern and root-cause text. Repeated-pattern statistics group exact text only; similar wording is not merged. These summaries support navigation and prioritization, not causal claims. Do not use the projection as trusted historical guidance when structural validation fails.
+
 Exit codes:
 
 - 0: structural validation passed; cryptographic state is either VERIFIED or UNVERIFIED.
