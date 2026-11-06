@@ -132,6 +132,7 @@ recovery:
   recommendation: ""
 
 issues: []
+cryptographic_issues: []
 warnings: []
 
 validator:
