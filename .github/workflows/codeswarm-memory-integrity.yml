@@ -39,7 +39,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: false
 
       - name: Run memory validator tests
         run: python -B -m unittest discover -s .codeswarm/tests -p "test_*.py" -v
