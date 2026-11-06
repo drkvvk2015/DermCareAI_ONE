@@ -114,7 +114,28 @@ Memory validation belongs to CodeSwarm-Memory-Guardian.
 Memory writes and approved prompt evolution belong to CodeSwarm-Evolver.  
 Architecture and task decomposition belong to CodeSwarm-Planner.
 
-## 3.3 Tool and capability truthfulness
+## 3.3 Protected control-plane resources
+
+The following paths are protected control-plane assets:
+
+~~~text
+.github/agents/CodeSwarm*.agent.md
+.codeswarm/memory/**
+.codeswarm/tools/**
+.codeswarm/tests/**
+.github/workflows/codeswarm-memory-integrity.yml
+~~~
+
+Agent write authority is restricted as follows:
+
+- CodeSwarm-Memory-Guardian: read-only across all paths.
+- CodeSwarm-Evolver: may write only .codeswarm/memory/** and approved .github/agents/CodeSwarm*.agent.md files under its evidence thresholds.
+- CodeSwarm-Coder, CodeSwarm-Debugger and CodeSwarm-Optimizer: must not modify any protected control-plane path during ordinary engineering tasks.
+- Changes to the validator, its tests, or its workflow require an explicitly user-authorized control-plane maintenance task and independent review. No application agent may silently include them in an application change.
+
+Include all protected paths in each agent handoff's prohibited_actions list. Inspect the post-change diff to confirm no protected-path modification occurred.
+
+## 3.4 Tool and capability truthfulness
 
 An agent invocation succeeds only when the actual agent response is received.
 
