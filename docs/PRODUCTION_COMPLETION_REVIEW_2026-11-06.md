@@ -19,6 +19,18 @@ The latest PR head passed:
 
 The dedicated dependency-lock refresh run regenerated both hash-locked Python graphs and the npm lockfile. Its runtime/CI dependency audit completed with **DEPENDENCY AUDIT: PASS** and no known Python vulnerabilities. The latest PR-triggered dependency audit and full staging acceptance were still running at the time this report was updated; those results must be checked before merge.
 
+## Copilot review findings — remediation on PR #242
+
+The first automated review identified five issues. The repair branch now includes these code changes:
+
+1. **Direct Firestore patient-create bypass:** `firestore.rules` now denies client-side patient creation for all roles. Patient creation is server-only through the authenticated FastAPI/Admin SDK path. The Firestore emulator script asserts that both a doctor and an administrator are denied direct create attempts, while tenant-authorized reads remain available.
+2. **Stale Python resolver pins:** both `uv pip compile` commands now use `--upgrade`.
+3. **Workflow token recursion:** dependency publication now uses an optional scoped GitHub App token (`APP_ID` and `APP_PRIVATE_KEY`) rather than `GITHUB_TOKEN`. Without the app credentials, the workflow audits and uploads artifacts but deliberately does not publish lockfiles automatically.
+4. **Auditing the wrong lockfiles:** candidate lockfiles are now installed, tested and audited before any PR publication step.
+5. **Production template override:** the shared `backend/.env.example` keeps `PATIENT_REGISTRATION_ENABLED` commented out. The backend enables registration by default only in explicit development/test environments; unknown/missing environments fail closed.
+
+Latest PR head at the time of this update: `b2ae3952b9b380ed522f87cce70dc77e07518d5b`. Pull Request Gates, including backend, dashboard, Android and iOS, passed; CodeQL, Continuous Evaluation, Production Preflight and PostgreSQL Staging Gate passed. The latest Firestore Rules, Dependency Audit and full Staging Acceptance jobs were still running. Do not merge until those final checks pass and the automated review reruns against the latest head.
+
 ## 1. Branch and pull-request consolidation — assessed, not blindly merged
 
 - The initial review found PR #233 open. PR #242 now carries a safer patient-registration control and the CI/security repairs. PR #233 should be closed as superseded only after PR #242 is accepted/merged.
