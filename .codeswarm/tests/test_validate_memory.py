@@ -210,6 +210,43 @@ class MemoryValidatorTests(unittest.TestCase):
         self.assertEqual(report.overall_status, "FAILURE")
         self.assertTrue(any("Schema version mismatch" in item for item in report.issues))
 
+    def test_read_only_knowledge_graph_and_intelligence_are_derived(self) -> None:
+        report = validate_memory(self.root)
+        graph = report.knowledge_graph
+        intelligence = report.engineering_intelligence
+        self.assertEqual(graph["projection"], "READ_ONLY_DERIVED_FROM_LEARNING_RECORDS")
+        self.assertEqual(intelligence["record_count"], 2)
+        self.assertEqual(intelligence["knowledge_graph_node_count"], len(graph["nodes"]))
+        self.assertEqual(intelligence["knowledge_graph_edge_count"], len(graph["edges"]))
+        self.assertEqual(len(intelligence["repeated_patterns"]), 1)
+        self.assertEqual(intelligence["repeated_patterns"][0]["occurrences"], 2)
+        self.assertEqual(
+            intelligence["repeated_patterns"][0]["record_ids"],
+            ["LEARNING-0001", "LEARNING-0002"],
+        )
+        self.assertEqual(intelligence["confidence_distribution"], {"medium": 2})
+
+    def test_knowledge_graph_does_not_merge_non_identical_patterns(self) -> None:
+        second = learning_record("LEARNING-0002").replace(
+            "A deterministic test pattern.",
+            "A DETERMINISTIC TEST PATTERN.",
+        )
+        (self.memory / "learnings.md").write_text(
+            "# CodeSwarm Learnings\n\n"
+            + learning_record("LEARNING-0001")
+            + "\n"
+            + second
+            + "\n## Entry Format\n",
+            encoding="utf-8",
+        )
+        report = validate_memory(self.root)
+        self.assertEqual(report.engineering_intelligence["repeated_patterns"], [])
+        pattern_nodes = [
+            node for node in report.knowledge_graph["nodes"]
+            if node["type"] == "pattern"
+        ]
+        self.assertEqual(len(pattern_nodes), 2)
+
     def test_validator_does_not_modify_memory_files(self) -> None:
         before = {
             path.relative_to(self.memory): path.read_bytes()
