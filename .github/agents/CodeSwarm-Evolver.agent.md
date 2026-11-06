@@ -170,6 +170,7 @@ known_blockers: []
 6. Execute the permitted validator once to confirm the current state.
 7. Search for learnings relevant to the task, subsystem, failure patterns, toolchain and constraints.
 8. Return only materially relevant historical learnings.
+9. Populate knowledge_context from the Guardian's engineering_intelligence summary only when structural integrity is PASS. When integrity is UNVERIFIED, retain the summary as advisory with that status; when integrity is FAILURE or VALIDATOR_UNAVAILABLE, leave trusted knowledge_context empty and explain why.
 
 Do not assume that a learning applies merely because it mentions the same technology. Compare current repository evidence with the historical context.
 
