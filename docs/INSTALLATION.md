@@ -274,7 +274,7 @@ Use staging/test data only. Keep production credentials and patient data out of 
 - [ ] Anonymous authentication disabled
 - [ ] Web-app values populated in `webapp/.env`
 - [ ] `FIREBASE_AUTH_REQUIRED=true`
-- [ ] `PATIENT_REGISTRATION_ENABLED` explicitly set for production (defaults to disabled when APP_ENV=production)
+- [ ] `PATIENT_REGISTRATION_ENABLED` explicitly set for production (defaults to enabled only in explicit development/test modes; missing or unknown APP_ENV disables it)
 - [ ] Backend Admin credential injected securely
 - [ ] First admin/clinician provisioned
 - [ ] `organization_id`, `clinic_id`, and `roles` claims verified
