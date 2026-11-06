@@ -444,65 +444,75 @@ Invoke CodeSwarm-Planner with:
 
 Require this structured execution plan:
 
+The Planner's existing, canonical output contract is authoritative. Do not require a renamed execution_plan wrapper or fields that the Planner does not emit.
+
 ~~~yaml
-execution_plan:
-  objective: ""
-  classification: "L0|L1|L2|L3|L4"
-  source_ref: ""
+plan_version: "1.0"
+objective: ""
 
-  workstreams:
-    - id: "WS-001"
+scope:
+  in: []
+  out: []
+
+repository_context:
+  framework: ""
+  languages: []
+  build_system: ""
+  relevant_modules: []
+
+memory_constraints:
+  applicable_learnings: []
+  conflicts: []
+
+tasks:
+  - id: "TASK-001"
+    title: ""
+    scope: []
+    files:
+      create: []
+      edit: []
+      delete: []
+    depends_on: []
+    interfaces:
+      inputs: []
+      outputs: []
+    implementation_notes: []
+    acceptance_criteria: []
+    verification: []
+    risk:
+      level: "LOW|MEDIUM|HIGH"
       description: ""
-      owner: ""
-      dependencies: []
-      parallelizable: false
+    rollback: []
 
-  tasks:
-    - id: "TASK-001"
-      scope: ""
-      files:
-        create: []
-        modify: []
-        delete: []
-      interfaces: []
-      acceptance_criteria: []
-      verification: []
-      risk: "LOW|MEDIUM|HIGH|CRITICAL"
-      rollback: []
+dependency_graph: []
+parallel_groups: []
+security_requirements: []
+clinical_requirements: []
 
-  architecture:
-    components: []
-    api_contracts: []
-    database_changes: []
-    migration_plan: []
+data_contract:
+  schema_change: false
+  migration_required: false
+  transaction_requirements: []
+  concurrency_requirements: []
+  rollback: []
 
-  security:
-    authentication: []
-    authorization: []
-    tenant_isolation: []
-    sensitive_data: []
+optimization_targets:
+  - target: ""
+    rationale: ""
 
-  clinical_safety:
-    applicable: false
-    workflow_risks: []
-    human_oversight: []
-    validation_requirements: []
+risks:
+  - id: "RISK-001"
+    description: ""
+    probability: "LOW|MEDIUM|HIGH"
+    impact: "LOW|MEDIUM|HIGH"
+    mitigation: ""
+    verification: ""
 
-  tests:
-    unit: []
-    integration: []
-    regression: []
-    security: []
-    mobile: []
-    runtime: []
-
-  acceptance_criteria: []
-  dependency_graph: []
-  rollback_plan: []
-  risks: []
-  required_capabilities: []
-  verification_commands: []
+final_acceptance: []
+ready_for_coder: true
 ~~~
+
+Task classification, source ref, authorization constraints and repository-baseline evidence remain in the Orchestrator handoff and task ledger; they are not invented as Planner output fields.
 
 Validate the plan for:
 
@@ -546,22 +556,44 @@ Coder must:
 
 Coder output:
 
+The Coder's existing output contract is authoritative:
+
 ~~~yaml
-implementation_report:
-  status: "IMPLEMENTED|PARTIAL|BLOCKED"
-  completed_tasks: []
-  created_files: []
-  modified_files: []
-  deleted_files: []
-  changed_files: []
-  api_changes: []
-  database_changes: []
-  tests_added: []
-  deviations: []
-  known_issues: []
-  remaining_work: []
-  handoff_notes: []
+status: "IMPLEMENTED|BLOCKED|PLAN_CONFLICT"
+
+files_created: []
+files_modified: []
+files_deleted: []
+tests_created: []
+tests_modified: []
+dependencies_changed: []
+
+scope_extensions:
+  - file: ""
+    reason: ""
+    planner_task: ""
+
+plan_deviations:
+  - task: ""
+    original: ""
+    actual: ""
+    reason: ""
+    debugger_attention: true
+
+self_check:
+  incomplete_markers_found: false
+  unrelated_changes_detected: false
+  control_plane_modified: false
+  obvious_import_export_issues: false
+
+debugger_handoff:
+  priority_checks: []
+  risk_areas: []
+
+ready_for_debugger: true
 ~~~
+
+The Orchestrator derives the changed-file inventory from files_created/files_modified/files_deleted and test file lists. BLOCKED or PLAN_CONFLICT cannot advance to Debugger as implementation-complete.
 
 Coder must not run or claim builds/tests passed unless execution tools and its role explicitly authorize them. It must never self-certify.
 
@@ -650,30 +682,60 @@ Environment, permission, SDK, credential, network and external-service failures 
 
 Required output:
 
+The Debugger's canonical output contract is the existing CodeSwarm-Debugger schema, extended with the evidence fields below:
+
 ~~~yaml
-debug_report:
-  status: "DEBUG_PASS|DEBUG_PASS_AFTER_FIX|DEBUG_BLOCKED"
-  attempts: 0
-  commands_executed: []
-  exit_codes: []
-  environment: ""
-  test_scope:
-    unit: []
-    integration: []
-    subsystem_regression: []
-    repository_wide: []
-    omitted_with_reason: []
-  passed_checks: []
-  failed_checks: []
-  root_causes: []
-  fixes_applied: []
-  changed_files: []
-  acceptance_criteria_results: []
-  security_results: []
-  clinical_results: []
-  evidence: []
-  blockers: []
+status: "DEBUG_PASS|DEBUG_PASS_AFTER_FIX|DEBUG_BLOCKED|BLOCKED_ENVIRONMENT|BLOCKED_INFRASTRUCTURE|FAIL"
+
+attempts_used: 1
+
+environment: ""
+source_ref: ""
+commands_executed: []
+exit_codes: []
+
+test_scope:
+  unit: []
+  integration: []
+  subsystem_regression: []
+  repository_wide: []
+  omitted_with_reason: []
+
+validation:
+  - command: ""
+    result: "PASS|FAIL"
+    exit_code: 0
+    evidence: ""
+
+errors:
+  - classification: ""
+    message: ""
+    root_cause: ""
+    affected_files: []
+    affected_tests: []
+
+fixes:
+  - file: ""
+    change: ""
+    reason: ""
+
+regression_results:
+  - command: ""
+    result: "PASS|FAIL"
+    exit_code: 0
+    evidence: ""
+
+acceptance_criteria_results: []
+security_results: []
+clinical_results: []
+remaining_risks: []
+blockers: []
+control_plane_modified: false
+ready_for_optimizer: true
+ready_for_final_debug: false
 ~~~
+
+Map DEBUG_PASS and DEBUG_PASS_AFTER_FIX to the initial/final pass gates. Map DEBUG_BLOCKED, BLOCKED_ENVIRONMENT, BLOCKED_INFRASTRUCTURE and FAIL to a blocked or failed gate; never normalize them to PASS. The validation and regression_results arrays are the primary execution evidence. If a value is unavailable, report NOT_RUN or null rather than inventing it.
 
 Do not advance to optimization unless initial DEBUG_PASS or DEBUG_PASS_AFTER_FIX is evidenced.
 
@@ -711,11 +773,14 @@ Every optimization must state:
 
 Do not accept speculative speedup claims as measurements.
 
-Optimizer statuses:
+Optimizer statuses from its canonical output contract:
 
 - OPTIMIZED
 - NO_CHANGE_REQUIRED
 - BLOCKED
+- OPTIMIZATION_BLOCKED_UNVERIFIED_BASELINE
+
+The Optimizer output uses baseline.validation_status, optimizations, files_created, files_modified, files_deleted, follow_ups, self_check and revalidation. Do not demand an optimization_report wrapper or renamed changes fields.
 
 An optimization is not complete merely because the agent says it is. Obtain exact changed-file inventory and rationale.
 
