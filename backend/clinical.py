@@ -190,8 +190,8 @@ def _patient_registration_enabled() -> bool:
     """Fail closed in production unless patient registration is explicitly enabled."""
     configured = os.getenv("PATIENT_REGISTRATION_ENABLED")
     if configured is None:
-        environment = os.getenv("APP_ENV", "development").strip().lower()
-        return environment not in {"production", "prod"}
+        environment = os.getenv("APP_ENV", "").strip().lower()
+        return environment in {"development", "dev", "test", "testing"}
     return configured.strip().lower() in {"1", "true", "yes", "on"}
 
 
