@@ -1,0 +1,48 @@
+name: CodeSwarm Memory Integrity
+
+on:
+  pull_request:
+    paths:
+      - ".codeswarm/memory/**"
+      - ".codeswarm/tools/**"
+      - ".codeswarm/tests/**"
+      - ".github/agents/CodeSwarm*.agent.md"
+      - ".github/workflows/codeswarm-memory-integrity.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".codeswarm/memory/**"
+      - ".codeswarm/tools/**"
+      - ".codeswarm/tests/**"
+      - ".github/agents/CodeSwarm*.agent.md"
+      - ".github/workflows/codeswarm-memory-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeswarm-memory-integrity-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-memory:
+    name: Validate CodeSwarm memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: false
+
+      - name: Run memory validator tests
+        run: python -B -m unittest discover -s .codeswarm/tests -p "test_*.py" -v
+
+      - name: Validate active memory
+        run: python -B .codeswarm/tools/validate_memory.py --format json
