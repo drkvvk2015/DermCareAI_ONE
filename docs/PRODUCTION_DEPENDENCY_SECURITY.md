@@ -1,16 +1,30 @@
 # Production Dependency Security
 
-Updated: 2026-10-04
+Updated: 2026-11-06
 
-The production dependency gate is based on the committed npm lockfile plus an independent Python audit.
+The production dependency gate is based on the committed npm lockfile plus independent Python runtime and CI audits.
 
-- The mobile application is on Expo SDK 57 / React Native 0.86.3.
-- @react-native-community/datetimepicker is pinned to 9.2.1; current package security inventory reports zero direct vulnerabilities for that release.
-- Firestore's nested @grpc/grpc-js dependency is overridden to 1.14.5 to escape the vulnerable ~1.9.0 dependency range declared by @firebase/firestore.
-- The audit workflow retains the complete npm and pip JSON evidence for every run.
-- Remediable npm high/critical findings block the release.
-- Two exact upstream-unfixed build-tooling advisories are explicitly tracked: GHSA-86w9-cpqp-85rv (node-forge) and GHSA-vfj7-8cjw-p6xm (braces). Current upstream npm releases do not contain fixes for those advisories.
-- Those two advisory IDs are non-blocking only when the audit graph proves that the high/critical findings are caused exclusively by those advisories. Every unrelated high/critical advisory remains a hard failure.
-- Both exceptions are build-tooling supply-chain risk acceptances, not claims that the affected libraries are safe. Upgrade immediately when fixed upstream releases become available.
+## Audit evidence (2026-11-02)
 
-This document records the security remediation boundary; it does not constitute a clinical or regulatory approval.
+The recorded audit artifact found two high-severity npm findings and vulnerable Python packages in both the runtime and CI graphs.
+
+| Ecosystem | Locked package | Locked version | Required patched floor |
+|---|---|---:|---:|
+| npm | `vite` | `6.4.3` | `6.4.5` |
+| npm | `re2js` | `2.8.6` | `2.8.7` |
+| Python | `Pillow` | `12.3.0` | `13.0.0` |
+| Python | `pyasn1` | `0.6.4` | `0.6.5` |
+| Python | `filelock` | `4.0.10` | `4.2.1` |
+| Python | `certifi` | `2026.7.22` | `2026.10.19` |
+| Python | `opentelemetry-api` | `1.45.0` | `1.45.1` |
+| Python | `setuptools` | `84.0.0` | `84.1.0` |
+
+The source requirement inputs now declare the Python security floors. The npm lockfile refresh uses `npm audit fix --package-lock-only`. The daily dependency-lock refresh workflow regenerates the hash-locked Python runtime and CI lockfiles, audits the resulting graphs, and opens a reviewed dependency PR.
+
+## Exception policy
+
+No active dependency-audit exceptions are currently approved. Expired Expo build-tooling exceptions were removed after confirming they were not present in the 2026-11-02 high/critical npm audit findings. Do not add an exception merely to make CI green. Any future exception must identify an exact package/advisory, a concrete compensating control, an accountable owner, and a short expiry date.
+
+## Clinical and release boundary
+
+Dependency audit success is engineering evidence only. It is not clinical validation, regulatory clearance, privacy approval, or authorization to use real patient data.
