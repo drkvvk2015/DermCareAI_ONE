@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -185,6 +186,15 @@ class PatientCreate(BaseModel):
         return value
 
 
+def _patient_registration_enabled() -> bool:
+    """Fail closed in production unless patient registration is explicitly enabled."""
+    configured = os.getenv("PATIENT_REGISTRATION_ENABLED")
+    if configured is None:
+        environment = os.getenv("APP_ENV", "development").strip().lower()
+        return environment not in {"production", "prod"}
+    return configured.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @router.post("/patients", status_code=201)
 def post_patient(
     req: PatientCreate,
@@ -192,6 +202,8 @@ def post_patient(
     user: dict[str, Any] = Depends(require_roles("doctor", "admin")),
 ):
     organization_id, clinic_id = _tenant(user)
+    if not _patient_registration_enabled():
+        raise HTTPException(status_code=503, detail="Patient registration is currently disabled")
     if not idempotency_key:
         raise HTTPException(status_code=400, detail="Idempotency-Key header is required")
     actor_id = str(user["uid"])
