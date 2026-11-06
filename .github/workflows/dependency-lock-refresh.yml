@@ -20,6 +20,9 @@ concurrency:
 jobs:
   refresh-and-audit:
     runs-on: ubuntu-latest
+    env:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -99,11 +102,11 @@ jobs:
 
       - name: Create scoped GitHub App token
         id: app-token
-        if: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
+        if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name || 'DermCareAI_ONE' }}
           permission-contents: write
