@@ -26,6 +26,10 @@ Prompt changes require the evidence threshold defined in `CodeSwarm-Evolver.agen
 | 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm-Evolver | 78b8692ac2707a690c18ab5400e8c3e19bb73423 | 78b8692ac2707a690c18ab5400e8c3e19bb73423 | Memory integrity, safe baseline, quarantine and metadata-only recovery | Explicit user-directed major upgrade; preserves append-only history and tool boundaries | USER-AUTHORIZED | USER-DIRECTED | Text reviewed; validator/CI validation pending |
 | 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm-Memory-Guardian | NEW | de3396aa19bca12f9ed9dfb9769b941bad186aa7 | Added independent read-only memory validation agent | Adds structural and cryptographic consistency checks with recovery classification | USER-AUTHORIZED | USER-DIRECTED | Text reviewed; validator/CI validation pending |
 
+
+| 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm | f193d2cb19970009129c27eb305c8fe9994831de | 2fc3e40d054c4b38cb6540b13080cee10786a586 | Audit correction: records the actual pre-upgrade main-branch blob and the initial CodeSwarm X 3.0 prompt blob; supersedes the duplicated previous/new hash in the initial release row above | Preserve an accurate pre-upgrade-to-3.0 provenance chain without rewriting the append-only historical row | USER-AUTHORIZED | USER-DIRECTED | Verified against the pre-upgrade snapshot reference and Git blob IDs |
+| 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm-Evolver | 97d76932835fb179f6ae2d0a6e77e4931ee80cfd | 78b8692ac2707a690c18ab5400e8c3e19bb73423 | Audit correction: records the actual pre-upgrade main-branch blob and the initial CodeSwarm Evolver 3.0 prompt blob; supersedes the duplicated previous/new hash in the initial release row above | Preserve an accurate pre-upgrade-to-3.0 provenance chain without rewriting the append-only historical row | USER-AUTHORIZED | USER-DIRECTED | Verified against the pre-upgrade snapshot reference and Git blob IDs |
+
 ## Evolution Rules
 
 - Entries are append-only.
