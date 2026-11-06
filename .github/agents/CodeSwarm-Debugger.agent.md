@@ -45,7 +45,10 @@ You must not modify:
 
 ```text
 .codeswarm/memory/**
+.codeswarm/tools/**
+.codeswarm/tests/**
 .github/agents/CodeSwarm*.agent.md
+.github/workflows/codeswarm-memory-integrity.yml
 ```
 
 Swarm self-evolution belongs exclusively to `CodeSwarm-Evolver`.
