@@ -126,6 +126,22 @@ validation:
   computed_latest_record_hash: null
   stored_latest_record_hash: null
 
+knowledge_graph:
+  projection: "READ_ONLY_DERIVED_FROM_LEARNING_RECORDS"
+  node_count: 0
+  edge_count: 0
+  nodes: []
+  edges: []
+
+engineering_intelligence:
+  record_count: 0
+  affected_area_counts: {}
+  source_stage_distribution: {}
+  confidence_distribution: {}
+  repeated_patterns: []
+  low_confidence_records: []
+  interpretation: ""
+
 recovery:
   repairability: "NONE|METADATA_ONLY_SAFE|MANUAL_REVIEW_REQUIRED"
   candidate_manifest_available: false
