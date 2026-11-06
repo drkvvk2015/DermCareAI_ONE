@@ -13,10 +13,14 @@ Prompt changes require the evidence threshold defined in `CodeSwarm-Evolver.agen
 | — | — | — | — | — | Initial baseline | Initial CodeSwarm agent set | — | — | Baseline |
 
 <!-- CodeSwarm-Evolver appends new rows below this line. -->
+| 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm | 2fc3e40d054c4b38cb6540b13080cee10786a586 | 2fc3e40d054c4b38cb6540b13080cee10786a586 | CodeSwarm X 3.0 orchestrator, state ledger, bounded routing, validation and certification gates | Explicit user-directed major upgrade; adds memory intelligence and governed recovery | USER-AUTHORIZED | USER-DIRECTED | Text reviewed; automated CI validation pending |
+| 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm-Evolver | 78b8692ac2707a690c18ab5400e8c3e19bb73423 | 78b8692ac2707a690c18ab5400e8c3e19bb73423 | Memory integrity, safe baseline, quarantine and metadata-only recovery | Explicit user-directed major upgrade; preserves append-only history and tool boundaries | USER-AUTHORIZED | USER-DIRECTED | Text reviewed; validator/CI validation pending |
+| 2026-11-06 | codeswarm-x-3.0-memory-intelligence | CodeSwarm-Memory-Guardian | NEW | de3396aa19bca12f9ed9dfb9769b941bad186aa7 | Added independent read-only memory validation agent | Adds structural and cryptographic consistency checks with recovery classification | USER-AUTHORIZED | USER-DIRECTED | Text reviewed; validator/CI validation pending |
 
 ## Evolution Rules
 
 - Entries are append-only.
+- Explicit user-directed prompt releases are recorded as maintainer-authorized changes; the independent-run thresholds apply to autonomous Evolver-initiated prompt evolution, not to a direct user instruction to upgrade a prompt.
 - A prompt change must never overwrite historical entries.
 - Every prompt patch must identify the previous and new prompt version or content hash when genuinely available.
 - A normal prompt evolution requires evidence from at least **2 independent CodeSwarm runs** with the same root cause.
