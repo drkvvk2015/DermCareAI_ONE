@@ -238,6 +238,26 @@ def test_registration_disabled_by_default_in_production(env, monkeypatch):
     assert events == []
 
 
+def test_registration_disabled_by_default_when_environment_is_missing(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("PATIENT_REGISTRATION_ENABLED", raising=False)
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
+def test_registration_disabled_by_default_for_unknown_environment(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("APP_ENV", "staging-unknown")
+    monkeypatch.delenv("PATIENT_REGISTRATION_ENABLED", raising=False)
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
 def test_registration_enabled_by_default_in_development(env):
     client, fake, events, _ = env
     response = client.post(URL, json=_body(), headers=_headers())
