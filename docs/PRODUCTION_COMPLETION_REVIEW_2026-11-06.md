@@ -1,5 +1,6 @@
 # DermCareAI — Production Completion Review
-**Review date:** 2026-11-06  
+**Initial review date:** 2026-11-06  
+**Status checked:** 2026-11-07  
 **Repository:** `drkvvk2015/DermCareAI_ONE`  
 **Baseline:** `main` at `f3818f68c957fb8a2b981b335cce85430c185ccc`  
 **Repair PR:** [#242](https://github.com/drkvvk2015/DermCareAI_ONE/pull/242)  
@@ -7,17 +8,11 @@
 
 This review tracks six workstreams and distinguishes repository changes from decisions/evidence that must be supplied by the deploying clinic.
 
-## Verified repair results
+## Previous PR-head verification snapshot — 2026-11-07
 
-The latest PR head passed:
-- Pull Request Gates: backend regression (265 tests), PWA/dashboard lint, tests and builds, Android Capacitor add/sync, and iOS Capacitor add/sync on macOS 15.
-- Continuous Evaluation.
-- CodeQL Advanced (JavaScript/TypeScript, Python and Actions).
-- Production Preflight Contract.
-- PostgreSQL Staging Gate.
-- Firestore Rules tests.
+The pre-follow-up PR head `baea1e6958d1d3ba8516fa12347b3898f2e7bd56` had **19/19 GitHub check runs completed successfully** when checked on 2026-11-07. The successful checks included backend regression (265 tests), PWA/dashboard lint, tests and builds, Android Capacitor add/sync, iOS Capacitor add/sync on macOS 15, CodeQL, Continuous Evaluation, Production Preflight, PostgreSQL integration, Firestore Rules emulator, dependency audit, full staging acceptance, dependency lock refresh, and CodeRabbit.
 
-The dedicated dependency-lock refresh run regenerated both hash-locked Python graphs and the npm lockfile. Its runtime/CI dependency audit completed with **DEPENDENCY AUDIT: PASS** and no known Python vulnerabilities. The latest PR-triggered dependency audit and full staging acceptance were still running at the time this report was updated; those results must be checked before merge.
+This is a historical verification snapshot for SHA `baea1e6`, not a claim that a later commit has passed. The security and documentation follow-up is recorded in commit `6d8605e6ab023a540dc46f2c62598f6854cae7f1`; all required checks must complete successfully again on the resulting PR head before merge.
 
 ## Copilot review findings — remediation on PR #242
 
@@ -29,7 +24,7 @@ The first automated review identified five issues. The repair branch now include
 4. **Auditing the wrong lockfiles:** candidate lockfiles are now installed, tested and audited before any PR publication step.
 5. **Production template override:** the shared `backend/.env.example` keeps `PATIENT_REGISTRATION_ENABLED` commented out. The backend enables registration by default only in explicit development/test environments; unknown/missing environments fail closed.
 
-Latest PR head at the time of this update: `b2ae3952b9b380ed522f87cce70dc77e07518d5b`. Pull Request Gates, including backend, dashboard, Android and iOS, passed; CodeQL, Continuous Evaluation, Production Preflight and PostgreSQL Staging Gate passed. The latest Firestore Rules, Dependency Audit and full Staging Acceptance jobs were still running. Do not merge until those final checks pass and the automated review reruns against the latest head.
+The five initial Copilot threads are resolved. A later automated review of SHA `baea1e6958d1d3ba8516fa12347b3898f2e7bd56` completed and identified a high-priority risk in the dependency workflow: the GitHub App private key was exposed at job scope while repository-controlled install/test steps ran. CodeRabbit also identified persisted checkout credentials and stale verification wording. The follow-up commit `6d8605e6ab023a540dc46f2c62598f6854cae7f1` restricts the workflow to explicitly trusted refs, passes the private key only to the GitHub App token-creation action, disables checkout credential persistence, and corrects this verification record. These fixes require fresh CI and automated review on the updated PR head.
 
 ## 1. Branch and pull-request consolidation — assessed, not blindly merged
 
@@ -63,7 +58,7 @@ The 2026-11-02 audit artifact recorded high-severity npm findings and Python vul
 - Dependabot now scans `/webapp` and `/backend`, not the obsolete `/dermcareai` path.
 - Expired Expo-specific audit exceptions were removed. No exception was added to hide fixable findings.
 - Scheduled/manual lock refresh regenerates npm and hash-locked Python lockfiles and enforces the audit policy.
-- Verified lock-refresh audit passed; the latest PR-triggered audit was still running when this document was updated. Check the PR check before merge.
+- The PR-triggered dependency audit and staging acceptance both passed on the pre-follow-up SHA `baea1e6958d1d3ba8516fa12347b3898f2e7bd56`. The dependency-workflow security correction has a new commit; rerun and verify the full audit and staging gates on that new head before merge.
 
 ## 4. Clinical workflow completeness — still outstanding
 
