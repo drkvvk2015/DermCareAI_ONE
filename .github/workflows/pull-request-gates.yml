@@ -78,7 +78,7 @@ jobs:
           package-manager-cache: false
           cache-dependency-path: webapp/package-lock.json
       - name: Install locked web/PWA dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm ci --include=dev --no-audit --no-fund
       - name: TypeScript check
         run: npx tsc -b
       - name: Web lint
@@ -88,9 +88,9 @@ jobs:
       - name: Production PWA build
         run: npm run build
       - name: Generate Capacitor Android project
-        run: npx cap add android
+        run: node ./node_modules/@capacitor/cli/bin/capacitor add android
       - name: Validate Capacitor Android sync
-        run: npx cap sync android
+        run: node ./node_modules/@capacitor/cli/bin/capacitor sync android
       - name: Validate no active Expo or React Native package references
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -102,7 +102,7 @@ jobs:
 
   capacitor-ios-regression:
     needs: synchronize-lockfiles
-    runs-on: macos-14
+    runs-on: macos-15
     defaults:
       run:
         working-directory: webapp
@@ -116,13 +116,13 @@ jobs:
           package-manager-cache: false
           cache-dependency-path: webapp/package-lock.json
       - name: Install locked web/PWA dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm ci --include=dev --no-audit --no-fund
       - name: Production PWA build
         run: npm run build
       - name: Generate Capacitor iOS project
-        run: npx cap add ios
+        run: node ./node_modules/@capacitor/cli/bin/capacitor add ios
       - name: Validate Capacitor iOS sync
-        run: npx cap sync ios
+        run: node ./node_modules/@capacitor/cli/bin/capacitor sync ios
 
   web-dashboard:
     needs: synchronize-lockfiles
@@ -140,7 +140,7 @@ jobs:
           package-manager-cache: false
           cache-dependency-path: webapp/package-lock.json
       - name: Install locked dashboard dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm ci --include=dev --no-audit --no-fund
       - name: Dashboard lint
         run: npm run lint
       - name: Dashboard build

@@ -8,7 +8,14 @@ firebase-admin
 SQLAlchemy>=2.0,<3
 psycopg[binary]>=3.2,<4
 python-multipart
-Pillow
+Pillow>=13.0.0,<14
 opencv-python-headless
 numpy
 pip-audit
+
+# Security floors for transitive dependencies found by the 2026-11-02 audit.
+certifi>=2026.10.19
+filelock>=4.2.1
+opentelemetry-api>=1.45.1
+pyasn1>=0.6.5
+setuptools>=84.1.0

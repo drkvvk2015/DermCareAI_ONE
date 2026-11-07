@@ -83,6 +83,8 @@ def _headers():
 
 @pytest.fixture
 def env(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("PATIENT_REGISTRATION_ENABLED", raising=False)
     fake = _FakeFirestore()
     events = []
     monkeypatch.setattr(patient_store, "_client", lambda: fake)
@@ -214,6 +216,72 @@ def test_firebase_unavailable_maps_to_503(env, monkeypatch):
     response = client.post(URL, json=_body(), headers=_headers())
     assert response.status_code == 503
     assert "Synthetic" not in response.text
+    assert events == []
+
+
+def test_registration_kill_switch_returns_503_without_writing(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("PATIENT_REGISTRATION_ENABLED", "false")
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
+def test_registration_disabled_by_default_in_production(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("PATIENT_REGISTRATION_ENABLED", raising=False)
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
+def test_registration_disabled_by_default_when_environment_is_missing(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("PATIENT_REGISTRATION_ENABLED", raising=False)
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
+def test_registration_disabled_by_default_for_unknown_environment(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("APP_ENV", "staging-unknown")
+    monkeypatch.delenv("PATIENT_REGISTRATION_ENABLED", raising=False)
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
+    assert events == []
+
+
+def test_registration_enabled_by_default_in_development(env):
+    client, fake, events, _ = env
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 201
+    assert len(fake.collections["patients"]) == 1
+    assert len(events) == 1
+
+
+def test_registration_can_be_explicitly_enabled_in_production(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("PATIENT_REGISTRATION_ENABLED", "true")
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 201
+    assert len(fake.collections["patients"]) == 1
+    assert len(events) == 1
+
+
+def test_registration_invalid_flag_fails_closed(env, monkeypatch):
+    client, fake, events, _ = env
+    monkeypatch.setenv("PATIENT_REGISTRATION_ENABLED", "sometimes")
+    response = client.post(URL, json=_body(), headers=_headers())
+    assert response.status_code == 503
+    assert fake.collections["patients"] == {}
     assert events == []
 
 

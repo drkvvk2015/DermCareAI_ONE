@@ -57,12 +57,10 @@ service cloud.firestore {
 
     match /patients/{patientId} {
       allow read: if isAdmin() || ownsClinicalRecord(resource.data);
-      allow create: if isAdmin()
-        || (
-          activeDoctor()
-          && tenantMatches(request.resource.data)
-          && request.resource.data.doctorId == request.auth.uid
-        );
+      // Patient creation is server-only through the authenticated FastAPI API.
+      // Firebase Admin SDK writes bypass client security rules; no browser/mobile
+      // client may create patient documents directly.
+      allow create: if false;
       allow update: if isAdmin()
         || (
           ownsClinicalRecord(resource.data)
