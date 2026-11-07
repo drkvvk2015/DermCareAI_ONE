@@ -1,9 +1,6 @@
 name: DermCareAI Dependency Lock Refresh
 
 on:
-  push:
-    branches:
-      - fix/production-completion-2026-11-06
   workflow_dispatch:
   schedule:
     - cron: "10 3 * * *"
@@ -19,12 +16,12 @@ concurrency:
 
 jobs:
   refresh-and-audit:
-    # Only run on the two explicitly trusted refs: scheduled/manual runs on
-    # main, and the dedicated repair-branch push trigger. Manual dispatches
-    # from feature refs are skipped before any repository code or secrets run.
+    # This workflow mints a repository-write App token. Run only from the
+    # protected default branch; never execute a feature/repair branch definition
+    # with App secrets, even for a push initiated by a trusted contributor.
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/fix/production-completion-2026-11-06') ||
-      ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main')
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     env:
       # APP_ID is non-secret and is used only to decide whether token creation
@@ -120,25 +117,8 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Commit and publish refreshed locks from repair-branch pushes
-        if: ${{ github.event_name == 'push' && steps.app-token.outputs.token != '' }}
-        shell: bash
-        env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          git add webapp/package-lock.json backend/requirements.lock backend/requirements-ci.lock
-          if git diff --cached --quiet; then
-            echo "No dependency lock changes."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore(deps): refresh audited dependency lockfiles"
-          AUTH_HEADER="$(printf 'x-access-token:%s' "$APP_TOKEN" | base64 -w0)"
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH_HEADER" push origin "HEAD:${GITHUB_REF_NAME}"
-
       - name: Open a dependency refresh PR for scheduled/manual runs
-        if: ${{ github.event_name != 'push' && steps.app-token.outputs.token != '' }}
+        if: ${{ steps.app-token.outputs.token != '' }}
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
