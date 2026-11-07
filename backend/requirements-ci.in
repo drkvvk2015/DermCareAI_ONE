@@ -6,7 +6,7 @@ pydantic
 httpx
 firebase-admin
 SQLAlchemy>=2.0,<3
-psycopg[binary]>=3.2,<4
+psycopg[binary]>=3.3.8,<4
 python-multipart
 Pillow
 opencv-python-headless
