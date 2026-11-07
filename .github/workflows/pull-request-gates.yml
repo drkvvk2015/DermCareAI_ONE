@@ -3,7 +3,6 @@ name: Pull Request Gates
 on:
   pull_request:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,22 +13,32 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           package-manager-cache: false
           cache-dependency-path: webapp/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install pinned uv lockfile generator
+        run: python -m pip install --disable-pip-version-check uv==0.10.0
+      - name: Regenerate authoritative Python lockfiles
+        run: |
+          uv pip compile backend/requirements.txt --python-version 3.12 --universal --generate-hashes --output-file backend/requirements.lock
+          uv pip compile backend/requirements-ci.in --python-version 3.12 --universal --generate-hashes --output-file backend/requirements-ci.lock
       - name: Generate authoritative web lockfile
         working-directory: webapp
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Fail on lockfile drift
         shell: bash
         run: |
-          if ! git diff --quiet -- webapp/package-lock.json backend/requirements-ci.lock; then
+          if ! git diff --quiet -- webapp/package-lock.json backend/requirements.lock backend/requirements-ci.lock; then
             echo 'Authoritative lockfiles are out of sync. Regenerate and commit them before opening the PR.'
-            git diff -- webapp/package-lock.json backend/requirements-ci.lock
+            git diff --stat -- webapp/package-lock.json backend/requirements.lock backend/requirements-ci.lock
             exit 1
           fi
 
@@ -44,7 +53,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -71,7 +81,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -102,14 +113,15 @@ jobs:
 
   capacitor-ios-regression:
     needs: synchronize-lockfiles
-    runs-on: macos-14
+    runs-on: macos-15
     defaults:
       run:
         working-directory: webapp
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -133,7 +145,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24

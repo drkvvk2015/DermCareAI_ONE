@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "project": "DermCareAI_ONE",
   "files": {
     "learnings": "learnings.md",
@@ -14,11 +14,26 @@
   "first_record_id": "LEARNING-0001",
   "latestRecordId": "LEARNING-0003",
   "latest_record_id": "LEARNING-0003",
-  "latestRecordHash": null,
-  "latest_record_hash": null,
+  "latestRecordHash": "cad1913ee907e63e8a42ba156e17c7d195ee889f8837929152098b76b08d34e0",
+  "latest_record_hash": "cad1913ee907e63e8a42ba156e17c7d195ee889f8837929152098b76b08d34e0",
   "lastUpdated": "2026-10-02",
-  "integrityStatus": "UNVERIFIED",
-  "integrity_status": "UNVERIFIED",
-  "cryptographicIntegrity": "UNVERIFIED",
-  "memoryState": "INITIALIZED"
+  "integrityStatus": "PASS",
+  "integrity_status": "PASS",
+  "cryptographicIntegrity": "VERIFIED",
+  "memoryState": "ACTIVE",
+  "recordHashAlgorithm": "sha256",
+  "record_hash_algorithm": "sha256",
+  "recordHashScope": "normalized-latest-record-block-v1",
+  "record_hash_scope": "normalized-latest-record-block-v1",
+  "structuralIntegrity": "PASS",
+  "structural_integrity": "PASS",
+  "cryptographic_integrity": "VERIFIED",
+  "integrityBaseline": {
+    "type": "CURRENT_REPOSITORY_SNAPSHOT",
+    "establishedAtUtc": "2026-11-06",
+    "sourceCommit": "f3818f68c957fb8a2b981b335cce85430c185ccc",
+    "trustModel": "CONTENT_HASH_DRIFT_DETECTION_NOT_SIGNATURE",
+    "note": "Baseline hash was computed from the learning record present at the referenced repository commit. It supports subsequent content-drift detection; it does not retroactively prove historical authorship or digital-signature authenticity."
+  },
+  "manifestUpdatedAtUtc": "2026-11-06"
 }
