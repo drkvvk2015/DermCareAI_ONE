@@ -289,6 +289,7 @@ DermCareAI does not claim regulatory approval or clinical validation. For India,
 - [Privacy Operations](docs/PRIVACY_OPERATIONS.md)
 - [Clinical AI Production Activation](docs/CLINICAL_AI_PRODUCTION_ACTIVATION.md)
 - [Wave 5 Release Evidence Status](docs/WAVE5_RELEASE_EVIDENCE_STATUS.md)
+- [Zero-Cost Internal Deployment Plan](docs/INTERNAL_ZERO_COST_DEPLOYMENT_PLAN.md)
 
 ## License
 
