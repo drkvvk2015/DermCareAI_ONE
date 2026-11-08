@@ -76,11 +76,11 @@ Consent + input validation
 Clinical AI Assist (optional)
       │
       ▼
-Suggestion-only output
+Suggestion-only output (with Grad-CAM heatmap)
       │
       ├── Accept
       ├── Reject
-      └── Override
+      └── Override (with clinician label)
       │
       ▼
 Treating physician decision
@@ -90,6 +90,18 @@ Signed clinical record
 ```
 
 The application does not permit AI to silently sign diagnoses, prescribe, place orders, or modify signed clinical records. Production diagnostic AI remains fail-closed behind the evidence/artifact gate documented in [Clinical AI Production Activation](docs/CLINICAL_AI_PRODUCTION_ACTIVATION.md).
+
+## Clinical workflow & PWA features
+
+The canonical PWA client (`webapp/`) provides comprehensive end-to-end clinical workflow capabilities:
+
+- **Patient 360 & Registration:** Tenant-scoped patient search, profile history, and secure registration.
+- **Encounter Documentation:** Structured clinical templates (*General Dermatology*, *Acne*, *Eczema*, *Psoriasis*), documenting chief complaints, duration, morphology, distribution, provisional diagnosis, and management plans.
+- **Clinical Sign-Off & Attestation:** Formal physician sign-off validating documentation completeness and ensuring all attached AI decision-support signals have been explicitly reviewed.
+- **Longitudinal Lesion Tracking:** Anatomic body-site mapping (scalp, face, chest, extremities, etc.), laterality, dimension tracking (mm), morphology, and differential diagnostic records.
+- **AI-Assisted Lesion Screening:** Dermoscopic/clinical image upload evaluated through the `/predict` pipeline, with real-time confidence scores, quality gate checks, **Grad-CAM explainability heatmap visualization**, and physician Accept / Override / Reject controls.
+- **Prescription Authoring:** Multi-item prescription authoring with drug names, strengths, routes, dosages, frequencies, and durations, persisted directly to the clinical store.
+- **Guideline Decision Support:** Integrated clinical recommendations referencing accredited dermatology societies (IADVL, AAD, BAD, NICE).
 
 ## Installation — start here
 
@@ -233,6 +245,10 @@ Passing software CI is **necessary engineering evidence, not clinical validation
 | Area | Status |
 | --- | --- |
 | PWA canonical client | ✅ Implemented |
+| Encounter documentation & clinical sign-off | ✅ Implemented in PWA |
+| Longitudinal lesion tracking & body site UI | ✅ Implemented in PWA |
+| Clinical AI screening & Grad-CAM review UI | ✅ Implemented in PWA |
+| Prescription authoring & pharmacy orders | ✅ Implemented in PWA |
 | Capacitor Android/iOS integration | ✅ Configuration and CI gates implemented; native packaging remains environment-dependent |
 | Firebase Authentication | ✅ Integrated |
 | Tenant claims / authorization | ✅ Implemented |
@@ -240,7 +256,7 @@ Passing software CI is **necessary engineering evidence, not clinical validation
 | PostgreSQL production boundary | ✅ Implemented |
 | Clinical AI suggestion-only boundary | ✅ Implemented |
 | AI production evidence gate | ✅ Fail-closed |
-| Backend/PWA/Capacitor CI | ✅ Automated |
+| Backend/PWA/Capacitor CI | ✅ Automated (267 backend + 14 webapp tests passing) |
 | Independent clinical validation | ⏳ External evidence required |
 | Prospective clinical validation | ⏳ External evidence required |
 | Regulatory/privacy assessment | ⏳ Organization-specific review required |

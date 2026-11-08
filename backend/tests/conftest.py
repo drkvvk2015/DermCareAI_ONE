@@ -29,7 +29,7 @@ def pytest_configure(config) -> None:
     if any(os.getenv(url_var) for url_var, _, _ in database_bindings):
         return
 
-    _TEMP_ROOT = tempfile.TemporaryDirectory(prefix="dermcareai-pytest-")
+    _TEMP_ROOT = tempfile.TemporaryDirectory(prefix="dermcareai-pytest-", ignore_cleanup_errors=True)
     root = Path(_TEMP_ROOT.name)
     for _, path_var, filename in database_bindings:
         os.environ.setdefault(path_var, str(root / filename))
@@ -39,5 +39,8 @@ def pytest_unconfigure(config) -> None:
     del config
     global _TEMP_ROOT
     if _TEMP_ROOT is not None:
-        _TEMP_ROOT.cleanup()
+        try:
+            _TEMP_ROOT.cleanup()
+        except Exception:
+            pass
         _TEMP_ROOT = None
