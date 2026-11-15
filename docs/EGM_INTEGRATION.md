@@ -33,7 +33,7 @@ For ChatGPT desktop, use the published EGM plugin listing from the upstream READ
 
 ### VS Code, Copilot, and Continue
 
-The upstream harness matrix currently documents Codex, Claude, and Antigravity routes, plus qualified ChatGPT routes. It does not establish a verified native VS Code Copilot or Continue integration. A folder or compatibility manifest in the upstream repository is not proof of end-to-end support.
+The upstream harness matrix documents Codex, Claude, and Antigravity routes, with additional host-specific integrations and qualified ChatGPT support. It does not establish a verified native VS Code Copilot or Continue integration. A folder or compatibility manifest in the upstream repository is not proof of end-to-end support.
 
 For this repository's VS Code workflow, use a supported Codex CLI installation from the integrated terminal or another explicitly supported EGM host. Do not claim that an Ollama model configured in Continue automatically supplies EGM's fresh-context subagents. Local model selection, reviewer spawning, filesystem access, and review isolation are separate capabilities and must be tested in the chosen host.
 
