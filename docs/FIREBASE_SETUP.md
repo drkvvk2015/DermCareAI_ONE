@@ -99,7 +99,7 @@ Firebase login alone does not grant clinical-record access; role and tenant auth
 
 ## 7. Firestore rules
 
-Deploy `firestore.rules` before enabling any Firestore collections:
+Deploy `firestore.rules` before enabling direct client-SDK access to any Firestore collections:
 
 ```bash
 firebase login

@@ -155,7 +155,7 @@ Verify `organization_id`, `clinic_id` and `roles` claims, refresh the ID token, 
 
 ### Firestore
 
-Firestore is not the primary store for the longitudinal clinical workflow tables, but the current patient-registration API path writes its patient-registry record through the Firebase Admin SDK. Deploy the repository rules for direct client-SDK access:
+Firestore is not the primary store for the longitudinal clinical workflow tables, but the current patient-registration API path writes its patient-registry record through the Firebase Admin SDK. If a deployment enables direct client-SDK access to Firestore collections, deploy the repository rules for that access. These rules do not protect the backend Admin-SDK path:
 
 ```bash
 firebase login
