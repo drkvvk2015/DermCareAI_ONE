@@ -27,7 +27,7 @@ These workflows remain a separate backlog. A future implementation must be separ
 - Capacitor Android generation and sync pass.
 - Capacitor iOS generation and sync pass.
 - Legacy mobile-only workflows are explicitly de-scoped as above.
-- Offline clinical writes are not enabled in this release; PostgreSQL remains authoritative.
-- No CI/deployment path references Expo or React Native.
+- Offline clinical writes are not enabled in this release; PostgreSQL remains authoritative for the clinical SQL store.
+- No Expo/React Native build, export, prebuild or deployment job is used for the current PWA/Capacitor release. PR CI includes a negative guard that rejects active Expo/React Native package references in `webapp/`.
 - Web/PWA/Capacitor dependencies are lockfile-synchronized.
 - Clinical AI remains suggestion-only with physician final decision authority.
