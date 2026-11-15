@@ -172,7 +172,7 @@ DermCareAI uses the [Elephant-Goldfish Model (EGM)](https://github.com/google/el
 - [Initial platform baseline](docs/designs/DERMCAREAI_PLATFORM_BASELINE.md)
 
 Approved designs belong in `docs/designs/`. Working drafts belong in the ignored `.dev/docs/` directory until reviewed. EGM reviews do not replace human architecture, security, privacy, or clinical approval.
- 
+
 ## Development
 
 ### Backend
