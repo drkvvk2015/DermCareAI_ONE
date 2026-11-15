@@ -107,7 +107,7 @@ The current application boundary remains unchanged:
 - The application must not autonomously diagnose, prescribe, place orders, sign, or silently modify a signed encounter.
 - Diagnostic AI production activation remains separately governed and fail-closed.
 - Patient-linked image review requires the existing consent and authorization controls.
-- PostgreSQL remains the production clinical source of truth; Firestore remains optional.
+- PostgreSQL is required for the clinical workflow SQL store in production; the current patient-registration API path also writes a registry document to Firestore through the Firebase Admin SDK. Treat this as a hybrid persistence boundary. Firestore Rules do not authorize Admin-SDK operations; the API must enforce its own controls.
 - Tenant isolation, auditability, authentication, and backend authorization must not be weakened to make a design simpler.
 
 EGM review, bootstrap, and drift reports do not constitute clinical validation, regulatory clearance, privacy approval, security certification, or production authorization.

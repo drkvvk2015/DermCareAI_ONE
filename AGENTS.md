@@ -11,9 +11,9 @@ Use the root `README.md` and the current platform migration documents under `doc
 - `backend/` contains the FastAPI backend.
 - `webapp/` is the canonical React/Vite PWA.
 - Capacitor wraps the same web bundle for Android/iOS; it is not a second clinical UI.
-- PostgreSQL is the production clinical source of truth.
+- PostgreSQL is required in production for the clinical workflow SQL store (encounters, lesions, consents, media metadata, sign-offs, follow-ups and AI reviews).
 - Firebase Authentication provides clinician identity and tenant-aware access to FastAPI.
-- Firestore is optional and is not the primary clinical datastore.
+- The current patient-registration route writes its registry document to Firestore through the Firebase Admin SDK. Treat this as a hybrid persistence boundary. Firestore Rules apply to direct client-SDK access, not backend Admin-SDK calls.
 - Clinical media/object storage is accessed through the authorized backend boundary.
 
 Always inspect the live tree and implementation before assuming a path or behavior. If source, README, migration documents, and agent instructions disagree, report the discrepancy and resolve it through an approved documentation change; do not silently select the most convenient interpretation.

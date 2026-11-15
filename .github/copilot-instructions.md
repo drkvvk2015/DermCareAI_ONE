@@ -11,9 +11,9 @@ Treat all clinical and patient-related information as sensitive. Never place rea
 - `backend/dermatology/` — dermatology-specific clinical workflow modules (verify current paths before relying on them).
 - `webapp/` — canonical React/Vite clinical PWA and primary application client.
 - Capacitor — wraps the canonical web bundle for Android/iOS; it is not a separate clinical UI.
-- PostgreSQL — production clinical source of truth.
+- PostgreSQL — production database for the clinical workflow SQL store (encounters, lesions, consents, media metadata, sign-offs, follow-ups and AI reviews).
 - Firebase Authentication — clinician identity and tenant-aware access to FastAPI.
-- Firestore — optional; it is not the primary clinical datastore.
+- Firestore — current patient-registration route writes registry documents through the Firebase Admin SDK; Firestore Rules govern direct client-SDK access but do not authorize Admin-SDK operations.
 - Object storage — clinical media/object persistence behind server-side authorization and signing.
 - `docs/` — architecture, security, clinical governance, deployment, and production-readiness documentation.
 
