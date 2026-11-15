@@ -68,7 +68,7 @@ Apply EGM across the project in bounded workstreams rather than generating docum
 | Clinical workflows | Patient 360, encounters, examination, lesions, consent, sign-off | Clinical workflow specifications |
 | Clinical AI | Assistive lane, adapters, model provenance, abstention, validation and activation gates | Clinical AI governance and model lifecycle specifications |
 | Web/PWA and native wrapper | React/Vite client, offline behavior, API integration, Capacitor | Client architecture and synchronization specifications |
-| Data and privacy | PostgreSQL, optional Firestore, media, retention, export/deletion, audit | Data lifecycle and privacy architecture |
+| Data and privacy | PostgreSQL clinical workflow store, Firestore-backed patient registry, direct Firestore client access where used, media, retention, export/deletion and audit | Data lifecycle and privacy architecture |
 | Security and operations | Tenant isolation, secrets, CI/CD, deployment, monitoring, backup and recovery | Threat model and operations specifications |
 
 ### Initial sequence

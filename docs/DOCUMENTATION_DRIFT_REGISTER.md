@@ -1,6 +1,6 @@
 # Documentation Drift Register
 
-**Baseline inspected:** `feat/egm-project-integration` at `adec7331fa154941ac53ce5faf5640fec7dcdf9`  
+**Baseline inspected:** `feat/egm-project-integration` at `adec7331fa154941ac53ce5faf5640fec7dcad39`  
 **Review date:** 2026-11-15  
 **Purpose:** Track material documentation conflicts found during the EGM platform-baseline review and the source evidence used to reconcile them.
 
