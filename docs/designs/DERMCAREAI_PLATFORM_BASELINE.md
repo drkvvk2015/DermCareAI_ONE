@@ -190,8 +190,9 @@ These are questions for scoped downstream specifications, not claims that every 
 | Gate | Status | Evidence / accountable role |
 |---|---|---|
 | Repository baseline assembled | PREPARED | Source files and commit listed in §§2, 10 |
-| Initial EGM review | STAGES 5–8 COMPLETED | Consolidated local report under ignored `.dev/docs/`; not committed |
-| EGM implementation-readiness stage | NOT RUN | Baseline has no implementation plan; do not mark this stage passed |
+| Initial EGM review of pre-remediation baseline at `adec7331fa154941ac53ce5faf5640fec7dcad39` | STAGES 5–8 COMPLETED | Consolidated local report under ignored `.dev/docs/`; report applies to the earlier baseline revision and is not committed |
+| EGM re-review of this revised baseline | PENDING | Re-run after the documentation corrections in this PR |
+| EGM implementation-readiness stage | NOT RUN | No implementation plan exists yet; do not mark this stage passed |
 | Goldfish isolation | PARTIALLY EVIDENCED | Review reported separate fresh agent conversations; filesystem and instruction-file isolation were not established |
 | Architecture approval | PENDING | Platform architecture owner / repository maintainer |
 | Clinical approval | PENDING WHEN APPLICABLE | Designated clinical safety owner |
