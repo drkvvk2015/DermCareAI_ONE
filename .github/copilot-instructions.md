@@ -1,20 +1,23 @@
 # Copilot Instructions — DermCareAI_ONE
 
-This repository is a clinical dermatology software platform with a Python/FastAPI backend (`backend/`) and a React Native/Expo TypeScript mobile application (`dermcareai/`).
+This repository is a clinical dermatology platform with a Python/FastAPI backend (`backend/`) and a canonical React/Vite PWA (`webapp/`) wrapped by Capacitor for Android/iOS. The README and platform migration documents are the primary architecture references; inspect the current tree before assuming any path exists.
 
 Treat all clinical and patient-related information as sensitive. Never place real patient-identifiable or clinical data in source code, fixtures, logs, commits, prompts, screenshots, or test output.
 
 ## Architecture
 
 - `backend/` — FastAPI services covering clinical, commerce, prescription, authentication, and related backend domains.
-- `backend/ai_adapters/` — AI/ML model adapters and screening integrations.
-- `backend/dermatology/` — dermatology-specific clinical workflow modules.
-- `dermcareai/` — React Native/Expo TypeScript mobile client.
-- `dermcareai/src/` — primary mobile application source.
-- `dermcareai/android/` — generated/native Android project and Gradle configuration.
-- `docs/` — architecture, security, deployment, and production-readiness documentation.
+- `backend/ai_adapters/` — AI/ML model adapters and screening integrations (verify current paths before relying on them).
+- `backend/dermatology/` — dermatology-specific clinical workflow modules (verify current paths before relying on them).
+- `webapp/` — canonical React/Vite clinical PWA and primary application client.
+- Capacitor — wraps the canonical web bundle for Android/iOS; it is not a separate clinical UI.
+- PostgreSQL — production clinical source of truth.
+- Firebase Authentication — clinician identity and tenant-aware access to FastAPI.
+- Firestore — optional; it is not the primary clinical datastore.
+- Object storage — clinical media/object persistence behind server-side authorization and signing.
+- `docs/` — architecture, security, clinical governance, deployment, and production-readiness documentation.
 
-Before making a large structural change, inspect the relevant documentation under `docs/`.
+Do not create or revive a separate React Native/Expo client without an approved architecture decision. Before a large structural change, inspect the relevant documentation under `docs/` and verify the current repository tree.
 
 ## Repository conventions
 
@@ -27,13 +30,14 @@ Before making a large structural change, inspect the relevant documentation unde
 - Do not introduce a new persistence abstraction when an existing repository abstraction already serves the requirement.
 - Preserve tenant isolation and transaction semantics.
 
-### Mobile
+### Web/PWA and Capacitor
 
 - Use TypeScript with strict typing.
-- Prefer functional React components and existing patterns under `dermcareai/src/`.
-- Reuse existing navigation, state-management, API-client, and UI abstractions.
-- Do not introduce a second implementation of an existing workflow.
-- Treat native Android changes as potentially build-sensitive and verify Gradle compatibility before modifying native configuration.
+- Prefer functional React components and existing patterns under `webapp/`.
+- Reuse existing routing, state-management, API-client, and UI abstractions.
+- Keep the PWA as the canonical clinical UI; Capacitor wraps the same web bundle for native Android/iOS delivery.
+- Do not introduce a second implementation of an existing workflow or a new React Native/Expo client without an approved architecture decision.
+- Treat native Capacitor/Android/iOS changes as build-sensitive and verify the relevant native toolchain before modifying native configuration.
 
 ## Security and sensitive data
 
@@ -93,11 +97,9 @@ Backend tests are located under:
 backend/tests/
 ```
 
-### Mobile
+### Web/PWA and Capacitor
 
-For mobile changes, use the repository's existing TypeScript, Expo, and native Android validation commands as applicable.
-
-When native Android code is affected, include appropriate Gradle/build verification.
+For PWA changes, use the repository's existing frontend lint, test, and production-build commands. When Capacitor or native platform files are affected, include the relevant Capacitor synchronization and Android/iOS build verification where the required toolchain is available.
 
 ### General rule
 

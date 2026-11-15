@@ -163,6 +163,16 @@ firebase deploy --only firestore:rules
 
 Do not enable Firestore offline persistence for clinical records merely to obtain offline support. See [Firebase Authentication and Firestore Setup](docs/FIREBASE_SETUP.md).
 
+## Architecture design and EGM review workflow
+
+DermCareAI uses the [Elephant-Goldfish Model (EGM)](https://github.com/google/elephant-goldfish-model) as an optional development-time specification and independent design-review workflow. EGM is not a clinical runtime dependency and does not authorize clinical decisions or production releases.
+
+- [EGM integration and operating guide](docs/EGM_INTEGRATION.md)
+- [Design specification index](docs/designs/README.md)
+- [Initial platform baseline](docs/designs/DERMCAREAI_PLATFORM_BASELINE.md)
+
+Approved designs belong in `docs/designs/`. Working drafts belong in the ignored `.dev/docs/` directory until reviewed. EGM reviews do not replace human architecture, security, privacy, or clinical approval.
+ 
 ## Development
 
 ### Backend
