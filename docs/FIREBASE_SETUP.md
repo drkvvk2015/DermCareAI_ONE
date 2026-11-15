@@ -6,9 +6,13 @@ This document is the detailed Firebase configuration contract for a DermCareAI d
 
 ## Architecture decision
 
-DermCareAI uses Firebase Authentication for clinician identity and the FastAPI backend as the authenticated clinical API boundary. PostgreSQL is the production clinical persistence boundary.
-The repository also contains Firestore security rules for deployments that explicitly use Firestore collections. The current PWA does not use Firestore as its primary clinical datastore.
-Do not introduce Firestore writes for clinical records merely to obtain offline caching. A second clinical source of truth creates synchronization, conflict-resolution, audit, retention and deletion risks.
+DermCareAI uses Firebase Authentication for clinician identity and FastAPI as the authenticated clinical API boundary. The client sends a Firebase ID token to FastAPI as a Bearer token.
+
+PostgreSQL is required in production for the SQLAlchemy clinical store, which includes encounters, lesions, lesion observations, consents, clinical-media metadata, sign-offs, follow-ups and AI reviews. The current `POST /api/v1/clinical/patients` route also writes the patient-registry document to Firestore through `backend/patient_store.py` using the Firebase Admin SDK. The implementation therefore has a hybrid persistence boundary: Firestore-backed patient registration and PostgreSQL-backed clinical workflow stores.
+
+Firestore Security Rules govern direct client-SDK access to Firestore collections. Backend Firebase Admin SDK operations bypass those rules and must be authorized by the FastAPI route itself. Do not rely on Firestore Rules to protect a server-side Admin-SDK operation.
+
+This current split is documented for architecture review; this guide does not authorize a data migration. Do not introduce additional Firestore writes or offline persistence for clinical records merely to obtain offline caching. A second clinical source of truth creates synchronization, conflict-resolution, audit, retention and deletion risks.
 
 ## 1. Create the Firebase project
 
@@ -80,7 +84,7 @@ After changing custom claims, force a token refresh with `user.getIdToken(true)`
 
 1. Create the Firebase Authentication account.
 2. Obtain the Firebase UID.
-3. Create or activate the matching `doctors/{uid}` record where Firestore is used.
+3. Create or activate the matching `doctors/{uid}` record where Firestore-backed doctor status is used.
 4. Assign exactly one organization/clinic tenant pair.
 5. Assign approved role claims.
 6. Verify the backend accepts the refreshed ID token.
@@ -95,7 +99,7 @@ Firebase login alone does not grant clinical-record access; role and tenant auth
 
 ## 7. Firestore rules
 
-Deploy `firestore.rules` before enabling any Firestore collections:
+Deploy `firestore.rules` before enabling direct client-SDK access to any Firestore collections:
 
 ```bash
 firebase login
@@ -104,6 +108,8 @@ firebase deploy --only firestore:rules
 ```
 
 Current rules require authentication, approved roles, an active clinician record, matching organization/clinic claims, and matching organizationId/clinicId document fields. Unspecified collections default to deny.
+
+These rules apply to direct client-SDK access. The backend's `patient_store.py` uses the Firebase Admin SDK, which bypasses Security Rules; the server route must enforce equivalent or stronger authorization itself. See the official [Firebase Admin SDK trust-boundary guidance](https://developers.google.com/learn/pathways/quizzes/firebase-security-layers).
 
 ## 8. Firestore tenant model
 
@@ -121,7 +127,7 @@ Do not store only `clinicId`. Existing records must be backfilled before relying
 ## 9. Firestore query alignment
 
 Firestore rules are not filters. An unrestricted collection read can still be rejected.
-When a module explicitly uses Firestore, client queries should include the same tenant constraints required by the rules, for example:
+When a module explicitly uses Firestore directly from a client SDK, client queries should include the same tenant constraints required by the rules, for example:
 
 ```ts
 query(
@@ -131,7 +137,7 @@ query(
 )
 ```
 
-The current PWA does not use Firestore for its primary clinical API calls. This section applies only to future or explicitly Firestore-backed modules.
+The PWA's normal clinical requests go through FastAPI rather than directly querying Firestore. The current FastAPI patient-registration route nevertheless writes to the Firestore patient registry through the Admin SDK. This is a server-side path and is not governed by Firestore Rules. The query example above applies only to direct client-SDK Firestore operations.
 
 ## 10. Offline persistence: DermCareAI distinction
 
@@ -139,18 +145,21 @@ The current architecture is:
 
 ```text
 PWA / Capacitor
-      |
+      | obtains Firebase ID token
       v
 Firebase Authentication
-      |
+      | ID token returned to client
       v
 FastAPI authenticated API
-      |
-      v
-PostgreSQL clinical persistence
+      |-------------------------------|
+      v                               v
+PostgreSQL clinical workflow      Firestore Admin SDK
+stores (encounters, lesions,       patient registry
+consents, media metadata,          (current POST /patients path)
+sign-offs, follow-ups, AI reviews)
 ```
 
-Therefore, do not enable Firestore persistence for clinical records unless the architecture is deliberately changed to make Firestore authoritative and the following are redesigned and revalidated: conflict resolution, auditability, retention/deletion, tenant isolation, signed-record behavior, backups/recovery, migration and offline mutation replay.
+Do not enable Firestore persistence for clinical records merely to obtain offline caching. Any future offline clinical writes require a separately approved architecture covering conflict resolution, auditability, retention/deletion, tenant isolation, signed-record behavior, backups/recovery, migration and offline mutation replay.
 The PWA + Capacitor migration instead requires replay-safe, conflict-aware clinical synchronization as defined by `docs/PLATFORM_MIGRATION_ACCEPTANCE.md`.
 
 ## 11. Emulator setup
@@ -185,8 +194,9 @@ Never point a production build at emulators.
 - Unauthenticated clinical API requests are rejected.
 - Unauthorized roles are rejected.
 - Production PostgreSQL is active.
+- Patient-registration Admin-SDK writes are authorized by the FastAPI route, not assumed to be protected by Firestore Rules.
 
-### Firestore, when used
+### Firestore, when used directly by client SDK
 
 - `firestore.rules` deployed to the intended project.
 - Tenant fields exist on protected documents.
@@ -204,13 +214,13 @@ Never point a production build at emulators.
 
 ## 13. Common failures
 
-Permission denied after successful login usually means missing/stale claims, tenant mismatch, missing tenant document fields, or a query incompatible with the rules.
+Permission denied after successful direct Firestore login usually means missing/stale claims, tenant mismatch, missing tenant document fields, or a query incompatible with the rules.
 Backend 401 after Firebase sign-in usually means a Firebase project/issuer/audience mismatch, invalid backend credentials, or an expired/revoked token.
 Backend 403 after successful authentication usually means missing roles, tenant claims, or inactive clinician status.
 
 ## 14. Security responsibility
 
-Authentication and Firestore Rules tests prove access-control behavior. They do not establish clinical safety, regulatory approval or production readiness.
+Authentication and Firestore Rules tests prove access-control behavior for the paths they exercise. They do not establish clinical safety, regulatory approval or production readiness. Direct Firestore Rules tests do not prove authorization of backend Admin-SDK calls.
 The treating organization remains responsible for identity lifecycle, least privilege, tenant administration, privacy/retention, incident response, clinical validation and regulatory assessment.
 
 ## 15. Deployment summary
@@ -219,12 +229,13 @@ The treating organization remains responsible for identity lifecycle, least priv
 Firebase project
   |-- Authentication -> clinician accounts
   |-- Custom claims  -> organization_id / clinic_id / roles
-  `-- Firestore      -> only where explicitly used and tenant-scoped
+  `-- Firestore Rules -> direct client-SDK access only
 
 PWA / Capacitor
   -> Firebase ID token
-  -> FastAPI
-  -> PostgreSQL clinical source of truth
+  -> FastAPI verifies token and applies API authorization
+       |-> PostgreSQL clinical workflow stores
+       `-> Firestore Admin SDK patient-registry write (current implementation)
 ```
 
 A new DermCareAI environment is not complete until Firebase project configuration, Authentication, custom claims, backend verification, tenant-isolation acceptance and environment-specific checks have been verified.

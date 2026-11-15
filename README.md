@@ -4,7 +4,7 @@ DermCareAI is a healthcare-oriented dermatology clinic platform for **Patient 36
 
 > ⚠️ **Clinical boundary:** AI output is decision support, not a diagnosis. The research HAM10000 model is not clinically validated for routine patient care. Clinical deployment requires intended-use review, independent validation and applicable regulatory/privacy approvals.
 
-> 🔐 **Production boundary:** PostgreSQL is the production clinical source of truth. Firebase Authentication provides clinician identity and tenant-aware access to FastAPI. Firestore is optional and is not the primary clinical datastore.
+> 🔐 **Persistence boundary:** PostgreSQL is required in production for the clinical workflow SQL store (encounters, lesions, consents, clinical-media metadata, sign-offs, follow-ups and AI reviews). The current patient-registration API path writes its patient-registry document to Firestore through the Firebase Admin SDK. This hybrid boundary is documented in [Firebase Setup](docs/FIREBASE_SETUP.md) and the [platform baseline](docs/designs/DERMCAREAI_PLATFORM_BASELINE.md); do not treat Firestore as unused or rely on Firestore Rules to authorize Admin-SDK calls.
 
 ## Visual architecture
 
@@ -36,22 +36,22 @@ The repository uses local SVG diagrams so documentation renders without an exter
 ## Current platform architecture
 
 ```text
-Browser / installed PWA
-        │
-        ├───────────────┐
-        │               │
-        ▼               ▼
-Firebase Auth       Capacitor 8
-        │           Android / iOS
-        └──────┬────────┘
-               ▼
-          FastAPI /api/v1
-               │
-       ┌───────┴────────┐
-       ▼                ▼
-  PostgreSQL       Object storage
- clinical source
-    of truth
+Browser
+  └── React/Vite PWA (webapp/)
+        └── Firebase Authentication sign-in
+              └── Firebase ID token returned to client
+                    └── HTTPS request to FastAPI
+                          Authorization: Bearer <Firebase ID token>
+
+Capacitor Android/iOS
+  └── packages the same webapp/ PWA bundle
+        └── uses the same authentication and API flow
+
+FastAPI persistence paths
+  ├── PostgreSQL: encounters, lesions, consents, media metadata,
+  │               sign-offs, follow-ups and AI reviews
+  ├── Firestore Admin SDK: current POST /api/v1/clinical/patients registry write
+  └── Cloudinary: backend-issued signed-upload authorization
 ```
 
 - `webapp/` is the canonical clinical client.
@@ -59,8 +59,10 @@ Firebase Auth       Capacitor 8
 - Capacitor wraps the same web bundle for Android/iOS; it is not a second clinical UI.
 - Firebase Authentication is the identity boundary.
 - FastAPI is the authenticated clinical API boundary.
-- PostgreSQL is authoritative for clinical persistence in production.
-- Clinical offline synchronization is replay-safe/conflict-aware application logic; Firestore persistence must not be added as an unreviewed cache workaround.
+- PostgreSQL is required in production for the SQLAlchemy clinical workflow store (encounters, lesions, consents, media metadata, sign-offs, follow-ups and AI reviews).
+- The current patient-registration API path writes a patient-registry document to Firestore through the Firebase Admin SDK. This is a hybrid persistence boundary that requires an explicit architecture decision; this PR does not migrate it.
+- Firestore Rules govern direct client-SDK Firestore access. They do not authorize backend Admin-SDK operations; FastAPI must enforce role, tenant and resource authorization itself.
+- Clinical offline synchronization is replay-safe/conflict-aware application logic; do not enable Firestore persistence as an unreviewed cache workaround.
 
 ## Clinical AI safety boundary
 
@@ -153,7 +155,7 @@ Verify `organization_id`, `clinic_id` and `roles` claims, refresh the ID token, 
 
 ### Firestore
 
-Firestore is optional. If explicitly used, deploy the repository rules:
+Firestore is not the primary store for the longitudinal clinical workflow tables, but the current patient-registration API path writes its patient-registry record through the Firebase Admin SDK. If a deployment enables direct client-SDK access to Firestore collections, deploy the repository rules for that access. These rules do not protect the backend Admin-SDK path:
 
 ```bash
 firebase login
@@ -162,6 +164,16 @@ firebase deploy --only firestore:rules
 ```
 
 Do not enable Firestore offline persistence for clinical records merely to obtain offline support. See [Firebase Authentication and Firestore Setup](docs/FIREBASE_SETUP.md).
+
+## Architecture design and EGM review workflow
+
+DermCareAI uses the [Elephant-Goldfish Model (EGM)](https://github.com/google/elephant-goldfish-model) as an optional development-time specification and independent design-review workflow. EGM is not a clinical runtime dependency and does not authorize clinical decisions or production releases.
+
+- [EGM integration and operating guide](docs/EGM_INTEGRATION.md)
+- [Design specification index](docs/designs/README.md)
+- [Initial platform baseline](docs/designs/DERMCAREAI_PLATFORM_BASELINE.md)
+
+Approved designs belong in `docs/designs/`. Working drafts belong in the ignored `.dev/docs/` directory until reviewed. EGM reviews do not replace human architecture, security, privacy, or clinical approval.
 
 ## Development
 
@@ -236,7 +248,7 @@ Passing software CI is **necessary engineering evidence, not clinical validation
 | Capacitor Android/iOS integration | ✅ Configuration and CI gates implemented; native packaging remains environment-dependent |
 | Firebase Authentication | ✅ Integrated |
 | Tenant claims / authorization | ✅ Implemented |
-| Firestore Rules | ✅ Present and CI-tested; Firestore remains optional |
+| Firestore Rules | ✅ Present and CI-tested for direct client-SDK access; backend Admin-SDK patient-registry writes require API-level authorization |
 | PostgreSQL production boundary | ✅ Implemented |
 | Clinical AI suggestion-only boundary | ✅ Implemented |
 | AI production evidence gate | ✅ Fail-closed |
@@ -283,6 +295,7 @@ DermCareAI does not claim regulatory approval or clinical validation. For India,
 
 - [Installation Guide](docs/INSTALLATION.md)
 - [Firebase Setup](docs/FIREBASE_SETUP.md)
+- [Documentation Drift Register](docs/DOCUMENTATION_DRIFT_REGISTER.md)
 - [Platform Migration Acceptance](docs/PLATFORM_MIGRATION_ACCEPTANCE.md)
 - [Platform Migration Architecture](docs/PLATFORM_MIGRATION_ARCHITECTURE.md)
 - [Dependency Security](docs/DEPENDENCY_SECURITY.md)
